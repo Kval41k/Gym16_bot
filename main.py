@@ -226,7 +226,14 @@ async def notify_admins_about_post(
 async def root():
     index_file = settings.STATIC_DIR / "index.html"
     if index_file.exists():
-        return FileResponse(index_file)
+        return FileResponse(
+            index_file,
+            headers={
+                "Cache-Control": "no-cache, no-store, must-revalidate",
+                "Pragma": "no-cache",
+                "Expires": "0"
+            }
+        )
     return {
         "app": "Gymnasium 16 Telegram Mini App",
         "status": "online",

@@ -3,6 +3,9 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
   <title>Гимназия №16 — 11 Классы</title>
 
   <!-- Telegram Web App Script -->
@@ -1364,8 +1367,8 @@
 
       // Natural uncropped aspect ratio for news media
       const imageHtml = post.image_url 
-        ? `<div class="mt-3 rounded-2xl overflow-hidden border border-zinc-100 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/50 flex items-center justify-center">
-             <img src="${post.image_url}" alt="Новость" class="w-full h-auto max-h-[550px] object-contain rounded-2xl cursor-pointer" onclick="window.open('${post.image_url}', '_blank')">
+        ? `<div class="mt-3 rounded-2xl overflow-hidden border border-zinc-100 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/30">
+             <img src="${post.image_url}" alt="Новость" class="w-full h-auto rounded-2xl cursor-pointer block" loading="lazy" onclick="window.open('${post.image_url}', '_blank')">
            </div>`
         : "";
 
