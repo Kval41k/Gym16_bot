@@ -1,0 +1,39 @@
+{
+  "parallel": "11 классы",
+  "classes": ["11А", "11Б", "11В", "11Г", "11Д", "11Ж"],
+  "profiles_map": {
+    "11А": {
+      "has_choice": true,
+      "profiles": ["Соц-гум", "Филологический"]
+    },
+    "11Б": {
+      "has_choice": false,
+      "profiles": ["Физмат"]
+    },
+    "11В": {
+      "has_choice": true,
+      "profiles": ["Инфотех", "Инженерный"]
+    },
+    "11Г": {
+      "has_choice": false,
+      "profiles": ["Химбио"]
+    },
+    "11Д": {
+      "has_choice": false,
+      "profiles": ["Инфотех"]
+    },
+    "11Ж": {
+      "has_choice": false,
+      "profiles": ["Инфотех"]
+    }
+  },
+  "all_profiles": [
+    "Соц-гум",
+    "Филологический",
+    "Физмат",
+    "Инфотех",
+    "Инженерный",
+    "Химбио"
+  ],
+  "subgroups_enabled": false
+}

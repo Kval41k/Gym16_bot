@@ -1,0 +1,39 @@
+# Python environment & cache
+venv/
+ENV/
+env/
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Sensitive credentials & environment variables
+.env
+
+# SQLite Database
+*.db
+*.sqlite3
+gym16.db
+
+# Uploaded media (keep folder structure)
+uploads/*
+!uploads/.gitkeep
+
+# Operating system files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Standalone tunnel binaries
+cloudflared
+*.tgz
+
+# IDE & Editor configs
+.vscode/
+.idea/
+*.swp

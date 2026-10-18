@@ -1,0 +1,78 @@
+import os
+from pathlib import Path
+from typing import Dict, List
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+BASE_DIR = Path(__file__).resolve().parent
+
+class Settings(BaseSettings):
+    # Telegram Bot Token & Admins
+    BOT_TOKEN: str = "8797348665:AAGLYigdB8ikqeAzqR7x5TMeGNIvC2YbD4E"
+    ADMIN_IDS: str = "1097947498"
+    ADMIN_IDS_RAW: str = ""
+    ADMIN_USERNAME: str = "kvalx"
+    
+    # App & Server Configuration
+    BASE_URL: str = "https://osevj-85-11-167-132.free.pinggy.net"
+    HOST: str = "0.0.0.0"
+    PORT: int = 8000
+    DEBUG: bool = True
+    
+    # Database & Storage
+    DATABASE_URL: str = f"sqlite+aiosqlite:///{BASE_DIR}/gym16.db"
+    UPLOAD_DIR: Path = BASE_DIR / "uploads"
+    STATIC_DIR: Path = BASE_DIR / "static"
+    
+    model_config = SettingsConfigDict(
+        env_file=BASE_DIR / ".env",
+        env_file_encoding="utf-8",
+        extra="ignore"
+    )
+
+    @property
+    def admin_ids(self) -> List[int]:
+        raw_val = self.ADMIN_IDS or self.ADMIN_IDS_RAW
+        if not raw_val:
+            return []
+        ids = []
+        for item in str(raw_val).split(","):
+            cleaned = item.strip()
+            if cleaned.isdigit():
+                ids.append(int(cleaned))
+        return ids
+
+settings = Settings()
+
+# Official bell schedule (Gymnasium 16) from timetable sheet
+DEFAULT_BELLS = [
+    {"lesson_number": 1, "start_time": "08:15", "end_time": "08:55"},
+    {"lesson_number": 2, "start_time": "09:10", "end_time": "09:50"},
+    {"lesson_number": 3, "start_time": "10:10", "end_time": "10:50"},
+    {"lesson_number": 4, "start_time": "11:10", "end_time": "11:50"},
+    {"lesson_number": 5, "start_time": "12:10", "end_time": "12:50"},
+    {"lesson_number": 6, "start_time": "13:00", "end_time": "13:40"},
+    {"lesson_number": 7, "start_time": "13:50", "end_time": "14:30"},
+    {"lesson_number": 8, "start_time": "14:40", "end_time": "15:20"},
+]
+
+# Classes of the 11th grade parallel
+DEFAULT_CLASSES = ["11А", "11Б", "11В", "11Г", "11Д", "11Ж"]
+
+# Profiles mapping by class
+CLASS_PROFILES_MAP: Dict[str, List[str]] = {
+    "11А": ["Соц-гум", "Филологический"],
+    "11Б": ["Физмат"],
+    "11В": ["Инфотех", "Инженерный"],
+    "11Г": ["Химбио"],
+    "11Д": ["Инфотех"],
+    "11Ж": ["Инфотех"],
+}
+
+ALL_PROFILES: List[str] = [
+    "Соц-гум",
+    "Филологический",
+    "Физмат",
+    "Инфотех",
+    "Инженерный",
+    "Химбио"
+]
