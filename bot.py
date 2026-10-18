@@ -217,6 +217,8 @@ async def cmd_help(message: Message):
             "\n👑 <b>Команды администратора:</b>\n"
             "/admin — Панель администратора и статистика\n"
             "/pending — Список новостей на модерации\n"
+            "/delete_post &lt;id&gt; — Удалить новость по ID\n"
+            "/delete_comment &lt;id&gt; — Удалить комментарий по ID\n"
         )
     await message.answer(help_text)
 
@@ -634,6 +636,60 @@ async def show_pending_news(event: Union[Message, CallbackQuery], bot: Bot):
             await bot.send_photo(chat_id=target_chat, photo=local_image, caption=card_text, reply_markup=markup)
         else:
             await bot.send_message(chat_id=target_chat, text=card_text, reply_markup=markup)
+
+@router.message(Command("delete_post"))
+async def cmd_delete_post(message: Message):
+    if message.from_user.id not in settings.admin_ids:
+        await message.answer("⛔ Доступ запрещен.")
+        return
+
+    args = message.text.split()
+    if len(args) < 2 or not args[1].isdigit():
+        await message.answer("ℹ️ Использование: <code>/delete_post &lt;id новости&gt;</code>")
+        return
+
+    post_id = int(args[1])
+    async with async_session() as session:
+        post = await session.get(NewsPost, post_id)
+        if not post:
+            await message.answer(f"❌ Новость #{post_id} не найдена.")
+            return
+
+        if post.image_url:
+            p = settings.UPLOAD_DIR / Path(post.image_url).name
+            if p.exists():
+                try:
+                    p.unlink()
+                except Exception:
+                    pass
+
+        await session.delete(post)
+        await session.commit()
+
+    await message.answer(f"🗑 <b>Новость #{post_id} успешно удалена.</b>")
+
+@router.message(Command("delete_comment"))
+async def cmd_delete_comment(message: Message):
+    if message.from_user.id not in settings.admin_ids:
+        await message.answer("⛔ Доступ запрещен.")
+        return
+
+    args = message.text.split()
+    if len(args) < 2 or not args[1].isdigit():
+        await message.answer("ℹ️ Использование: <code>/delete_comment &lt;id комментария&gt;</code>")
+        return
+
+    comment_id = int(args[1])
+    async with async_session() as session:
+        comment = await session.get(Comment, comment_id)
+        if not comment:
+            await message.answer(f"❌ Комментарий #{comment_id} не найден.")
+            return
+
+        await session.delete(comment)
+        await session.commit()
+
+    await message.answer(f"🗑 <b>Комментарий #{comment_id} успешно удален.</b>")
 
 # -------------------------------------------------------------
 # Main Polling Function

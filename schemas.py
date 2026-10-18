@@ -104,6 +104,11 @@ class NewsCreateRequest(BaseModel):
     author_class: Optional[str] = None
     is_anonymous: bool = False
 
+class NewsEditRequest(BaseModel):
+    title: str = Field(..., min_length=3, max_length=255)
+    content: str = Field(..., min_length=5)
+    admin_id: int
+
 class ReactionCount(BaseModel):
     emoji: str
     count: int

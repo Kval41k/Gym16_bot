@@ -28,7 +28,7 @@ from models import BellSchedule, Comment, Lesson, NewsPost, Profile, Reaction, S
 from schemas import (
     BellItem, CommentCreateRequest, CommentResponse, DayScheduleResponse,
     LessonItem, LessonSlot, LiveStatusResponse, ModerationActionRequest,
-    NewsCreateRequest, NewsResponse, ReactionCount, ReactionToggleRequest,
+    NewsCreateRequest, NewsEditRequest, NewsResponse, ReactionCount, ReactionToggleRequest,
     StructureResponse, UserProfileUpdate, UserResponse, UserSyncRequest
 )
 
@@ -123,15 +123,17 @@ def verify_telegram_init_data(init_data_str: str) -> Optional[Dict[str, Any]]:
 async def notify_admins_about_post(
     post_id: int, 
     title: str, 
+    content: str,
     author_name: str, 
     author_class: Optional[str], 
     is_anonymous: bool, 
-    has_image: bool
+    image_url: Optional[str]
 ):
     """
     Sends notification to Telegram administrators when a new news post is suggested.
     Always reveals author identity and class to admins for moderation safety,
     even if marked anonymous for the public feed.
+    Sends attached photo directly to admins so they can review media visually!
     """
     if not settings.BOT_TOKEN or not settings.admin_ids or "ABCdefGHI" in settings.BOT_TOKEN:
         return
@@ -141,13 +143,15 @@ async def notify_admins_about_post(
     if is_anonymous:
         author_info += " <b>[🎭 Анонимно в ленте]</b>"
 
-    text = (
+    caption_text = (
         f"📢 <b>Новое предложение в ленту новостей (#{post_id})</b>\n\n"
         f"📝 <b>Заголовок:</b> {title}\n"
         f"👤 <b>Автор:</b> {author_info}\n"
-        f"🖼 <b>Медиа:</b> {'Да' if has_image else 'Нет'}\n\n"
+        f"📄 <b>Текст:</b>\n{content}\n\n"
         f"Выберите действие для модерации:"
     )
+    if len(caption_text) > 950:
+        caption_text = caption_text[:940] + "...\n\nВыберите действие для модерации:"
 
     reply_markup = {
         "inline_keyboard": [
@@ -158,20 +162,62 @@ async def notify_admins_about_post(
         ]
     }
 
-    async with httpx.AsyncClient(timeout=10.0) as client:
+    local_image_path: Optional[Path] = None
+    if image_url:
+        candidate = settings.UPLOAD_DIR / Path(image_url).name
+        if candidate.exists():
+            local_image_path = candidate
+
+    async with httpx.AsyncClient(timeout=15.0) as client:
         for admin_id in settings.admin_ids:
             try:
-                await client.post(
-                    f"{bot_url}/sendMessage",
-                    json={
-                        "chat_id": admin_id,
-                        "text": text,
-                        "parse_mode": "HTML",
-                        "reply_markup": reply_markup
-                    }
-                )
+                if local_image_path and local_image_path.exists():
+                    with open(local_image_path, "rb") as f:
+                        file_bytes = f.read()
+                    await client.post(
+                        f"{bot_url}/sendPhoto",
+                        data={
+                            "chat_id": admin_id,
+                            "caption": caption_text,
+                            "parse_mode": "HTML",
+                            "reply_markup": json.dumps(reply_markup)
+                        },
+                        files={"photo": (local_image_path.name, file_bytes, "image/jpeg")}
+                    )
+                elif image_url and image_url.startswith("http"):
+                    await client.post(
+                        f"{bot_url}/sendPhoto",
+                        data={
+                            "chat_id": admin_id,
+                            "photo": image_url,
+                            "caption": caption_text,
+                            "parse_mode": "HTML",
+                            "reply_markup": json.dumps(reply_markup)
+                        }
+                    )
+                else:
+                    await client.post(
+                        f"{bot_url}/sendMessage",
+                        json={
+                            "chat_id": admin_id,
+                            "text": caption_text,
+                            "parse_mode": "HTML",
+                            "reply_markup": reply_markup
+                        }
+                    )
             except Exception:
-                pass
+                try:
+                    await client.post(
+                        f"{bot_url}/sendMessage",
+                        json={
+                            "chat_id": admin_id,
+                            "text": caption_text,
+                            "parse_mode": "HTML",
+                            "reply_markup": reply_markup
+                        }
+                    )
+                except Exception:
+                    pass
 
 # -------------------------------------------------------------
 # Base & Meta Endpoints
@@ -628,10 +674,11 @@ async def suggest_news(
         notify_admins_about_post,
         post_id=new_post.id,
         title=new_post.title,
+        content=new_post.content,
         author_name=new_post.author_name,
         author_class=new_post.author_class,
         is_anonymous=new_post.is_anonymous,
-        has_image=bool(new_post.image_url)
+        image_url=new_post.image_url
     )
 
     reactions_list = [ReactionCount(emoji=e, count=0, user_reacted=False) for e in EMOJI_PALETTE]
@@ -850,6 +897,100 @@ async def moderate_news(
 
     await db.commit()
     return {"status": "success", "post_id": post_id, "action": payload.action}
+
+@app.delete("/api/admin/news/{post_id}")
+async def delete_news_post(
+    post_id: int, 
+    admin_id: int = Query(...), 
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Deletes a news post and removes its attached media file.
+    """
+    if admin_id not in settings.admin_ids:
+        admin_user = await db.get(User, admin_id)
+        if not admin_user or not admin_user.is_admin:
+            raise HTTPException(status_code=403, detail="Admin permissions required")
+
+    post = await db.get(NewsPost, post_id)
+    if not post:
+        raise HTTPException(status_code=404, detail="News post not found")
+
+    if post.image_url:
+        img_path = settings.UPLOAD_DIR / Path(post.image_url).name
+        if img_path.exists():
+            try:
+                img_path.unlink()
+            except Exception:
+                pass
+
+    await db.delete(post)
+    await db.commit()
+    return {"status": "success", "post_id": post_id, "action": "deleted"}
+
+@app.put("/api/admin/news/{post_id}", response_model=NewsResponse)
+async def edit_news_post(
+    post_id: int, 
+    payload: NewsEditRequest, 
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Allows administrator to edit post title and content directly in the feed.
+    """
+    if payload.admin_id not in settings.admin_ids:
+        admin_user = await db.get(User, payload.admin_id)
+        if not admin_user or not admin_user.is_admin:
+            raise HTTPException(status_code=403, detail="Admin permissions required")
+
+    post = await db.get(NewsPost, post_id)
+    if not post:
+        raise HTTPException(status_code=404, detail="News post not found")
+
+    post.title = payload.title.strip()
+    post.content = payload.content.strip()
+    await db.commit()
+    await db.refresh(post)
+
+    reactions_list = [ReactionCount(emoji=e, count=0, user_reacted=False) for e in EMOJI_PALETTE]
+    return NewsResponse(
+        id=post.id,
+        title=post.title,
+        content=post.content,
+        image_url=post.image_url,
+        author_name="Анонимно" if post.is_anonymous else post.author_name,
+        author_class=None if post.is_anonymous else post.author_class,
+        is_anonymous=post.is_anonymous,
+        status=post.status,
+        created_at=datetime.now(TYUMEN_TZ).strftime("%d.%m.%Y %H:%M"),
+        reactions=reactions_list,
+        comments_count=0
+    )
+
+@app.delete("/api/admin/comments/{comment_id}")
+async def delete_comment(
+    comment_id: int, 
+    user_id: int = Query(...), 
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Deletes a comment. Allowed for admins, or the author of the comment.
+    """
+    comment = await db.get(Comment, comment_id)
+    if not comment:
+        raise HTTPException(status_code=404, detail="Comment not found")
+
+    is_admin = user_id in settings.admin_ids
+    if not is_admin:
+        u = await db.get(User, user_id)
+        if u and u.is_admin:
+            is_admin = True
+
+    if not is_admin and comment.user_id != user_id:
+        raise HTTPException(status_code=403, detail="Permission denied to delete this comment")
+
+    await db.delete(comment)
+    await db.commit()
+    return {"status": "success", "comment_id": comment_id, "action": "deleted"}
 
 # -------------------------------------------------------------
 # Media Storage & Proxy Endpoints

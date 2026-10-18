@@ -202,15 +202,20 @@
     <!-- ---------------------------------------------------- -->
     <section id="tab-news" class="tab-page hidden space-y-4 px-4 pt-3">
       
-      <!-- Propose News Banner Card -->
+      <!-- Propose News Banner Card & Admin Moderation Action -->
       <div class="rounded-2xl p-4 bg-gradient-to-r from-blue-600/10 via-indigo-600/10 to-teal-600/10 dark:from-blue-900/20 dark:via-indigo-900/20 dark:to-teal-900/20 border border-ios-blue/20 flex items-center justify-between">
         <div>
           <h3 class="text-sm font-bold text-zinc-900 dark:text-white">Есть новость или объявление?</h3>
           <p class="text-xs text-ios-secondaryText mt-0.5">Предложи пост в школьную ленту</p>
         </div>
-        <button id="open-propose-modal-btn" class="px-3.5 py-1.5 rounded-xl bg-ios-blue text-white text-xs font-semibold shadow-sm active-press">
-          Предложить
-        </button>
+        <div class="flex items-center space-x-2">
+          <button id="admin-moderation-btn" class="hidden px-3 py-1.5 rounded-xl bg-amber-500/15 text-amber-700 dark:text-amber-300 text-xs font-bold border border-amber-500/30 active-press">
+            📬 Модерация <span id="admin-pending-badge" class="ml-1 px-1.5 py-0.5 bg-amber-500 text-white rounded-full text-[10px]">0</span>
+          </button>
+          <button id="open-propose-modal-btn" class="px-3.5 py-1.5 rounded-xl bg-ios-blue text-white text-xs font-semibold shadow-sm active-press">
+            Предложить
+          </button>
+        </div>
       </div>
 
       <!-- News Feed Posts List -->
@@ -424,8 +429,8 @@
             </label>
             <span id="propose-file-name" class="text-xs text-ios-secondaryText truncate max-w-[180px]">Файл не выбран</span>
           </div>
-          <div id="propose-image-preview" class="hidden mt-2 rounded-xl overflow-hidden max-h-40 border border-zinc-200 dark:border-zinc-800">
-            <img id="propose-img-tag" src="" class="w-full h-auto object-cover">
+          <div id="propose-image-preview" class="hidden mt-2 rounded-xl overflow-hidden max-h-60 border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/50 flex items-center justify-center">
+            <img id="propose-img-tag" src="" class="w-full h-auto max-h-60 object-contain">
           </div>
         </div>
 
@@ -451,6 +456,57 @@
         </button>
       </div>
 
+    </div>
+  </div>
+
+  <!-- ======================================================== -->
+  <!-- MODAL: EDIT NEWS (РЕДАКТИРОВАНИЕ ПОСТА АДМИНОМ)          -->
+  <!-- ======================================================== -->
+  <div id="edit-news-modal" class="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm hidden items-end sm:items-center justify-center transition-opacity">
+    <div class="bg-white dark:bg-ios-cardDark w-full max-w-md rounded-t-3xl sm:rounded-3xl p-6 shadow-ios-sheet max-h-[92vh] overflow-y-auto space-y-4">
+      <div class="flex items-center justify-between">
+        <h3 class="text-lg font-bold text-zinc-900 dark:text-white">✏️ Редактировать новость</h3>
+        <button id="close-edit-modal-btn" class="w-8 h-8 rounded-full bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center text-zinc-500 font-bold text-sm">✕</button>
+      </div>
+
+      <input type="hidden" id="edit-post-id" value="">
+
+      <div class="space-y-3">
+        <div>
+          <label class="text-xs font-semibold text-ios-secondaryText">Заголовок</label>
+          <input id="edit-post-title" type="text" class="w-full mt-1 px-3.5 py-2.5 rounded-xl bg-zinc-100 dark:bg-ios-cardDark2 border-0 text-sm focus:ring-2 focus:ring-ios-blue outline-none text-zinc-900 dark:text-white">
+        </div>
+
+        <div>
+          <label class="text-xs font-semibold text-ios-secondaryText">Текст новости</label>
+          <textarea id="edit-post-content" rows="5" class="w-full mt-1 px-3.5 py-2.5 rounded-xl bg-zinc-100 dark:bg-ios-cardDark2 border-0 text-sm focus:ring-2 focus:ring-ios-blue outline-none text-zinc-900 dark:text-white"></textarea>
+        </div>
+      </div>
+
+      <div class="pt-2">
+        <button id="save-edit-post-btn" class="w-full py-3.5 rounded-2xl bg-ios-blue text-white font-bold text-sm shadow-md active-press transition-all disabled:opacity-50">
+          Сохранить изменения
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ======================================================== -->
+  <!-- MODAL: ADMIN MODERATION (МОДЕРАЦИЯ НОВОСТЕЙ)             -->
+  <!-- ======================================================== -->
+  <div id="admin-moderation-modal" class="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm hidden items-end sm:items-center justify-center transition-opacity">
+    <div class="bg-white dark:bg-ios-cardDark w-full max-w-lg rounded-t-3xl sm:rounded-3xl p-6 shadow-ios-sheet max-h-[92vh] flex flex-col space-y-4">
+      <div class="flex items-center justify-between pb-2 border-b border-zinc-100 dark:border-zinc-800">
+        <div>
+          <h3 class="text-lg font-bold text-zinc-900 dark:text-white">📬 Модерация предложки</h3>
+          <p class="text-xs text-ios-secondaryText">Проверьте прикрепленные фото и текст перед публикацией</p>
+        </div>
+        <button id="close-moderation-modal-btn" class="w-8 h-8 rounded-full bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center text-zinc-500 font-bold text-sm">✕</button>
+      </div>
+
+      <div id="admin-pending-list" class="flex-1 overflow-y-auto space-y-4 pr-1">
+        <!-- Rendered dynamically -->
+      </div>
     </div>
   </div>
 
@@ -615,6 +671,18 @@
           return null;
         }
       },
+      async delete(url) {
+        try {
+          const res = await fetch(url, {
+            method: 'DELETE'
+          });
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          return await res.json();
+        } catch (e) {
+          console.error(`API DELETE ${url} error:`, e);
+          return null;
+        }
+      },
       async upload(file) {
         try {
           const formData = new FormData();
@@ -670,6 +738,7 @@
         headerActionBtn.classList.remove('hidden');
         headerActionBtn.textContent = '+ Новость';
         headerActionBtn.onclick = openProposeNewsModal;
+        checkPendingNewsCount();
       } else if (tabId === 'tab-profile') {
         appTitle.textContent = 'Профиль';
         headerActionBtn.classList.add('hidden');
@@ -721,6 +790,7 @@
       await updateLiveScheduleStatus();
       await loadSchedule();
       await loadNews();
+      await checkPendingNewsCount();
 
       // Start live interval
       setInterval(updateLiveScheduleStatus, 15000);
@@ -1163,11 +1233,12 @@
       }
     }
 
-    // --------------------------------------------------------
+// --------------------------------------------------------
     // News Feed Rendering & Interactions
     // --------------------------------------------------------
     async function loadNews() {
-      const container = document.getElementById('news-posts-list');
+      const container = document.getElementById("news-posts-list");
+      if (!container) return;
       container.innerHTML = `
         <div class="py-12 text-center text-xs text-ios-secondaryText space-y-2">
           <div class="inline-block animate-spin rounded-full h-5 w-5 border-2 border-ios-blue border-t-transparent"></div>
@@ -1188,15 +1259,20 @@
       }
 
       state.news = posts;
-      container.innerHTML = posts.map(p => renderNewsPost(p)).join('');
+      container.innerHTML = posts.map(p => renderNewsPost(p)).join("");
+    }
 
-      // Bind reaction buttons
-      container.querySelectorAll('.reaction-btn').forEach(btn => {
-        btn.addEventListener('click', async (e) => {
+    // Event delegation on news feed for reactions, comments, editing, and deleting
+    const newsContainer = document.getElementById("news-posts-list");
+    if (newsContainer) {
+      newsContainer.addEventListener("click", async (e) => {
+        // 1. Reaction toggle / un-react
+        const reactBtn = e.target.closest(".reaction-btn");
+        if (reactBtn) {
           e.stopPropagation();
-          const postId = parseInt(btn.getAttribute('data-post-id'));
-          const emoji = btn.getAttribute('data-emoji');
-          haptic('impact');
+          const postId = parseInt(reactBtn.getAttribute("data-post-id"));
+          const emoji = reactBtn.getAttribute("data-emoji");
+          haptic("impact");
 
           const updatedReactions = await API.post(`/api/news/${postId}/react`, {
             user_id: state.user.id,
@@ -1211,16 +1287,44 @@
               if (bar) bar.innerHTML = renderReactionBar(postId, updatedReactions);
             }
           }
-        });
-      });
+          return;
+        }
 
-      // Bind comments buttons
-      container.querySelectorAll('.open-comments-btn').forEach(btn => {
-        btn.addEventListener('click', () => {
-          const postId = parseInt(btn.getAttribute('data-post-id'));
+        // 2. Open comments
+        const commentsBtn = e.target.closest(".open-comments-btn");
+        if (commentsBtn) {
+          e.stopPropagation();
+          const postId = parseInt(commentsBtn.getAttribute("data-post-id"));
           openCommentsSheet(postId);
-          haptic('selection');
-        });
+          haptic("selection");
+          return;
+        }
+
+        // 3. Edit post (admin)
+        const editBtn = e.target.closest(".edit-news-btn");
+        if (editBtn) {
+          e.stopPropagation();
+          const postId = parseInt(editBtn.getAttribute("data-post-id"));
+          openEditModal(postId);
+          haptic("selection");
+          return;
+        }
+
+        // 4. Delete post (admin)
+        const deleteBtn = e.target.closest(".delete-news-btn");
+        if (deleteBtn) {
+          e.stopPropagation();
+          const postId = parseInt(deleteBtn.getAttribute("data-post-id"));
+          if (confirm("Вы действительно хотите удалить этот пост из ленты новостей?")) {
+            haptic("impact");
+            const res = await API.delete(`/api/admin/news/${postId}?admin_id=${state.user.id}`);
+            if (res) {
+              state.news = state.news.filter(p => p.id !== postId);
+              await loadNews();
+            }
+          }
+          return;
+        }
       });
     }
 
@@ -1228,43 +1332,61 @@
       return reactions.map(r => `
         <button data-post-id="${postId}" data-emoji="${r.emoji}" class="reaction-btn px-2.5 py-1 rounded-full text-xs font-semibold flex items-center space-x-1 active-press transition-all ${
           r.user_reacted 
-            ? 'bg-blue-100 text-ios-blue border border-ios-blue/40 dark:bg-blue-950/80 dark:text-blue-300' 
-            : 'bg-zinc-100 text-zinc-700 dark:bg-ios-cardDark2 dark:text-zinc-300'
+            ? "bg-blue-100 text-ios-blue border border-ios-blue/40 dark:bg-blue-950/80 dark:text-blue-300 ring-1 ring-ios-blue/30 font-bold" 
+            : "bg-zinc-100 text-zinc-700 dark:bg-ios-cardDark2 dark:text-zinc-300"
         }">
           <span>${r.emoji}</span>
           <span>${r.count}</span>
         </button>
-      `).join('');
+      `).join("");
     }
 
     function renderNewsPost(post) {
       const isAnon = post.is_anonymous;
-      const avatarContent = isAnon ? '🎭' : (post.author_name ? post.author_name.charAt(0) : 'Г');
+      const avatarContent = isAnon ? "🎭" : (post.author_name ? post.author_name.charAt(0) : "Г");
       const authorClassBadge = (!isAnon && post.author_class)
         ? `<span class="px-1.5 py-0.5 rounded-md bg-blue-50 text-ios-blue dark:bg-blue-950 dark:text-blue-300 text-[10px] font-bold border border-blue-200/50 dark:border-blue-900/50">${post.author_class}</span>`
-        : '';
+        : "";
 
+      const isAdmin = state.user && state.user.is_admin;
+      const adminActions = isAdmin ? `
+        <div class="flex items-center space-x-1.5 ml-auto">
+          <button data-post-id="${post.id}" class="edit-news-btn px-2.5 py-1 rounded-lg bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-300 text-xs font-medium flex items-center space-x-1 active-press">
+            <span>✏️</span>
+            <span class="hidden sm:inline">Изменить</span>
+          </button>
+          <button data-post-id="${post.id}" class="delete-news-btn px-2.5 py-1 rounded-lg bg-red-50 hover:bg-red-100 dark:bg-red-950/60 dark:hover:bg-red-900/80 text-red-600 dark:text-red-400 text-xs font-medium flex items-center space-x-1 active-press">
+            <span>🗑</span>
+            <span class="hidden sm:inline">Удалить</span>
+          </button>
+        </div>
+      ` : "";
+
+      // Natural uncropped aspect ratio for news media
       const imageHtml = post.image_url 
-        ? `<div class="mt-3 rounded-2xl overflow-hidden max-h-72 border border-zinc-100 dark:border-zinc-800">
-             <img src="${post.image_url}" alt="Новость" class="w-full h-full object-cover">
+        ? `<div class="mt-3 rounded-2xl overflow-hidden border border-zinc-100 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/50 flex items-center justify-center">
+             <img src="${post.image_url}" alt="Новость" class="w-full h-auto max-h-[550px] object-contain rounded-2xl cursor-pointer" onclick="window.open('${post.image_url}', '_blank')">
            </div>`
-        : '';
+        : "";
 
       return `
         <article class="rounded-3xl p-5 bg-white dark:bg-ios-cardDark border border-zinc-200/60 dark:border-zinc-800/80 shadow-ios-card space-y-3">
           
-          <!-- Post Author Header with Name, Class or Anonymous Badge -->
-          <div class="flex items-center space-x-2.5">
-            <div class="w-9 h-9 rounded-full ${isAnon ? 'bg-zinc-200 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 text-sm' : 'bg-gradient-to-tr from-ios-blue to-ios-indigo text-white text-xs'} font-bold flex items-center justify-center shadow-xs">
-              ${avatarContent}
-            </div>
-            <div>
-              <div class="text-xs font-bold text-zinc-900 dark:text-white leading-tight flex items-center space-x-1.5">
-                <span>${post.author_name}</span>
-                ${authorClassBadge}
+          <!-- Post Author Header with Name, Class or Anonymous Badge & Admin Controls -->
+          <div class="flex items-center justify-between">
+            <div class="flex items-center space-x-2.5">
+              <div class="w-9 h-9 rounded-full ${isAnon ? "bg-zinc-200 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 text-sm" : "bg-gradient-to-tr from-ios-blue to-ios-indigo text-white text-xs"} font-bold flex items-center justify-center shadow-xs">
+                ${avatarContent}
               </div>
-              <div class="text-[10px] text-ios-secondaryText">${post.created_at}</div>
+              <div>
+                <div class="text-xs font-bold text-zinc-900 dark:text-white leading-tight flex items-center space-x-1.5">
+                  <span>${post.author_name}</span>
+                  ${authorClassBadge}
+                </div>
+                <div class="text-[10px] text-ios-secondaryText">${post.created_at}</div>
+              </div>
             </div>
+            ${adminActions}
           </div>
 
           <!-- Post Content -->
@@ -1283,7 +1405,7 @@
 
             <button data-post-id="${post.id}" class="open-comments-btn px-3 py-1 rounded-full text-xs font-medium text-ios-secondaryText hover:text-zinc-900 dark:hover:text-white flex items-center space-x-1 active-press flex-shrink-0">
               <span>💬</span>
-              <span>${post.comments_count}</span>
+              <span id="comment-count-${post.id}">${post.comments_count}</span>
             </button>
           </div>
 
@@ -1294,35 +1416,35 @@
     // --------------------------------------------------------
     // Propose News Modal Handling
     // --------------------------------------------------------
-    const proposeModal = document.getElementById('propose-news-modal');
-    const openProposeModalBtn = document.getElementById('open-propose-modal-btn');
-    const closeProposeModalBtn = document.getElementById('close-propose-modal-btn');
-    const proposeFileInput = document.getElementById('propose-file');
-    const proposeFileName = document.getElementById('propose-file-name');
-    const proposeImagePreview = document.getElementById('propose-image-preview');
-    const proposeImgTag = document.getElementById('propose-img-tag');
+    const proposeModal = document.getElementById("propose-news-modal");
+    const openProposeModalBtn = document.getElementById("open-propose-modal-btn");
+    const closeProposeModalBtn = document.getElementById("close-propose-modal-btn");
+    const proposeFileInput = document.getElementById("propose-file");
+    const proposeFileName = document.getElementById("propose-file-name");
+    const proposeImagePreview = document.getElementById("propose-image-preview");
+    const proposeImgTag = document.getElementById("propose-img-tag");
     let selectedImageFile = null;
 
     function openProposeNewsModal() {
-      proposeModal.classList.remove('hidden');
-      proposeModal.classList.add('flex');
-      haptic('selection');
+      proposeModal.classList.remove("hidden");
+      proposeModal.classList.add("flex");
+      haptic("selection");
     }
 
     function closeProposeNewsModal() {
-      proposeModal.classList.add('hidden');
-      proposeModal.classList.remove('flex');
-      document.getElementById('propose-title').value = '';
-      document.getElementById('propose-content').value = '';
+      proposeModal.classList.add("hidden");
+      proposeModal.classList.remove("flex");
+      document.getElementById("propose-title").value = "";
+      document.getElementById("propose-content").value = "";
       selectedImageFile = null;
-      proposeFileName.textContent = 'Файл не выбран';
-      proposeImagePreview.classList.add('hidden');
+      proposeFileName.textContent = "Файл не выбран";
+      proposeImagePreview.classList.add("hidden");
     }
 
-    openProposeModalBtn?.addEventListener('click', openProposeNewsModal);
-    closeProposeModalBtn?.addEventListener('click', closeProposeNewsModal);
+    openProposeModalBtn?.addEventListener("click", openProposeNewsModal);
+    closeProposeModalBtn?.addEventListener("click", closeProposeNewsModal);
 
-    proposeFileInput.addEventListener('change', (e) => {
+    proposeFileInput?.addEventListener("change", (e) => {
       const file = e.target.files[0];
       if (file) {
         selectedImageFile = file;
@@ -1330,22 +1452,22 @@
         const reader = new FileReader();
         reader.onload = (re) => {
           proposeImgTag.src = re.target.result;
-          proposeImagePreview.classList.remove('hidden');
+          proposeImagePreview.classList.remove("hidden");
         };
         reader.readAsDataURL(file);
       }
     });
 
-    document.getElementById('submit-news-btn').addEventListener('click', async () => {
-      const title = document.getElementById('propose-title').value.trim();
-      const content = document.getElementById('propose-content').value.trim();
+    document.getElementById("submit-news-btn")?.addEventListener("click", async () => {
+      const title = document.getElementById("propose-title").value.trim();
+      const content = document.getElementById("propose-content").value.trim();
 
       if (!title || title.length < 3) {
-        alert('Пожалуйста, введите заголовок (не менее 3 символов)');
+        alert("Пожалуйста, введите заголовок (не менее 3 символов)");
         return;
       }
       if (!content || content.length < 5) {
-        alert('Пожалуйста, введите текст новости (не менее 5 символов)');
+        alert("Пожалуйста, введите текст новости (не менее 5 символов)");
         return;
       }
 
@@ -1357,10 +1479,10 @@
         }
       }
 
-      const isAnonymous = document.getElementById('propose-anonymous') ? document.getElementById('propose-anonymous').checked : false;
-      const authorName = `${state.user.first_name || ''} ${state.user.last_name || ''}`.trim() || state.user.first_name || 'Гимназист';
+      const isAnonymous = document.getElementById("propose-anonymous") ? document.getElementById("propose-anonymous").checked : false;
+      const authorName = `${state.user.first_name || ""} ${state.user.last_name || ""}`.trim() || state.user.first_name || "Гимназист";
 
-      const postRes = await API.post('/api/news', {
+      const postRes = await API.post("/api/news", {
         title: title,
         content: content,
         image_url: imageUrl,
@@ -1371,26 +1493,203 @@
       });
 
       if (postRes) {
-        haptic('success');
+        haptic("success");
         closeProposeNewsModal();
-        alert('Спасибо! Новость успешно отправлена на модерацию администратору.');
+        alert("Спасибо! Новость успешно отправлена на модерацию администратору.");
+        checkPendingNewsCount();
       }
+    });
+
+    // --------------------------------------------------------
+    // Edit News Post Handling (Admin)
+    // --------------------------------------------------------
+    const editModal = document.getElementById("edit-news-modal");
+    const closeEditModalBtn = document.getElementById("close-edit-modal-btn");
+    const saveEditPostBtn = document.getElementById("save-edit-post-btn");
+
+    function openEditModal(postId) {
+      const post = state.news.find(p => p.id === postId);
+      if (!post) return;
+      document.getElementById("edit-post-id").value = post.id;
+      document.getElementById("edit-post-title").value = post.title;
+      document.getElementById("edit-post-content").value = post.content;
+      editModal.classList.remove("hidden");
+      editModal.classList.add("flex");
+    }
+
+    function closeEditModal() {
+      editModal.classList.add("hidden");
+      editModal.classList.remove("flex");
+    }
+
+    closeEditModalBtn?.addEventListener("click", closeEditModal);
+
+    saveEditPostBtn?.addEventListener("click", async () => {
+      const postId = parseInt(document.getElementById("edit-post-id").value);
+      const title = document.getElementById("edit-post-title").value.trim();
+      const content = document.getElementById("edit-post-content").value.trim();
+
+      if (!title || !content) {
+        alert("Заполните заголовок и текст");
+        return;
+      }
+
+      saveEditPostBtn.disabled = true;
+      saveEditPostBtn.textContent = "Сохранение...";
+
+      const updated = await API.put(`/api/admin/news/${postId}`, {
+        title: title,
+        content: content,
+        admin_id: state.user.id
+      });
+
+      saveEditPostBtn.disabled = false;
+      saveEditPostBtn.textContent = "Сохранить изменения";
+
+      if (updated) {
+        closeEditModal();
+        haptic("impact");
+        await loadNews();
+      }
+    });
+
+    // --------------------------------------------------------
+    // Admin Moderation Modal Handling
+    // --------------------------------------------------------
+    const moderationModal = document.getElementById("admin-moderation-modal");
+    const openModerationBtn = document.getElementById("admin-moderation-btn");
+    const closeModerationBtn = document.getElementById("close-moderation-modal-btn");
+
+    async function checkPendingNewsCount() {
+      if (!state.user || !state.user.is_admin) return;
+      try {
+        const pending = await API.get(`/api/admin/news/pending?admin_id=${state.user.id}`);
+        const badge = document.getElementById("admin-pending-badge");
+        const btn = document.getElementById("admin-moderation-btn");
+        if (pending && pending.length > 0) {
+          if (badge) badge.textContent = pending.length;
+          if (btn) btn.classList.remove("hidden");
+        } else {
+          if (badge) badge.textContent = "0";
+          if (btn) btn.classList.remove("hidden");
+        }
+      } catch (e) {
+        console.error(e);
+      }
+    }
+
+    function renderPendingNews(posts) {
+      const container = document.getElementById("admin-pending-list");
+      if (!posts || posts.length === 0) {
+        container.innerHTML = `
+          <div class="py-12 text-center text-xs text-ios-secondaryText space-y-1">
+            <p class="text-2xl">🎉</p>
+            <p class="font-bold text-zinc-700 dark:text-zinc-300">Все новости промодерированы</p>
+            <p>В предложке нет ожидающих публикаций</p>
+          </div>
+        `;
+        return;
+      }
+
+      container.innerHTML = posts.map(p => {
+        const isAnon = p.is_anonymous;
+        const anonBadge = isAnon 
+          ? '<span class="px-2 py-0.5 rounded-md bg-purple-100 text-purple-700 dark:bg-purple-950 dark:text-purple-300 text-[10px] font-bold">🎭 Анонимно в ленте</span>' 
+          : "";
+        const classBadge = p.author_class 
+          ? `<span class="px-2 py-0.5 rounded-md bg-blue-100 text-ios-blue dark:bg-blue-950 dark:text-blue-300 text-[10px] font-bold">${p.author_class}</span>` 
+          : "";
+
+        // Uncropped photo preview for admin moderation
+        const imageHtml = p.image_url ? `
+          <div class="mt-2 rounded-xl overflow-hidden border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-900 flex items-center justify-center">
+            <img src="${p.image_url}" alt="Фото новости" class="w-full h-auto max-h-72 object-contain rounded-xl cursor-pointer" onclick="window.open('${p.image_url}', '_blank')">
+          </div>
+        ` : '<div class="mt-2 p-2 rounded-xl bg-zinc-100 dark:bg-zinc-800/50 text-[11px] text-ios-secondaryText italic">Без фотографии</div>';
+
+        return `
+          <div class="p-4 rounded-2xl bg-zinc-100/80 dark:bg-ios-cardDark2 border border-zinc-200/60 dark:border-zinc-800 space-y-2.5">
+            <div class="flex items-center justify-between flex-wrap gap-1">
+              <div class="flex items-center space-x-1.5">
+                <span class="text-xs font-bold text-zinc-900 dark:text-white">${p.author_name}</span>
+                ${classBadge}
+                ${anonBadge}
+              </div>
+              <span class="text-[10px] text-ios-secondaryText">${p.created_at}</span>
+            </div>
+
+            <div>
+              <h4 class="text-sm font-bold text-zinc-900 dark:text-white">${p.title}</h4>
+              <p class="mt-1 text-xs text-zinc-600 dark:text-zinc-300 whitespace-pre-line leading-relaxed">${p.content}</p>
+            </div>
+
+            ${imageHtml}
+
+            <div class="pt-2 flex items-center justify-end space-x-2 border-t border-zinc-200/60 dark:border-zinc-800/80">
+              <button data-post-id="${p.id}" class="admin-reject-btn px-3 py-1.5 rounded-xl bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300 text-xs font-bold active-press">
+                ❌ Отклонить
+              </button>
+              <button data-post-id="${p.id}" class="admin-approve-btn px-3.5 py-1.5 rounded-xl bg-emerald-600 text-white text-xs font-bold shadow-xs active-press">
+                ✅ Опубликовать
+              </button>
+            </div>
+          </div>
+        `;
+      }).join("");
+    }
+
+    async function openModerationModal() {
+      moderationModal.classList.remove("hidden");
+      moderationModal.classList.add("flex");
+      const pending = await API.get(`/api/admin/news/pending?admin_id=${state.user.id}`);
+      renderPendingNews(pending || []);
+    }
+
+    function closeModerationModal() {
+      moderationModal.classList.add("hidden");
+      moderationModal.classList.remove("flex");
+      loadNews();
+    }
+
+    openModerationBtn?.addEventListener("click", openModerationModal);
+    closeModerationBtn?.addEventListener("click", closeModerationModal);
+
+    const pendingListContainer = document.getElementById("admin-pending-list");
+    pendingListContainer?.addEventListener("click", async (e) => {
+      const approveBtn = e.target.closest(".admin-approve-btn");
+      const rejectBtn = e.target.closest(".admin-reject-btn");
+      if (!approveBtn && !rejectBtn) return;
+      const btn = approveBtn || rejectBtn;
+      const action = approveBtn ? "approve" : "reject";
+      const postId = parseInt(btn.getAttribute("data-post-id"));
+
+      btn.disabled = true;
+      haptic("impact");
+
+      await API.post(`/api/admin/news/${postId}/moderate`, {
+        action: action,
+        admin_id: state.user.id
+      });
+
+      const pending = await API.get(`/api/admin/news/pending?admin_id=${state.user.id}`);
+      renderPendingNews(pending || []);
+      checkPendingNewsCount();
     });
 
     // --------------------------------------------------------
     // Bottom Sheet: Comments Handling
     // --------------------------------------------------------
-    const commentsSheet = document.getElementById('comments-sheet');
-    const closeCommentsBtn = document.getElementById('close-comments-btn');
-    const newCommentInput = document.getElementById('new-comment-input');
-    const sendCommentBtn = document.getElementById('send-comment-btn');
+    const commentsSheet = document.getElementById("comments-sheet");
+    const closeCommentsBtn = document.getElementById("close-comments-btn");
+    const newCommentInput = document.getElementById("new-comment-input");
+    const sendCommentBtn = document.getElementById("send-comment-btn");
 
     async function openCommentsSheet(postId) {
       state.activePostForComments = postId;
-      commentsSheet.classList.remove('hidden');
-      commentsSheet.classList.add('flex');
+      commentsSheet.classList.remove("hidden");
+      commentsSheet.classList.add("flex");
 
-      const container = document.getElementById('comments-sheet-list');
+      const container = document.getElementById("comments-sheet-list");
       container.innerHTML = `
         <div class="py-12 text-center text-xs text-ios-secondaryText">
           <div class="inline-block animate-spin rounded-full h-4 w-4 border-2 border-ios-blue border-t-transparent"></div>
@@ -1403,17 +1702,17 @@
     }
 
     function closeCommentsSheet() {
-      commentsSheet.classList.add('hidden');
-      commentsSheet.classList.remove('flex');
+      commentsSheet.classList.add("hidden");
+      commentsSheet.classList.remove("flex");
       state.activePostForComments = null;
-      newCommentInput.value = '';
+      newCommentInput.value = "";
     }
 
-    closeCommentsBtn.addEventListener('click', closeCommentsSheet);
+    closeCommentsBtn?.addEventListener("click", closeCommentsSheet);
 
     function renderCommentsList(comments) {
-      const container = document.getElementById('comments-sheet-list');
-      if (comments.length === 0) {
+      const container = document.getElementById("comments-sheet-list");
+      if (!comments || comments.length === 0) {
         container.innerHTML = `
           <div class="py-12 text-center text-xs text-ios-secondaryText space-y-1">
             <p class="font-bold text-zinc-700 dark:text-zinc-300">Пока нет комментариев</p>
@@ -1423,23 +1722,59 @@
         return;
       }
 
-      container.innerHTML = comments.map(c => `
-        <div class="p-3 rounded-2xl bg-zinc-100 dark:bg-ios-cardDark2 space-y-1">
-          <div class="flex items-center justify-between">
-            <span class="text-xs font-bold text-zinc-900 dark:text-white">${c.author_name}</span>
-            <span class="text-[10px] text-ios-secondaryText">${c.created_at}</span>
+      container.innerHTML = comments.map(c => {
+        const canDelete = state.user && (state.user.is_admin || c.user_id === state.user.id);
+        const deleteBtn = canDelete ? `
+          <button data-comment-id="${c.id}" class="delete-comment-btn p-1 text-zinc-400 hover:text-red-500 rounded-md active-press" title="Удалить комментарий">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+          </button>
+        ` : "";
+
+        return `
+          <div class="p-3 rounded-2xl bg-zinc-100 dark:bg-ios-cardDark2 space-y-1">
+            <div class="flex items-center justify-between">
+              <span class="text-xs font-bold text-zinc-900 dark:text-white">${c.author_name} ${c.author_class ? `<span class="text-[10px] text-ios-blue font-normal">(${c.author_class})</span>` : ""}</span>
+              <div class="flex items-center space-x-1.5">
+                <span class="text-[10px] text-ios-secondaryText">${c.created_at}</span>
+                ${deleteBtn}
+              </div>
+            </div>
+            <p class="text-xs text-zinc-700 dark:text-zinc-200 whitespace-pre-line leading-relaxed">${c.text}</p>
           </div>
-          <p class="text-xs text-zinc-700 dark:text-zinc-200">${c.text}</p>
-        </div>
-      `).join('');
+        `;
+      }).join("");
       container.scrollTop = container.scrollHeight;
     }
 
-    sendCommentBtn.addEventListener('click', async () => {
+    // Comment deletion listener (admin or comment author)
+    document.getElementById("comments-sheet-list")?.addEventListener("click", async (e) => {
+      const btn = e.target.closest(".delete-comment-btn");
+      if (!btn) return;
+      e.stopPropagation();
+      const commentId = parseInt(btn.getAttribute("data-comment-id"));
+      if (!confirm("Удалить этот комментарий?")) return;
+      haptic("impact");
+
+      const res = await API.delete(`/api/admin/comments/${commentId}?user_id=${state.user.id}`);
+      if (res) {
+        const updatedComments = await API.get(`/api/news/${state.activePostForComments}/comments`);
+        renderCommentsList(updatedComments || []);
+        const countSpan = document.getElementById(`comment-count-${state.activePostForComments}`);
+        if (countSpan && updatedComments) {
+          countSpan.textContent = updatedComments.length;
+        }
+        const post = state.news.find(p => p.id === state.activePostForComments);
+        if (post && updatedComments) {
+          post.comments_count = updatedComments.length;
+        }
+      }
+    });
+
+    sendCommentBtn?.addEventListener("click", async () => {
       const text = newCommentInput.value.trim();
       if (!text || !state.activePostForComments) return;
 
-      const authorName = `${state.user.first_name || ''} ${state.user.last_name || ''}`.trim() || state.user.first_name || 'Гимназист';
+      const authorName = `${state.user.first_name || ""} ${state.user.last_name || ""}`.trim() || state.user.first_name || "Гимназист";
 
       const newComment = await API.post(`/api/news/${state.activePostForComments}/comments`, {
         user_id: state.user.id,
@@ -1449,15 +1784,23 @@
       });
 
       if (newComment) {
-        newCommentInput.value = '';
-        haptic('impact');
+        newCommentInput.value = "";
+        haptic("impact");
         const updatedComments = await API.get(`/api/news/${state.activePostForComments}/comments`);
         renderCommentsList(updatedComments || []);
+        const countSpan = document.getElementById(`comment-count-${state.activePostForComments}`);
+        if (countSpan && updatedComments) {
+          countSpan.textContent = updatedComments.length;
+        }
+        const post = state.news.find(p => p.id === state.activePostForComments);
+        if (post && updatedComments) {
+          post.comments_count = updatedComments.length;
+        }
       }
     });
 
-    newCommentInput.addEventListener('keypress', (e) => {
-      if (e.key === 'Enter') {
+    newCommentInput?.addEventListener("keypress", (e) => {
+      if (e.key === "Enter") {
         sendCommentBtn.click();
       }
     });
