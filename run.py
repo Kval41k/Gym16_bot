@@ -11,10 +11,11 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("Gym16_Runner")
 
 async def run_api():
+    port = int(os.getenv("PORT", settings.PORT))
     config = uvicorn.Config(
         app=app,
         host=settings.HOST,
-        port=settings.PORT,
+        port=port,
         log_level="info"
     )
     server = uvicorn.Server(config)
