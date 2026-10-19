@@ -20,14 +20,22 @@ class Settings(BaseSettings):
     
     # Database & Storage
     DATABASE_URL: str = f"sqlite+aiosqlite:///{BASE_DIR}/gym16.db"
-    UPLOAD_DIR: Path = BASE_DIR / "uploads"
-    STATIC_DIR: Path = BASE_DIR / "static"
+    UPLOAD_DIR_RAW: str = ""
+    STATIC_DIR_RAW: str = ""
     
     model_config = SettingsConfigDict(
         env_file=BASE_DIR / ".env",
         env_file_encoding="utf-8",
         extra="ignore"
     )
+
+    @property
+    def UPLOAD_DIR(self) -> Path:
+        return (BASE_DIR / "uploads").resolve()
+
+    @property
+    def STATIC_DIR(self) -> Path:
+        return (BASE_DIR / "static").resolve()
 
     @property
     def admin_ids(self) -> List[int]:

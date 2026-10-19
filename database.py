@@ -1,10 +1,12 @@
 from typing import AsyncGenerator
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase
-from config import settings
+from config import BASE_DIR, settings
 
 def get_db_url() -> str:
     url = settings.DATABASE_URL
+    if "sqlite" in url and ("./gym16.db" in url or ":///./" in url):
+        return f"sqlite+aiosqlite:///{BASE_DIR}/gym16.db"
     if url.startswith("postgres://"):
         url = url.replace("postgres://", "postgresql+asyncpg://", 1)
     elif url.startswith("postgresql://") and not url.startswith("postgresql+asyncpg://"):

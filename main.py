@@ -106,6 +106,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Ensure directories exist before mounting
+settings.UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+settings.STATIC_DIR.mkdir(parents=True, exist_ok=True)
+
 # Mount local uploads for direct static image access
 app.mount("/uploads", StaticFiles(directory=settings.UPLOAD_DIR), name="uploads")
 
@@ -463,7 +467,15 @@ async def get_bells(db: AsyncSession = Depends(get_db)):
     res = await db.execute(
         select(BellSchedule).order_by(BellSchedule.lesson_number)
     )
-    bells = res.scalars().all()
+    raw_bells = res.scalars().all()
+    bells = [
+        BellItem(
+            lesson_number=b.lesson_number,
+            start_time=b.start_time,
+            end_time=b.end_time
+        )
+        for b in raw_bells
+    ]
     cache_set("schedule_bells", bells)
     return bells
 
@@ -655,11 +667,16 @@ async def get_lessons(
 # -------------------------------------------------------------
 @app.get("/api/news", response_model=List[NewsResponse])
 async def get_news(
-    user_id: Optional[int] = Query(None),
+    user_id: Optional[str] = Query(None),
     limit: int = Query(20, ge=1, le=100),
     offset: int = Query(0, ge=0),
     db: AsyncSession = Depends(get_db)
 ):
+    parsed_user_id: Optional[int] = None
+    if user_id:
+        cleaned_uid = str(user_id).strip()
+        if cleaned_uid.isdigit():
+            parsed_user_id = int(cleaned_uid)
     """
     Returns approved news feed posts with reaction tallies and comments count.
     If post is anonymous, author_name is masked as 'Анонимно' and author_class is omitted.
@@ -686,7 +703,7 @@ async def get_news(
 
         for r in p.reactions:
             reaction_counts_dict[r.emoji] = reaction_counts_dict.get(r.emoji, 0) + 1
-            if user_id and r.user_id == user_id:
+            if parsed_user_id and r.user_id == parsed_user_id:
                 user_reacted_dict[r.emoji] = True
 
         reactions_list = [

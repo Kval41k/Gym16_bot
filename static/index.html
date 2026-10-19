@@ -447,9 +447,12 @@
     <div class="bg-white dark:bg-ios-cardDark w-full max-w-md rounded-t-3xl sm:rounded-3xl p-6 shadow-ios-sheet max-h-[92vh] overflow-y-auto space-y-4 animate-slide-up">
       
       <!-- Modal Header -->
-      <div class="text-center space-y-1">
+      <div class="flex items-center justify-between pb-1">
         <div class="w-12 h-1.5 bg-zinc-300 dark:bg-zinc-700 rounded-full mx-auto mb-2 sm:hidden"></div>
         <h3 id="onboarding-modal-title" class="text-xl font-bold tracking-tight text-zinc-900 dark:text-white">Настройка профиля</h3>
+        <button id="close-onboarding-modal-btn" onclick="closeOnboardingModal()" class="w-7 h-7 rounded-full bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center text-zinc-500 font-bold text-xs active-press">✕</button>
+      </div>
+      <div class="text-center space-y-1">
         <p class="text-xs text-ios-secondaryText">Укажи свои данные и выбери класс. Система запомнит твой выбор при последующих заходах.</p>
       </div>
 
@@ -852,46 +855,64 @@
     });
 
     function switchTab(tabId) {
-      tabPages.forEach(p => p.classList.add('hidden'));
-      document.getElementById(tabId)?.classList.remove('hidden');
+      try {
+        const pages = document.querySelectorAll('.tab-page');
+        pages.forEach(p => p.classList.add('hidden'));
+        const targetPage = document.getElementById(tabId);
+        if (targetPage) targetPage.classList.remove('hidden');
 
-      tabButtons.forEach(b => {
-        if (b.getAttribute('data-tab') === tabId) {
-          b.classList.remove('text-ios-secondaryText');
-          b.classList.add('text-ios-blue');
-        } else {
-          b.classList.remove('text-ios-blue');
-          b.classList.add('text-ios-secondaryText');
-        }
-      });
+        const buttons = document.querySelectorAll('.nav-tab-btn');
+        buttons.forEach(b => {
+          if (b.getAttribute('data-tab') === tabId) {
+            b.classList.remove('text-ios-secondaryText');
+            b.classList.add('text-ios-blue');
+          } else {
+            b.classList.remove('text-ios-blue');
+            b.classList.add('text-ios-secondaryText');
+          }
+        });
 
-      if (tabId === 'tab-schedule') {
-        appTitle.textContent = 'Расписание';
-        headerActionBtn.classList.add('hidden');
-      } else if (tabId === 'tab-news') {
-        appTitle.textContent = 'Новости';
-        headerActionBtn.classList.remove('hidden');
-        headerActionBtn.textContent = '+ Новость';
-        headerActionBtn.onclick = openProposeNewsModal;
-        checkPendingNewsCount();
-      } else if (tabId === 'tab-ege') {
-        appTitle.textContent = 'ЕГЭ';
-        const isAdmin = checkIsAdmin();
-        if (isAdmin) {
-          headerActionBtn.classList.remove('hidden');
-          headerActionBtn.textContent = '+ Материал';
-          headerActionBtn.onclick = openAddEgeModal;
-          const egeBtn = document.getElementById('ege-add-mat-btn');
-          if (egeBtn) { egeBtn.classList.remove('hidden'); egeBtn.classList.add('flex'); }
-        } else {
-          headerActionBtn.classList.add('hidden');
+        const appTitleEl = document.getElementById('app-title');
+        const headerBtn = document.getElementById('header-action-btn');
+
+        if (tabId === 'tab-schedule') {
+          if (appTitleEl) appTitleEl.textContent = 'Расписание';
+          if (headerBtn) headerBtn.classList.add('hidden');
+          loadSchedule().catch(() => {});
+        } else if (tabId === 'tab-news') {
+          if (appTitleEl) appTitleEl.textContent = 'Новости';
+          if (headerBtn) {
+            headerBtn.classList.remove('hidden');
+            headerBtn.textContent = '+ Новость';
+            headerBtn.onclick = openProposeNewsModal;
+          }
+          loadNews().catch(() => {});
+          checkPendingNewsCount().catch(() => {});
+        } else if (tabId === 'tab-ege') {
+          if (appTitleEl) appTitleEl.textContent = 'ЕГЭ';
+          const isAdmin = checkIsAdmin();
+          if (isAdmin) {
+            if (headerBtn) {
+              headerBtn.classList.remove('hidden');
+              headerBtn.textContent = '+ Материал';
+              headerBtn.onclick = openAddEgeModal;
+            }
+            const egeBtn = document.getElementById('ege-add-mat-btn');
+            if (egeBtn) { egeBtn.classList.remove('hidden'); egeBtn.classList.add('flex'); }
+          } else {
+            if (headerBtn) headerBtn.classList.add('hidden');
+          }
+          loadEgeMaterials().catch(() => {});
+        } else if (tabId === 'tab-profile') {
+          if (appTitleEl) appTitleEl.textContent = 'Профиль';
+          if (headerBtn) headerBtn.classList.add('hidden');
+          updateProfileUI();
         }
-        loadEgeMaterials();
-      } else if (tabId === 'tab-profile') {
-        appTitle.textContent = 'Профиль';
-        headerActionBtn.classList.add('hidden');
+      } catch (err) {
+        console.error('switchTab error:', err);
       }
     }
+    window.switchTab = switchTab;
 
     // --------------------------------------------------------
     // User Sync & Onboarding
@@ -1205,6 +1226,29 @@
     });
 
     // Day buttons (0=Пн..5=Сб)
+    
+    // --------------------------------------------------------
+    // Select Day Function (0=Пн..5=Сб)
+    // --------------------------------------------------------
+    function selectDay(d) {
+      try {
+        state.selectedDay = d;
+        const dayButtons = document.querySelectorAll('.day-btn');
+        dayButtons.forEach(b => {
+          if (parseInt(b.getAttribute('data-day')) === d) {
+            b.className = 'day-btn flex-1 py-1.5 text-xs font-semibold rounded-xl text-center transition-all bg-white dark:bg-zinc-700 text-zinc-900 dark:text-white shadow-sm active-press';
+          } else {
+            b.className = 'day-btn flex-1 py-1.5 text-xs font-semibold rounded-xl text-center transition-all text-ios-secondaryText active-press';
+          }
+        });
+        loadSchedule();
+        haptic('selection');
+      } catch (err) {
+        console.error('selectDay error:', err);
+      }
+    }
+    window.selectDay = selectDay;
+
     const dayButtons = document.querySelectorAll('.day-btn');
     dayButtons.forEach(btn => {
       btn.addEventListener('click', () => {
@@ -2209,6 +2253,21 @@
     }
 
     async function handleSaveEgeMaterial(e) {
+
+    window.renderScheduleProfileFilters = renderScheduleProfileFilters;
+    window.setScheduleProfileFilter = setScheduleProfileFilter;
+    window.setEgeSubject = setEgeSubject;
+    window.setEgeTaskFilter = setEgeTaskFilter;
+    window.openAddEgeModal = openAddEgeModal;
+    window.openEditEgeModal = openEditEgeModal;
+    window.closeEgeModal = closeEgeModal;
+    window.deleteEgeMaterial = deleteEgeMaterial;
+    window.handleSaveEgeMaterial = handleSaveEgeMaterial;
+    window.openOnboardingModal = openOnboardingModal;
+    window.closeOnboardingModal = closeOnboardingModal;
+    window.openProposeNewsModal = openProposeNewsModal;
+    window.closeProposeNewsModal = closeProposeNewsModal;
+
       e.preventDefault();
       const editId = document.getElementById('ege-edit-id').value;
       const subject = document.getElementById('ege-form-subject').value;
