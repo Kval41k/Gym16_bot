@@ -496,7 +496,12 @@ async def seed():
             session.add(Profile(name=p_name))
 
         # 3. Seed Lessons for 11A, 11В, 11Г, 11Ж
-        all_seeded_lessons = LESSONS_11A + LESSONS_11V + LESSONS_11G + LESSONS_11ZH
+        LESSONS_11D = [
+    {**item, 'class_name': '11Д'}
+    for item in LESSONS_11V
+]
+
+all_seeded_lessons = LESSONS_11A + LESSONS_11V + LESSONS_11G + LESSONS_11ZH + LESSONS_11D
         logger.info(f"Seeding {len(all_seeded_lessons)} lessons across 11А, 11В, 11Г, 11Ж...")
         await session.execute(delete(Lesson))
 
