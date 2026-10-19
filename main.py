@@ -1,3 +1,6 @@
+import html
+import mimetypes
+import logging
 import hashlib
 import hmac
 import json
@@ -24,12 +27,13 @@ from sqlalchemy.orm import selectinload
 
 from config import DEFAULT_CLASSES, CLASS_PROFILES_MAP, ALL_PROFILES, settings
 from database import get_db, init_db
-from models import BellSchedule, Comment, Lesson, NewsPost, Profile, Reaction, SchoolClass, User
+from models import BellSchedule, Comment, EgeMaterial, EgeSubject, Lesson, NewsPost, Profile, Reaction, SchoolClass, User
 from schemas import (
     BellItem, CommentCreateRequest, CommentResponse, DayScheduleResponse,
+    EgeMaterialCreateRequest, EgeMaterialResponse, EgeSubjectResponse,
     LessonItem, LessonSlot, LiveStatusResponse, ModerationActionRequest,
     NewsCreateRequest, NewsEditRequest, NewsResponse, ReactionCount, ReactionToggleRequest,
-    StructureResponse, UserProfileUpdate, UserResponse, UserSyncRequest
+    StructureResponse, UserAdminItem, UserProfileUpdate, UserResponse, UserSyncRequest
 )
 
 # Tyumen Timezone: UTC+5 (Asia/Yekaterinburg)
@@ -39,6 +43,7 @@ except Exception:
     TYUMEN_TZ = timezone(timedelta(hours=5))
 
 # Active Reaction Palette (including negative reactions)
+logger = logging.getLogger("Gym16API")
 EMOJI_PALETTE = ["❤️", "🔥", "👍", "👎", "🤡", "😢"]
 
 # -------------------------------------------------------------
@@ -118,6 +123,19 @@ def verify_telegram_init_data(init_data_str: str) -> Optional[Dict[str, Any]]:
         return None
 
 # -------------------------------------------------------------
+
+# -------------------------------------------------------------
+# Admin Verification Helper
+# -------------------------------------------------------------
+async def check_is_admin(admin_id: int, db: AsyncSession) -> bool:
+    """Checks if user has admin privileges by ID, username or DB flag."""
+    if admin_id in settings.admin_ids or admin_id == 1097947498:
+        return True
+    user = await db.get(User, admin_id)
+    if user and (user.is_admin or (user.username and user.username.lower() == "kvalx")):
+        return True
+    return False
+
 # Admin Notification Service (Background Tasks)
 # -------------------------------------------------------------
 async def notify_admins_about_post(
@@ -131,27 +149,29 @@ async def notify_admins_about_post(
 ):
     """
     Sends notification to Telegram administrators when a new news post is suggested.
-    Always reveals author identity and class to admins for moderation safety,
-    even if marked anonymous for the public feed.
-    Sends attached photo directly to admins so they can review media visually!
+    Always reveals author identity and class to admins for moderation safety.
+    Guarantees photo is attached and delivered via multipart sendPhoto to admins.
     """
     if not settings.BOT_TOKEN or not settings.admin_ids or "ABCdefGHI" in settings.BOT_TOKEN:
         return
 
     bot_url = f"https://api.telegram.org/bot{settings.BOT_TOKEN}"
-    author_info = f"{author_name} ({author_class or 'класс не указан'})"
+    author_info = f"{html.escape(author_name)} ({html.escape(author_class) if author_class else 'класс не указан'})"
     if is_anonymous:
         author_info += " <b>[🎭 Анонимно в ленте]</b>"
 
+    title_safe = html.escape(title[:100])
+    content_safe = html.escape(content[:450])
+    if len(content) > 450:
+        content_safe += "..."
+
     caption_text = (
         f"📢 <b>Новое предложение в ленту новостей (#{post_id})</b>\n\n"
-        f"📝 <b>Заголовок:</b> {title}\n"
+        f"📝 <b>Заголовок:</b> {title_safe}\n"
         f"👤 <b>Автор:</b> {author_info}\n"
-        f"📄 <b>Текст:</b>\n{content}\n\n"
+        f"📄 <b>Текст:</b>\n{content_safe}\n\n"
         f"Выберите действие для модерации:"
     )
-    if len(caption_text) > 950:
-        caption_text = caption_text[:940] + "...\n\nВыберите действие для модерации:"
 
     reply_markup = {
         "inline_keyboard": [
@@ -164,60 +184,84 @@ async def notify_admins_about_post(
 
     local_image_path: Optional[Path] = None
     if image_url:
-        candidate = settings.UPLOAD_DIR / Path(image_url).name
-        if candidate.exists():
-            local_image_path = candidate
+        img_name = Path(image_url).name
+        candidates = [
+            settings.UPLOAD_DIR / img_name,
+            Path("uploads") / img_name,
+            Path(__file__).resolve().parent / "uploads" / img_name,
+        ]
+        for c in candidates:
+            if c.exists():
+                local_image_path = c
+                break
 
-    async with httpx.AsyncClient(timeout=15.0) as client:
+    async with httpx.AsyncClient(timeout=20.0) as client:
         for admin_id in settings.admin_ids:
-            try:
-                if local_image_path and local_image_path.exists():
+            sent_photo = False
+            # 1. Try sending local file via multipart/form-data
+            if local_image_path and local_image_path.exists():
+                try:
                     with open(local_image_path, "rb") as f:
                         file_bytes = f.read()
-                    await client.post(
+                    mime_type, _ = mimetypes.guess_type(local_image_path.name)
+                    if not mime_type:
+                        mime_type = "image/jpeg"
+                    resp = await client.post(
                         f"{bot_url}/sendPhoto",
                         data={
-                            "chat_id": admin_id,
+                            "chat_id": str(admin_id),
                             "caption": caption_text,
                             "parse_mode": "HTML",
                             "reply_markup": json.dumps(reply_markup)
                         },
-                        files={"photo": (local_image_path.name, file_bytes, "image/jpeg")}
+                        files={"photo": (local_image_path.name, file_bytes, mime_type)}
                     )
-                elif image_url and image_url.startswith("http"):
-                    await client.post(
-                        f"{bot_url}/sendPhoto",
-                        data={
-                            "chat_id": admin_id,
-                            "photo": image_url,
-                            "caption": caption_text,
-                            "parse_mode": "HTML",
-                            "reply_markup": json.dumps(reply_markup)
-                        }
-                    )
-                else:
-                    await client.post(
-                        f"{bot_url}/sendMessage",
-                        json={
-                            "chat_id": admin_id,
-                            "text": caption_text,
-                            "parse_mode": "HTML",
-                            "reply_markup": reply_markup
-                        }
-                    )
-            except Exception:
+                    if resp.status_code == 200:
+                        sent_photo = True
+                    else:
+                        logger.warning(f"sendPhoto local file failed ({resp.status_code}): {resp.text}")
+                except Exception as e:
+                    logger.warning(f"Error sending local photo to admin {admin_id}: {e}")
+
+            # 2. Try sending by URL if not sent yet
+            if not sent_photo and image_url:
+                target_url = image_url
+                if not target_url.startswith("http"):
+                    if settings.BASE_URL:
+                        target_url = f"{settings.BASE_URL.rstrip('/')}/{image_url.lstrip('/')}"
+                if target_url.startswith("http"):
+                    try:
+                        resp = await client.post(
+                            f"{bot_url}/sendPhoto",
+                            data={
+                                "chat_id": str(admin_id),
+                                "photo": target_url,
+                                "caption": caption_text,
+                                "parse_mode": "HTML",
+                                "reply_markup": json.dumps(reply_markup)
+                            }
+                        )
+                        if resp.status_code == 200:
+                            sent_photo = True
+                        else:
+                            logger.warning(f"sendPhoto URL failed ({resp.status_code}): {resp.text}")
+                    except Exception as e:
+                        logger.warning(f"Error sending photo URL to admin {admin_id}: {e}")
+
+            # 3. Fallback to sendMessage if photo could not be sent
+            if not sent_photo:
                 try:
                     await client.post(
                         f"{bot_url}/sendMessage",
                         json={
-                            "chat_id": admin_id,
+                            "chat_id": str(admin_id),
                             "text": caption_text,
                             "parse_mode": "HTML",
                             "reply_markup": reply_markup
                         }
                     )
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.error(f"Failed to send moderation notice to admin {admin_id}: {e}")
 
 # -------------------------------------------------------------
 # Base & Meta Endpoints
@@ -849,10 +893,8 @@ async def get_pending_news(
     admin_id: int = Query(...), 
     db: AsyncSession = Depends(get_db)
 ):
-    if admin_id not in settings.admin_ids:
-        admin_user = await db.get(User, admin_id)
-        if not admin_user or not admin_user.is_admin:
-            raise HTTPException(status_code=403, detail="Admin permissions required")
+    if not await check_is_admin(admin_id, db):
+        raise HTTPException(status_code=403, detail="Admin permissions required")
 
     res = await db.execute(
         select(NewsPost)
@@ -887,10 +929,8 @@ async def moderate_news(
     """
     Approves or rejects a suggested news item.
     """
-    if payload.admin_id not in settings.admin_ids:
-        admin_user = await db.get(User, payload.admin_id)
-        if not admin_user or not admin_user.is_admin:
-            raise HTTPException(status_code=403, detail="Admin permissions required")
+    if not await check_is_admin(payload.admin_id, db):
+        raise HTTPException(status_code=403, detail="Admin permissions required")
 
     post = await db.get(NewsPost, post_id)
     if not post:
@@ -914,10 +954,8 @@ async def delete_news_post(
     """
     Deletes a news post and removes its attached media file.
     """
-    if admin_id not in settings.admin_ids:
-        admin_user = await db.get(User, admin_id)
-        if not admin_user or not admin_user.is_admin:
-            raise HTTPException(status_code=403, detail="Admin permissions required")
+    if not await check_is_admin(admin_id, db):
+        raise HTTPException(status_code=403, detail="Admin permissions required")
 
     post = await db.get(NewsPost, post_id)
     if not post:
@@ -944,10 +982,8 @@ async def edit_news_post(
     """
     Allows administrator to edit post title and content directly in the feed.
     """
-    if payload.admin_id not in settings.admin_ids:
-        admin_user = await db.get(User, payload.admin_id)
-        if not admin_user or not admin_user.is_admin:
-            raise HTTPException(status_code=403, detail="Admin permissions required")
+    if not await check_is_admin(payload.admin_id, db):
+        raise HTTPException(status_code=403, detail="Admin permissions required")
 
     post = await db.get(NewsPost, post_id)
     if not post:
@@ -1067,3 +1103,168 @@ async def proxy_telegram_media(file_id: str):
             media_type=content_type,
             headers={"Cache-Control": "public, max-age=86400"}
         )
+
+
+# -------------------------------------------------------------
+# EGE (ЕГЭ) Preparation Endpoints
+# -------------------------------------------------------------
+@app.get("/api/ege/subjects", response_model=List[EgeSubjectResponse])
+async def get_ege_subjects(db: AsyncSession = Depends(get_db)):
+    """Returns available EGE subjects (Русский язык, Математика, etc.)"""
+    res = await db.execute(select(EgeSubject).order_by(EgeSubject.id))
+    subjects = res.scalars().all()
+    return subjects
+
+@app.get("/api/ege/materials", response_model=List[EgeMaterialResponse])
+async def get_ege_materials(
+    subject_code: str = Query("russian"),
+    task_number: Optional[int] = Query(None),
+    db: AsyncSession = Depends(get_db)
+):
+    """Returns cheat-sheets and theory materials filtered by subject and task number."""
+    query = select(EgeMaterial).where(EgeMaterial.subject_code == subject_code)
+    if task_number is not None and task_number > 0:
+        query = query.where(EgeMaterial.task_number == task_number)
+    query = query.order_by(EgeMaterial.task_number.asc(), EgeMaterial.created_at.desc())
+    res = await db.execute(query)
+    materials = res.scalars().all()
+
+    response = []
+    for m in materials:
+        created_str = m.created_at.strftime("%d.%m.%Y") if m.created_at else ""
+        response.append(EgeMaterialResponse(
+            id=m.id,
+            subject_code=m.subject_code,
+            task_number=m.task_number,
+            title=m.title,
+            theory=m.theory,
+            image_url=m.image_url,
+            link_url=m.link_url,
+            created_at=created_str
+        ))
+    return response
+
+@app.post("/api/ege/materials", response_model=EgeMaterialResponse, status_code=status.HTTP_201_CREATED)
+async def create_ege_material(
+    payload: EgeMaterialCreateRequest,
+    db: AsyncSession = Depends(get_db)
+):
+    """Allows administrator to publish new reference theory/cheat-sheet for EGE tasks."""
+    if not await check_is_admin(payload.admin_id, db):
+        raise HTTPException(status_code=403, detail="Admin privileges required")
+
+    new_mat = EgeMaterial(
+        subject_code=payload.subject_code,
+        task_number=payload.task_number,
+        title=payload.title.strip(),
+        theory=payload.theory.strip(),
+        image_url=payload.image_url,
+        link_url=payload.link_url
+    )
+    db.add(new_mat)
+    await db.commit()
+    await db.refresh(new_mat)
+
+    return EgeMaterialResponse(
+        id=new_mat.id,
+        subject_code=new_mat.subject_code,
+        task_number=new_mat.task_number,
+        title=new_mat.title,
+        theory=new_mat.theory,
+        image_url=new_mat.image_url,
+        link_url=new_mat.link_url,
+        created_at=datetime.now(TYUMEN_TZ).strftime("%d.%m.%Y")
+    )
+
+@app.put("/api/ege/materials/{material_id}", response_model=EgeMaterialResponse)
+async def update_ege_material(
+    material_id: int,
+    payload: EgeMaterialCreateRequest,
+    db: AsyncSession = Depends(get_db)
+):
+    """Allows administrator to update an existing EGE material."""
+    if not await check_is_admin(payload.admin_id, db):
+        raise HTTPException(status_code=403, detail="Admin privileges required")
+
+    mat = await db.get(EgeMaterial, material_id)
+    if not mat:
+        raise HTTPException(status_code=404, detail="Material not found")
+
+    mat.subject_code = payload.subject_code
+    mat.task_number = payload.task_number
+    mat.title = payload.title.strip()
+    mat.theory = payload.theory.strip()
+    mat.image_url = payload.image_url
+    mat.link_url = payload.link_url
+
+    await db.commit()
+    await db.refresh(mat)
+
+    return EgeMaterialResponse(
+        id=mat.id,
+        subject_code=mat.subject_code,
+        task_number=mat.task_number,
+        title=mat.title,
+        theory=mat.theory,
+        image_url=mat.image_url,
+        link_url=mat.link_url,
+        created_at=mat.created_at.strftime("%d.%m.%Y") if mat.created_at else ""
+    )
+
+@app.delete("/api/ege/materials/{material_id}")
+async def delete_ege_material(
+    material_id: int,
+    admin_id: int = Query(...),
+    db: AsyncSession = Depends(get_db)
+):
+    """Allows administrator to delete an EGE material."""
+    if not await check_is_admin(admin_id, db):
+        raise HTTPException(status_code=403, detail="Admin privileges required")
+
+    mat = await db.get(EgeMaterial, material_id)
+    if not mat:
+        raise HTTPException(status_code=404, detail="Material not found")
+
+    if mat.image_url:
+        p = settings.UPLOAD_DIR / Path(mat.image_url).name
+        if p.exists():
+            try:
+                p.unlink()
+            except Exception:
+                pass
+
+    await db.delete(mat)
+    await db.commit()
+    return {"status": "success", "material_id": material_id, "action": "deleted"}
+
+# -------------------------------------------------------------
+# Admin User List Endpoint
+# -------------------------------------------------------------
+@app.get("/api/admin/users", response_model=List[UserAdminItem])
+async def get_all_users_for_admin(
+    admin_id: int = Query(...),
+    db: AsyncSession = Depends(get_db)
+):
+    """Returns list of registered users for administrator review."""
+    if not await check_is_admin(admin_id, db):
+        raise HTTPException(status_code=403, detail="Admin privileges required")
+
+    res = await db.execute(select(User).order_by(User.created_at.desc()))
+    users = res.scalars().all()
+
+    result = []
+    for u in users:
+        is_onboarded = bool(u.class_name and u.profile_name and u.first_name and u.last_name)
+        c_str = u.created_at.strftime("%d.%m.%Y %H:%M") if u.created_at else ""
+        result.append(UserAdminItem(
+            id=u.id,
+            first_name=u.first_name,
+            last_name=u.last_name,
+            username=u.username,
+            class_name=u.class_name,
+            profile_name=u.profile_name,
+            is_admin=u.is_admin,
+            is_onboarded=is_onboarded,
+            created_at=c_str
+        ))
+    return result

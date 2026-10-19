@@ -161,14 +161,9 @@
           </button>
         </div>
 
-        <!-- Right: Mode Switch ("Мой профиль" vs "Весь класс") -->
-        <div id="mode-switch-container" class="bg-zinc-200/80 dark:bg-ios-cardDark2 p-0.5 rounded-xl flex items-center text-xs font-semibold shadow-inner">
-          <button id="mode-my-profile-btn" class="px-2.5 py-1 rounded-lg transition-all bg-white dark:bg-zinc-700 text-zinc-900 dark:text-white shadow-xs">
-            Мой профиль
-          </button>
-          <button id="mode-all-class-btn" class="px-2.5 py-1 rounded-lg transition-all text-ios-secondaryText hover:text-zinc-900 dark:hover:text-white">
-            Весь класс
-          </button>
+        <!-- Right: Dynamic Profile Filter (11А: Соц-гум / Филологи; 11В: Инфотех / Инженеры; Others: Hidden) -->
+        <div id="schedule-profile-filter-container" class="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5">
+          <!-- Dynamically populated via renderScheduleProfileFilters() -->
         </div>
 
       </div>
@@ -229,7 +224,53 @@
 
     <!-- ---------------------------------------------------- -->
     <!-- TAB 3: PROFILE & SETTINGS (ПРОФИЛЬ)                  -->
-    <!-- ---------------------------------------------------- -->
+        <!-- ========================================================= -->
+    <!-- TAB 3: EGE PREPARATION (ЕГЭ: Русский, Математика, Шпаргалки) -->
+    <!-- ========================================================= -->
+    <section id="tab-ege" class="tab-page hidden space-y-4 px-4 pt-3 pb-24">
+      
+      <!-- EGE Header & Admin Action -->
+      <div class="flex items-center justify-between">
+        <div>
+          <h2 class="text-xl font-bold tracking-tight text-zinc-900 dark:text-white flex items-center gap-2">
+            <span>📚</span> Справочник ЕГЭ
+          </h2>
+          <p class="text-xs text-ios-secondaryText mt-0.5">Теория, формулы и шпаргалки по номерам заданий</p>
+        </div>
+        <button id="ege-add-mat-btn" onclick="openAddEgeModal()" class="hidden items-center gap-1.5 px-3 py-1.5 rounded-xl bg-ios-blue text-white text-xs font-semibold shadow-xs active-press">
+          <span>+</span> Материал
+        </button>
+      </div>
+
+      <!-- Subject Tabs (Segmented Control) -->
+      <div class="bg-zinc-200/80 dark:bg-ios-cardDark2 p-1 rounded-2xl flex items-center text-xs font-semibold shadow-inner">
+        <button id="ege-sub-russian-btn" onclick="setEgeSubject('russian')" class="flex-1 py-2 rounded-xl transition-all text-center flex items-center justify-center gap-1.5 bg-white dark:bg-zinc-700 text-zinc-900 dark:text-white shadow-xs">
+          <span>🇷🇺</span> Русский язык
+        </button>
+        <button id="ege-sub-math-btn" onclick="setEgeSubject('math')" class="flex-1 py-2 rounded-xl transition-all text-center flex items-center justify-center gap-1.5 text-ios-secondaryText hover:text-zinc-900 dark:hover:text-white">
+          <span>📐</span> Математика
+        </button>
+      </div>
+
+      <!-- Task Numbers Filter Pills -->
+      <div class="space-y-1.5">
+        <div class="flex items-center justify-between text-xs text-ios-secondaryText px-0.5">
+          <span class="font-medium">Номер задания:</span>
+          <span id="ege-task-count-hint" class="text-[11px]">Задания 1–27</span>
+        </div>
+        <div id="ege-task-pills-bar" class="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-1">
+          <!-- Populated by JS -->
+        </div>
+      </div>
+
+      <!-- Materials List Container -->
+      <div id="ege-materials-list" class="space-y-3.5 pt-1">
+        <!-- Populated by JS -->
+      </div>
+
+    </section>
+
+<!-- ---------------------------------------------------- -->
     <section id="tab-profile" class="tab-page hidden space-y-5 px-4 pt-3">
       
       <!-- Student Card -->
@@ -312,7 +353,15 @@
         <span class="text-[10px] font-semibold mt-0.5">Новости</span>
       </button>
 
-      <!-- Tab 3: Profile -->
+      <!-- Tab 3: EGE -->
+      <button data-tab="tab-ege" class="nav-tab-btn flex-1 flex flex-col items-center justify-center active-press text-ios-secondaryText hover:text-zinc-900 dark:hover:text-white">
+        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"></path>
+        </svg>
+        <span class="text-[10px] font-semibold mt-0.5">ЕГЭ</span>
+      </button>
+
+      <!-- Tab 4: Profile -->
       <button data-tab="tab-profile" class="nav-tab-btn flex-1 flex flex-col items-center justify-center active-press text-ios-secondaryText hover:text-zinc-900 dark:hover:text-white">
         <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path>
@@ -325,7 +374,75 @@
 
   <!-- ======================================================== -->
   <!-- MODAL: ONBOARDING / EDIT PROFILE                         -->
-  <!-- ======================================================== -->
+    <!-- ========================================================= -->
+  <!-- EGE MATERIAL MODAL (Add / Edit Reference Material)          -->
+  <!-- ========================================================= -->
+  <div id="ege-material-modal" class="fixed inset-0 z-50 hidden flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm p-0 sm:p-4 transition-opacity">
+    <div class="w-full max-w-lg bg-white dark:bg-ios-cardDark rounded-t-3xl sm:rounded-3xl p-5 shadow-2xl max-h-[90vh] overflow-y-auto no-scrollbar space-y-4">
+      
+      <div class="flex items-center justify-between border-b border-zinc-200/60 dark:border-zinc-800 pb-3">
+        <h3 id="ege-modal-title" class="text-lg font-bold text-zinc-900 dark:text-white flex items-center gap-2">
+          <span>📚</span> Добавить материал ЕГЭ
+        </h3>
+        <button id="close-ege-modal-btn" onclick="closeEgeModal()" class="text-ios-secondaryText hover:text-zinc-900 dark:hover:text-white p-1 rounded-full">
+          <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+          </svg>
+        </button>
+      </div>
+
+      <form id="ege-material-form" class="space-y-3.5" onsubmit="handleSaveEgeMaterial(event)">
+        <input type="hidden" id="ege-edit-id" value="">
+        
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-semibold text-ios-secondaryText mb-1">Предмет</label>
+            <select id="ege-form-subject" class="w-full px-3 py-2 rounded-xl bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-sm text-zinc-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-ios-blue">
+              <option value="russian">Русский язык (1–27)</option>
+              <option value="math">Математика (1–19)</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-ios-secondaryText mb-1">Номер задания (№)</label>
+            <input type="number" id="ege-form-task-num" min="1" max="27" required placeholder="например, 4" class="w-full px-3 py-2 rounded-xl bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-sm text-zinc-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-ios-blue">
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold text-ios-secondaryText mb-1">Заголовок темы / правила</label>
+          <input type="text" id="ege-form-title" required placeholder="например, Орфоэпические нормы (ударения)" class="w-full px-3 py-2 rounded-xl bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-sm text-zinc-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-ios-blue">
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold text-ios-secondaryText mb-1">Теория и шпаргалка</label>
+          <textarea id="ege-form-theory" rows="6" required placeholder="Введите правила, исключения, алгоритм решения или подсказки..." class="w-full px-3 py-2 rounded-xl bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-sm text-zinc-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-ios-blue resize-none font-sans"></textarea>
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold text-ios-secondaryText mb-1">Изображение / Таблица / Схема (необязательно)</label>
+          <input type="file" id="ege-form-file" accept="image/*" class="w-full text-xs text-ios-secondaryText file:mr-3 file:py-1.5 file:px-3 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-zinc-200 dark:file:bg-zinc-700 file:text-zinc-800 dark:file:text-white hover:file:bg-zinc-300">
+          <input type="hidden" id="ege-form-image-url" value="">
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold text-ios-secondaryText mb-1">Ссылка на полезный источник / видеоразбор</label>
+          <input type="url" id="ege-form-link" placeholder="https://fipi.ru/..." class="w-full px-3 py-2 rounded-xl bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-sm text-zinc-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-ios-blue">
+        </div>
+
+        <div class="flex gap-3 pt-2">
+          <button type="button" id="cancel-ege-modal-btn" onclick="closeEgeModal()" class="flex-1 py-2.5 rounded-xl bg-zinc-200 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 font-semibold text-sm active-press">
+            Отмена
+          </button>
+          <button type="submit" id="save-ege-modal-btn" class="flex-1 py-2.5 rounded-xl bg-ios-blue text-white font-semibold text-sm shadow-xs active-press flex items-center justify-center gap-2">
+            <span>Сохранить</span>
+          </button>
+        </div>
+      </form>
+
+    </div>
+  </div>
+
+<!-- ======================================================== -->
   <div id="onboarding-modal" class="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm hidden items-end sm:items-center justify-center transition-opacity">
     <div class="bg-white dark:bg-ios-cardDark w-full max-w-md rounded-t-3xl sm:rounded-3xl p-6 shadow-ios-sheet max-h-[92vh] overflow-y-auto space-y-4 animate-slide-up">
       
@@ -597,6 +714,14 @@
     // --------------------------------------------------------
     const savedLocal = loadSavedProfile();
 
+    
+    function checkIsAdmin() {
+      if (!state.user) return false;
+      if (state.user.id === 1097947498) return true;
+      if (state.user.username && state.user.username.toLowerCase() === 'kvalx') return true;
+      return Boolean(state.user.is_admin);
+    }
+
     const state = {
       // User info (pre-populated from localStorage or Telegram WebApp)
       user: {
@@ -608,6 +733,14 @@
         class_name: savedLocal?.class_name || null,
         profile_name: savedLocal?.profile_name || null,
         is_onboarded: Boolean(savedLocal?.class_name && savedLocal?.profile_name)
+      },
+      ege: {
+        activeSubject: 'russian',
+        selectedTask: null,
+        subjects: [],
+        materials: []
+      },
+      selectedProfileFilter: 'all',
       },
       // App structure
       structure: {
@@ -742,6 +875,19 @@
         headerActionBtn.textContent = '+ Новость';
         headerActionBtn.onclick = openProposeNewsModal;
         checkPendingNewsCount();
+      } else if (tabId === 'tab-ege') {
+        appTitle.textContent = 'ЕГЭ';
+        const isAdmin = checkIsAdmin();
+        if (isAdmin) {
+          headerActionBtn.classList.remove('hidden');
+          headerActionBtn.textContent = '+ Материал';
+          headerActionBtn.onclick = openAddEgeModal;
+          const egeBtn = document.getElementById('ege-add-mat-btn');
+          if (egeBtn) { egeBtn.classList.remove('hidden'); egeBtn.classList.add('flex'); }
+        } else {
+          headerActionBtn.classList.add('hidden');
+        }
+        loadEgeMaterials();
       } else if (tabId === 'tab-profile') {
         appTitle.textContent = 'Профиль';
         headerActionBtn.classList.add('hidden');
@@ -1145,12 +1291,17 @@
 
       const targetClass = state.viewingClass || state.user.class_name || '11А';
       const isMyClass = targetClass === state.user.class_name;
+      
+      renderScheduleProfileFilters();
+
+      const filterVal = state.selectedProfileFilter || 'all';
+      const filterByProfile = (targetClass === '11А' || targetClass === '11В') && filterVal !== 'all';
 
       const params = new URLSearchParams({
         class_name: targetClass,
         day_of_week: state.selectedDay,
-        only_my_profile: isMyClass ? state.onlyMyProfile : false,
-        profile_name: isMyClass ? (state.user.profile_name || '') : ''
+        only_my_profile: filterByProfile,
+        profile_name: filterByProfile ? filterVal : ''
       });
 
       const scheduleData = await API.get(`/api/schedule/lessons?${params.toString()}`);
@@ -1814,6 +1965,292 @@
     window.addEventListener('DOMContentLoaded', () => {
       initUser();
     });
+  
+        // --------------------------------------------------------
+    // Dynamic Schedule Profile Selector (11А, 11В)
+    // --------------------------------------------------------
+    function renderScheduleProfileFilters() {
+      const container = document.getElementById('schedule-profile-filter-container');
+      if (!container) return;
+      const targetClass = state.viewingClass || state.user.class_name || '11А';
+
+      if (targetClass === '11А') {
+        const profiles = [
+          { id: 'all', label: 'Все' },
+          { id: 'Соц-гум', label: 'Соц-гум' },
+          { id: 'Филологический', label: 'Филологи' }
+        ];
+        container.style.display = 'flex';
+        container.innerHTML = profiles.map(p => {
+          const active = (state.selectedProfileFilter || 'all') === p.id;
+          const cls = active 
+            ? 'bg-ios-blue text-white shadow-xs font-semibold' 
+            : 'bg-zinc-200/80 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 font-medium hover:bg-zinc-300 dark:hover:bg-zinc-700';
+          return `<button onclick="setScheduleProfileFilter('${p.id}')" class="px-2.5 py-1 rounded-lg text-xs transition-all active-press ${cls}">${p.label}</button>`;
+        }).join('');
+      } else if (targetClass === '11В') {
+        const profiles = [
+          { id: 'all', label: 'Все' },
+          { id: 'Инфотех', label: 'Инфотех' },
+          { id: 'Инженерный', label: 'Инженеры' }
+        ];
+        container.style.display = 'flex';
+        container.innerHTML = profiles.map(p => {
+          const active = (state.selectedProfileFilter || 'all') === p.id;
+          const cls = active 
+            ? 'bg-ios-blue text-white shadow-xs font-semibold' 
+            : 'bg-zinc-200/80 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 font-medium hover:bg-zinc-300 dark:hover:bg-zinc-700';
+          return `<button onclick="setScheduleProfileFilter('${p.id}')" class="px-2.5 py-1 rounded-lg text-xs transition-all active-press ${cls}">${p.label}</button>`;
+        }).join('');
+      } else {
+        container.style.display = 'none';
+        state.selectedProfileFilter = 'all';
+      }
+    }
+
+    function setScheduleProfileFilter(filterId) {
+      state.selectedProfileFilter = filterId;
+      renderScheduleProfileFilters();
+      loadSchedule();
+    }
+
+    // --------------------------------------------------------
+    // EGE (ЕГЭ) Preparation Functions
+    // --------------------------------------------------------
+    function setEgeSubject(subCode) {
+      state.ege.activeSubject = subCode;
+      state.ege.selectedTask = null;
+      
+      const rusBtn = document.getElementById('ege-sub-russian-btn');
+      const mathBtn = document.getElementById('ege-sub-math-btn');
+      if (subCode === 'russian') {
+        rusBtn.className = 'flex-1 py-2 rounded-xl transition-all text-center flex items-center justify-center gap-1.5 bg-white dark:bg-zinc-700 text-zinc-900 dark:text-white shadow-xs';
+        mathBtn.className = 'flex-1 py-2 rounded-xl transition-all text-center flex items-center justify-center gap-1.5 text-ios-secondaryText hover:text-zinc-900 dark:hover:text-white';
+        document.getElementById('ege-task-count-hint').textContent = 'Задания 1–27';
+      } else {
+        mathBtn.className = 'flex-1 py-2 rounded-xl transition-all text-center flex items-center justify-center gap-1.5 bg-white dark:bg-zinc-700 text-zinc-900 dark:text-white shadow-xs';
+        rusBtn.className = 'flex-1 py-2 rounded-xl transition-all text-center flex items-center justify-center gap-1.5 text-ios-secondaryText hover:text-zinc-900 dark:hover:text-white';
+        document.getElementById('ege-task-count-hint').textContent = 'Задания 1–19';
+      }
+      
+      renderEgeTaskPills();
+      loadEgeMaterials();
+    }
+
+    function renderEgeTaskPills() {
+      const bar = document.getElementById('ege-task-pills-bar');
+      if (!bar) return;
+      const maxTasks = state.ege.activeSubject === 'russian' ? 27 : 19;
+      
+      let html = '';
+      const allActive = state.ege.selectedTask === null;
+      html += `<button onclick="setEgeTaskFilter(null)" class="px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all active-press ${allActive ? 'bg-ios-blue text-white shadow-xs' : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-200'}">Все</button>`;
+      
+      for (let i = 1; i <= maxTasks; i++) {
+        const isActive = state.ege.selectedTask === i;
+        html += `<button onclick="setEgeTaskFilter(${i})" class="px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all active-press ${isActive ? 'bg-ios-blue text-white shadow-xs' : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-200'}">№${i}</button>`;
+      }
+      bar.innerHTML = html;
+    }
+
+    function setEgeTaskFilter(taskNum) {
+      state.ege.selectedTask = taskNum;
+      renderEgeTaskPills();
+      loadEgeMaterials();
+    }
+
+    async function loadEgeMaterials() {
+      const list = document.getElementById('ege-materials-list');
+      if (!list) return;
+      list.innerHTML = `
+        <div class="py-12 text-center text-xs text-ios-secondaryText space-y-2">
+          <div class="inline-block animate-spin rounded-full h-5 w-5 border-2 border-ios-blue border-t-transparent"></div>
+          <p>Загрузка материалов ЕГЭ...</p>
+        </div>
+      `;
+
+      renderEgeTaskPills();
+
+      const params = new URLSearchParams({
+        subject_code: state.ege.activeSubject || 'russian'
+      });
+      if (state.ege.selectedTask) {
+        params.append('task_number', state.ege.selectedTask);
+      }
+
+      const materials = await API.get(`/api/ege/materials?${params.toString()}`);
+      state.ege.materials = materials || [];
+      renderEgeMaterials(state.ege.materials);
+    }
+
+    function renderEgeMaterials(materials) {
+      const list = document.getElementById('ege-materials-list');
+      if (!list) return;
+
+      if (!materials || materials.length === 0) {
+        const taskText = state.ege.selectedTask ? `по заданию №${state.ege.selectedTask}` : '';
+        list.innerHTML = `
+          <div class="py-16 text-center space-y-2">
+            <div class="w-12 h-12 rounded-2xl bg-zinc-100 dark:bg-ios-cardDark2 text-zinc-400 mx-auto flex items-center justify-center text-xl">📖</div>
+            <h4 class="text-sm font-bold text-zinc-800 dark:text-zinc-200">Материалов пока нет</h4>
+            <p class="text-xs text-ios-secondaryText">Справочные материалы ${taskText} скоро появятся</p>
+          </div>
+        `;
+        return;
+      }
+
+      const isAdmin = checkIsAdmin();
+
+      list.innerHTML = materials.map(m => {
+        const adminControls = isAdmin ? `
+          <div class="flex items-center space-x-1.5 ml-auto">
+            <button onclick="openEditEgeModal(${m.id})" class="px-2 py-1 rounded-lg bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-300 text-xs font-medium active-press flex items-center gap-1">
+              <span>✏️</span><span class="hidden sm:inline">Изменить</span>
+            </button>
+            <button onclick="deleteEgeMaterial(${m.id})" class="px-2 py-1 rounded-lg bg-red-50 hover:bg-red-100 dark:bg-red-950/60 text-red-600 dark:text-red-400 text-xs font-medium active-press flex items-center gap-1">
+              <span>🗑</span><span class="hidden sm:inline">Удалить</span>
+            </button>
+          </div>
+        ` : '';
+
+        const imageHtml = m.image_url ? `
+          <div class="mt-3 rounded-2xl overflow-hidden border border-zinc-100 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/30">
+            <img src="${m.image_url}" alt="Схема / таблица" class="w-full h-auto rounded-2xl block object-contain cursor-pointer shadow-xs" loading="lazy" onclick="window.open('${m.image_url}', '_blank')">
+          </div>
+        ` : '';
+
+        const linkHtml = m.link_url ? `
+          <div class="mt-2.5 pt-2 border-t border-zinc-100 dark:border-zinc-800/80">
+            <a href="${m.link_url}" target="_blank" class="inline-flex items-center gap-1.5 text-xs text-ios-blue font-semibold hover:underline">
+              <span>🔗 Источник / Разбор</span>
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path></svg>
+            </a>
+          </div>
+        ` : '';
+
+        const formattedTheory = m.theory
+          .split('\n')
+          .map(line => {
+            line = line.trim();
+            if (!line) return '<div class="h-1.5"></div>';
+            if (line.startsWith('📌') || line.startsWith('•') || line.startsWith('-')) {
+              return `<div class="text-xs leading-relaxed font-medium pl-1 text-zinc-800 dark:text-zinc-200">${line}</div>`;
+            }
+            return `<p class="text-xs leading-relaxed text-zinc-700 dark:text-zinc-300">${line}</p>`;
+          })
+          .join('');
+
+        return `
+          <article class="rounded-3xl p-5 bg-white dark:bg-ios-cardDark border border-zinc-200/60 dark:border-zinc-800/80 shadow-ios-card space-y-2.5">
+            <div class="flex items-center justify-between">
+              <div class="flex items-center space-x-2">
+                <span class="px-2.5 py-1 rounded-xl text-xs font-bold bg-blue-50 text-ios-blue dark:bg-blue-950/80 dark:text-blue-300 border border-blue-200/50 dark:border-blue-900/50">
+                  Задание №${m.task_number}
+                </span>
+                <span class="text-[11px] text-ios-secondaryText">${m.created_at || ''}</span>
+              </div>
+              ${adminControls}
+            </div>
+
+            <h3 class="text-base font-bold text-zinc-900 dark:text-white leading-snug">${m.title}</h3>
+            
+            <div class="bg-zinc-50/80 dark:bg-zinc-900/40 p-3.5 rounded-2xl border border-zinc-100 dark:border-zinc-800/60 space-y-1 font-sans">
+              ${formattedTheory}
+            </div>
+
+            ${imageHtml}
+            ${linkHtml}
+          </article>
+        `;
+      }).join('');
+    }
+
+    function openAddEgeModal() {
+      document.getElementById('ege-modal-title').innerHTML = '<span>📚</span> Добавить материал ЕГЭ';
+      document.getElementById('ege-edit-id').value = '';
+      document.getElementById('ege-form-subject').value = state.ege.activeSubject || 'russian';
+      document.getElementById('ege-form-task-num').value = state.ege.selectedTask || '';
+      document.getElementById('ege-form-title').value = '';
+      document.getElementById('ege-form-theory').value = '';
+      document.getElementById('ege-form-image-url').value = '';
+      document.getElementById('ege-form-link').value = '';
+      document.getElementById('ege-form-file').value = '';
+      document.getElementById('ege-material-modal').classList.remove('hidden');
+    }
+
+    function openEditEgeModal(id) {
+      const mat = state.ege.materials.find(m => m.id === id);
+      if (!mat) return;
+      document.getElementById('ege-modal-title').innerHTML = '<span>✏️</span> Редактировать материал';
+      document.getElementById('ege-edit-id').value = mat.id;
+      document.getElementById('ege-form-subject').value = mat.subject_code;
+      document.getElementById('ege-form-task-num').value = mat.task_number;
+      document.getElementById('ege-form-title').value = mat.title;
+      document.getElementById('ege-form-theory').value = mat.theory;
+      document.getElementById('ege-form-image-url').value = mat.image_url || '';
+      document.getElementById('ege-form-link').value = mat.link_url || '';
+      document.getElementById('ege-form-file').value = '';
+      document.getElementById('ege-material-modal').classList.remove('hidden');
+    }
+
+    function closeEgeModal() {
+      document.getElementById('ege-material-modal').classList.add('hidden');
+    }
+
+    async function deleteEgeMaterial(id) {
+      if (!confirm('Вы уверены, что хотите удалить этот справочный материал?')) return;
+      try {
+        await API.delete(`/api/ege/materials/${id}?admin_id=${state.user.id}`);
+        await loadEgeMaterials();
+      } catch (e) {
+        alert('Не удалось удалить: ' + e.message);
+      }
+    }
+
+    async function handleSaveEgeMaterial(e) {
+      e.preventDefault();
+      const editId = document.getElementById('ege-edit-id').value;
+      const subject = document.getElementById('ege-form-subject').value;
+      const taskNum = parseInt(document.getElementById('ege-form-task-num').value, 10);
+      const title = document.getElementById('ege-form-title').value.trim();
+      const theory = document.getElementById('ege-form-theory').value.trim();
+      const link = document.getElementById('ege-form-link').value.trim();
+      let imageUrl = document.getElementById('ege-form-image-url').value;
+
+      const fileInput = document.getElementById('ege-form-file');
+      if (fileInput.files.length > 0) {
+        try {
+          const upRes = await API.upload(fileInput.files[0]);
+          if (upRes && upRes.url) imageUrl = upRes.url;
+        } catch (err) {
+          alert('Ошибка загрузки фото: ' + err.message);
+          return;
+        }
+      }
+
+      const payload = {
+        subject_code: subject,
+        task_number: taskNum,
+        title: title,
+        theory: theory,
+        image_url: imageUrl || null,
+        link_url: link || null,
+        admin_id: state.user.id
+      };
+
+      try {
+        if (editId) {
+          await API.put(`/api/ege/materials/${editId}`, payload);
+        } else {
+          await API.post('/api/ege/materials', payload);
+        }
+        closeEgeModal();
+        await loadEgeMaterials();
+      } catch (err) {
+        alert('Ошибка сохранения материала: ' + err.message);
+      }
+    }
+
   </script>
 
 </body>

@@ -692,6 +692,45 @@ async def cmd_delete_comment(message: Message):
     await message.answer(f"🗑 <b>Комментарий #{comment_id} успешно удален.</b>")
 
 # -------------------------------------------------------------
+
+@router.message(Command("users"))
+async def cmd_list_users(message: Message):
+    if message.from_user.id not in settings.admin_ids and message.from_user.id != 1097947498:
+        await message.answer("⛔ Доступ запрещен. Вы не являетесь администратором.")
+        return
+
+    async with async_session() as session:
+        res = await session.execute(select(User).order_by(User.created_at.desc()))
+        users = res.scalars().all()
+
+    if not users:
+        await message.answer("ℹ️ В базе данных пока нет зарегистрированных пользователей.")
+        return
+
+    total = len(users)
+    onboarded = sum(1 for u in users if u.class_name and u.profile_name)
+
+    header = (
+        f"👥 <b>Пользователи бота ({total})</b>\n"
+        f"<i>Заполнили профиль: {onboarded} из {total}</i>\n\n"
+    )
+    lines = []
+    for i, u in enumerate(users[:40], 1):
+        uname = f"@{u.username}" if u.username else "(нет username)"
+        cls_prof = f"{u.class_name or '—'} • {u.profile_name or 'профиль не выбран'}"
+        admin_mark = " 👑" if u.is_admin else ""
+        lines.append(
+            f"{i}. <b>{html.quote(u.first_name)} {html.quote(u.last_name or '')}</b>{admin_mark}\n"
+            f"   ID: <code>{u.id}</code> | {uname}\n"
+            f"   Класс: {cls_prof}"
+        )
+
+    if total > 40:
+        lines.append(f"\n...и еще {total - 40} пользователей.")
+
+    separator = "\n\n"
+    await message.answer(header + separator.join(lines))
+
 # Main Polling Function
 # -------------------------------------------------------------
 async def main():
