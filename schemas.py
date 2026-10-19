@@ -160,3 +160,30 @@ class UserAdminItem(BaseModel):
     is_admin: bool
     is_onboarded: bool
     created_at: Optional[str] = None
+
+class EgeSubjectResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    code: str
+    name: str
+    icon: str
+    tasks_count: int
+
+class EgeMaterialCreateRequest(BaseModel):
+    subject_code: str
+    task_number: int
+    title: str = Field(..., min_length=2, max_length=255)
+    theory: str = Field(..., min_length=2)
+    image_url: Optional[str] = None
+    link_url: Optional[str] = None
+    admin_id: int
+
+class EgeMaterialResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    subject_code: str
+    task_number: int
+    title: str
+    theory: str
+    image_url: Optional[str] = None
+    link_url: Optional[str] = None
+    created_at: str

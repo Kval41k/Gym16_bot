@@ -212,3 +212,50 @@ class Comment(Base):
 
     def __repr__(self) -> str:
         return f"<Comment post={self.post_id} by='{self.author_name}'>"
+
+
+class EgeSubject(Base):
+    """
+    EGE Subjects: Русский язык, Математика, etc.
+    """
+    __tablename__ = "ege_subjects"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    code: Mapped[str] = mapped_column(String(50), unique=True, index=True, nullable=False)  # "russian", "math"
+    name: Mapped[str] = mapped_column(String(100), nullable=False)  # "Русский язык", "Математика"
+    icon: Mapped[str] = mapped_column(String(20), default="📖")
+    tasks_count: Mapped[int] = mapped_column(Integer, default=27)
+
+    materials: Mapped[List["EgeMaterial"]] = relationship(
+        "EgeMaterial", back_populates="subject", cascade="all, delete-orphan", lazy="selectin"
+    )
+
+    def __repr__(self) -> str:
+        return f"<EgeSubject {self.code}: {self.name}>"
+
+
+class EgeMaterial(Base):
+    """
+    EGE preparation materials and theory per task number.
+    """
+    __tablename__ = "ege_materials"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    subject_code: Mapped[str] = mapped_column(
+        String(50), ForeignKey("ege_subjects.code", ondelete="CASCADE"), nullable=False, index=True
+    )
+    task_number: Mapped[int] = mapped_column(Integer, nullable=False, index=True)  # 1..27
+    title: Mapped[str] = mapped_column(String(255), nullable=False)
+    theory: Mapped[str] = mapped_column(Text, nullable=False)
+    image_url: Mapped[Optional[str]] = mapped_column(String(512), nullable=True)
+    link_url: Mapped[Optional[str]] = mapped_column(String(512), nullable=True)
+    
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), index=True)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+    subject: Mapped["EgeSubject"] = relationship("EgeSubject", back_populates="materials")
+
+    def __repr__(self) -> str:
+        return f"<EgeMaterial #{self.task_number} {self.title}>"
