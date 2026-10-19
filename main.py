@@ -483,11 +483,16 @@ async def get_bells(db: AsyncSession = Depends(get_db)):
 async def get_live_status(db: AsyncSession = Depends(get_db)):
     """
     Real-time progress calculation synchronized with Tyumen timezone (Asia/Yekaterinburg, UTC+5).
+    Differentiates Monday schedule (08:00 «Разговоры о важном») vs Tuesday-Friday standard bells.
     """
     now = datetime.now(TYUMEN_TZ)
     day_of_week = now.weekday() # 0=Mon..6=Sun
     now_minutes = now.hour * 60 + now.minute
     time_str = now.strftime("%H:%M")
+
+    def parse_minutes(t_str: str) -> int:
+        h, m = map(int, t_str.split(":"))
+        return h * 60 + m
 
     # Sunday check
     if day_of_week == 6:
@@ -497,36 +502,72 @@ async def get_live_status(db: AsyncSession = Depends(get_db)):
             message="Сегодня воскресенье — уроков нет"
         )
 
-    res = await db.execute(
-        select(BellSchedule).order_by(BellSchedule.lesson_number)
-    )
-    bells = res.scalars().all()
-    if not bells:
-        return LiveStatusResponse(
-            current_time=time_str,
-            state="before_school",
-            message="Расписание звонков не настроено"
-        )
+    # Saturday check
+    if day_of_week == 5:
+        sat_start = parse_minutes("10:00")
+        sat_end = parse_minutes("14:00")
+        if now_minutes < sat_start:
+            diff = sat_start - now_minutes
+            return LiveStatusResponse(
+                current_time=time_str,
+                state="before_school",
+                minutes_left=diff,
+                message=f"Консультации начнутся в 10:00 (через {diff} мин)"
+            )
+        elif sat_start <= now_minutes < sat_end:
+            diff = sat_end - now_minutes
+            return LiveStatusResponse(
+                current_time=time_str,
+                state="lesson",
+                minutes_left=diff,
+                message=f"Идут консультации (до окончания {diff} мин)"
+            )
+        else:
+            return LiveStatusResponse(
+                current_time=time_str,
+                state="after_school",
+                message="Консультации завершены 🎉"
+            )
 
-    def parse_minutes(t_str: str) -> int:
-        h, m = map(int, t_str.split(":"))
-        return h * 60 + m
+    # Monday bell schedule (with Разговоры о важном)
+    if day_of_week == 0:
+        day_bells = [
+            {"num": 0, "title": "Разговоры о важном", "start": "08:00", "end": "08:30"},
+            {"num": 1, "title": "1 урок", "start": "08:35", "end": "09:15"},
+            {"num": 2, "title": "2 урок", "start": "09:30", "end": "10:10"},
+            {"num": 3, "title": "3 урок", "start": "10:25", "end": "11:05"},
+            {"num": 4, "title": "4 урок", "start": "11:25", "end": "12:05"},
+            {"num": 5, "title": "5 урок", "start": "12:25", "end": "13:05"},
+            {"num": 6, "title": "6 урок", "start": "13:10", "end": "13:50"},
+            {"num": 7, "title": "7 урок", "start": "14:00", "end": "14:40"},
+        ]
+    else:
+        # Tuesday - Friday standard bell schedule
+        day_bells = [
+            {"num": 1, "title": "1 урок", "start": "08:15", "end": "08:55"},
+            {"num": 2, "title": "2 урок", "start": "09:10", "end": "09:50"},
+            {"num": 3, "title": "3 урок", "start": "10:10", "end": "10:50"},
+            {"num": 4, "title": "4 урок", "start": "11:10", "end": "11:50"},
+            {"num": 5, "title": "5 урок", "start": "12:10", "end": "12:50"},
+            {"num": 6, "title": "6 урок", "start": "13:00", "end": "13:40"},
+            {"num": 7, "title": "7 урок", "start": "13:50", "end": "14:30"},
+            {"num": 8, "title": "8 урок", "start": "14:40", "end": "15:20"},
+        ]
 
-    # Check if before first lesson
-    first_start = parse_minutes(bells[0].start_time)
+    first_start = parse_minutes(day_bells[0]["start"])
     if now_minutes < first_start:
         diff = first_start - now_minutes
+        target_name = day_bells[0]["title"]
         return LiveStatusResponse(
             current_time=time_str,
             state="before_school",
             minutes_left=diff,
-            message=f"До начала 1 урока: {diff} мин",
-            next_lesson_number=1,
-            next_lesson_time=bells[0].start_time
+            message=f"До начала ({target_name}): {diff} мин",
+            next_lesson_number=day_bells[0]["num"],
+            next_lesson_time=day_bells[0]["start"]
         )
 
-    # Check if after last lesson
-    last_end = parse_minutes(bells[-1].end_time)
+    last_end = parse_minutes(day_bells[-1]["end"])
     if now_minutes >= last_end:
         return LiveStatusResponse(
             current_time=time_str,
@@ -534,36 +575,35 @@ async def get_live_status(db: AsyncSession = Depends(get_db)):
             message="Учебный день завершен 🎉"
         )
 
-    # Check within lessons and breaks
-    for i, bell in enumerate(bells):
-        b_start = parse_minutes(bell.start_time)
-        b_end = parse_minutes(bell.end_time)
+    for i, bell in enumerate(day_bells):
+        b_start = parse_minutes(bell["start"])
+        b_end = parse_minutes(bell["end"])
 
-        # Inside this lesson
         if b_start <= now_minutes < b_end:
             diff = b_end - now_minutes
+            lesson_label = bell["title"]
             return LiveStatusResponse(
                 current_time=time_str,
                 state="lesson",
-                current_lesson_number=bell.lesson_number,
+                current_lesson_number=bell["num"],
                 minutes_left=diff,
-                message=f"Урок {bell.lesson_number}: до конца {diff} мин"
+                message=f"{lesson_label}: до конца {diff} мин"
             )
 
-        # Inside break between this lesson and next
-        if i < len(bells) - 1:
-            next_bell = bells[i + 1]
-            next_start = parse_minutes(next_bell.start_time)
+        if i < len(day_bells) - 1:
+            next_b = day_bells[i + 1]
+            next_start = parse_minutes(next_b["start"])
             if b_end <= now_minutes < next_start:
                 diff = next_start - now_minutes
+                next_label = next_b["title"]
                 return LiveStatusResponse(
                     current_time=time_str,
                     state="break",
-                    current_lesson_number=bell.lesson_number,
+                    current_lesson_number=bell["num"],
                     minutes_left=diff,
-                    message=f"Перемена: до {next_bell.lesson_number} урока {diff} мин",
-                    next_lesson_number=next_bell.lesson_number,
-                    next_lesson_time=next_bell.start_time
+                    message=f"Перемена: до {next_label} {diff} мин",
+                    next_lesson_number=next_b["num"],
+                    next_lesson_time=next_b["start"]
                 )
 
     return LiveStatusResponse(
