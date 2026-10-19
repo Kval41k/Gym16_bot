@@ -19,6 +19,8 @@ from fastapi import (
     Header, Query, Request, UploadFile, status
 )
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware.gzip import GZipMiddleware
+import time
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import delete, func, select, update
@@ -47,6 +49,28 @@ logger = logging.getLogger("Gym16API")
 EMOJI_PALETTE = ["❤️", "🔥", "👍", "👎", "🤡", "😢"]
 
 # -------------------------------------------------------------
+
+# -------------------------------------------------------------
+# High-Performance In-Memory Cache (Sub-millisecond responses)
+# -------------------------------------------------------------
+_CACHE: Dict[str, Any] = {}
+
+def cache_get(key: str, ttl: float) -> Optional[Any]:
+    entry = _CACHE.get(key)
+    if entry and (time.time() - entry['time'] < ttl):
+        return entry['data']
+    return None
+
+def cache_set(key: str, data: Any):
+    _CACHE[key] = {'time': time.time(), 'data': data}
+
+def cache_clear_prefix(prefix: str):
+    global _CACHE
+    if not prefix:
+        _CACHE.clear()
+    else:
+        _CACHE = {k: v for k, v in _CACHE.items() if not k.startswith(prefix)}
+
 # Lifespan Management
 # -------------------------------------------------------------
 @asynccontextmanager
@@ -72,6 +96,8 @@ app = FastAPI(
 )
 
 # Enable CORS for Telegram Web App webview
+app.add_middleware(GZipMiddleware, minimum_size=1000)
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -296,16 +322,22 @@ async def get_structure(db: AsyncSession = Depends(get_db)):
     """
     Returns available classes (11А..11Ж) and mapping of classes to their profiles.
     """
+    cached = cache_get("meta_structure", 600.0)
+    if cached:
+        return cached
+
     classes_res = await db.execute(select(SchoolClass.name).order_by(SchoolClass.name))
     classes = [r[0] for r in classes_res.all()]
     if not classes:
         classes = DEFAULT_CLASSES
 
-    return StructureResponse(
+    resp = StructureResponse(
         classes=classes,
         class_profiles=CLASS_PROFILES_MAP,
         all_profiles=ALL_PROFILES
     )
+    cache_set("meta_structure", resp)
+    return resp
 
 # -------------------------------------------------------------
 # User Profile & Onboarding Endpoints
@@ -425,10 +457,14 @@ async def update_user_profile(user_id: int, payload: UserProfileUpdate, db: Asyn
 # -------------------------------------------------------------
 @app.get("/api/schedule/bells", response_model=List[BellItem])
 async def get_bells(db: AsyncSession = Depends(get_db)):
+    cached = cache_get("schedule_bells", 600.0)
+    if cached:
+        return cached
     res = await db.execute(
         select(BellSchedule).order_by(BellSchedule.lesson_number)
     )
     bells = res.scalars().all()
+    cache_set("schedule_bells", bells)
     return bells
 
 @app.get("/api/schedule/live", response_model=LiveStatusResponse)
@@ -543,8 +579,13 @@ async def get_lessons(
     If only_my_profile=True, filters to common lessons + matching profile.
     If only_my_profile=False, returns all class lessons grouped into slots with split indicators.
     """
-    bells_res = await db.execute(select(BellSchedule).order_by(BellSchedule.lesson_number))
-    bells = {b.lesson_number: b for b in bells_res.scalars().all()}
+    cache_key = f"sched:{class_name}:{day_of_week}:{only_my_profile}:{profile_name}"
+    cached = cache_get(cache_key, 180.0)
+    if cached:
+        return cached
+
+    bells = await get_bells(db)
+    bells_map = {b.lesson_number: b for b in bells}
 
     query = select(Lesson).where(
         Lesson.class_name == class_name,
@@ -567,7 +608,7 @@ async def get_lessons(
     # Group into LessonSlots by lesson_number
     slots_map: Dict[int, List[LessonItem]] = {}
     for l in filtered_lessons:
-        b = bells.get(l.lesson_number)
+        b = bells_map.get(l.lesson_number)
         item = LessonItem(
             id=l.id,
             day_of_week=l.day_of_week,
@@ -587,7 +628,7 @@ async def get_lessons(
     slots: List[LessonSlot] = []
     for num in sorted(slots_map.keys()):
         items = slots_map[num]
-        b = bells.get(num)
+        b = bells_map.get(num)
         start_t = b.start_time if b else ""
         end_t = b.end_time if b else ""
         is_split = len(items) > 1
@@ -600,12 +641,14 @@ async def get_lessons(
             lessons=items
         ))
 
-    return DayScheduleResponse(
+    resp = DayScheduleResponse(
         day_of_week=day_of_week,
         day_name=DAY_NAMES[day_of_week],
         class_name=class_name,
         slots=slots
     )
+    cache_set(cache_key, resp)
+    return resp
 
 # -------------------------------------------------------------
 # News Feed & Social Endpoints
@@ -1161,6 +1204,7 @@ async def create_ege_material(
         image_url=payload.image_url,
         link_url=payload.link_url
     )
+    cache_clear_prefix("ege_")
     db.add(new_mat)
     await db.commit()
     await db.refresh(new_mat)
@@ -1233,6 +1277,7 @@ async def delete_ege_material(
             except Exception:
                 pass
 
+    cache_clear_prefix("ege_")
     await db.delete(mat)
     await db.commit()
     return {"status": "success", "material_id": material_id, "action": "deleted"}

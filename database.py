@@ -13,13 +13,21 @@ def get_db_url() -> str:
 
 DB_URL = get_db_url()
 
-# Async SQLAlchemy engine
-engine = create_async_engine(
-    DB_URL,
-    echo=False,
-    future=True,
-    connect_args={"check_same_thread": False} if "sqlite" in DB_URL else {}
-)
+# High-performance async SQLAlchemy engine with connection pooling
+is_sqlite = "sqlite" in DB_URL
+engine_kwargs = {
+    "echo": False,
+    "future": True,
+}
+if is_sqlite:
+    engine_kwargs["connect_args"] = {"check_same_thread": False}
+else:
+    engine_kwargs["pool_size"] = 25
+    engine_kwargs["max_overflow"] = 35
+    engine_kwargs["pool_pre_ping"] = True
+    engine_kwargs["pool_recycle"] = 300
+
+engine = create_async_engine(DB_URL, **engine_kwargs)
 
 # Async session factory
 async_session = async_sessionmaker(
