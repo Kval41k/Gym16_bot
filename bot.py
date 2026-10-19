@@ -225,16 +225,29 @@ async def cmd_help(message: Message):
 @router.callback_query(F.data == "view_bells")
 @router.message(Command("bells"))
 async def show_bells(event: Union[Message, CallbackQuery]):
-    async with async_session() as session:
-        res = await session.execute(select(BellSchedule).order_by(BellSchedule.lesson_number))
-        bells = res.scalars().all()
-
-    if not bells:
-        text = "Расписание звонков еще не загружено."
-    else:
-        text = "🔔 <b>Расписание звонков Гимназии №16:</b>\n\n"
-        for b in bells:
-            text += f"• <b>{b.lesson_number} урок:</b> {b.start_time} — {b.end_time}\n"
+    text = (
+        "🔔 <b>Расписание звонков МАОУ гимназии №16:</b>\n\n"
+        "📌 <b>ПОНЕДЕЛЬНИК (с «Разговорами о важном»):</b>\n"
+        "• <b>08:00 — 08:30</b> — 🇷🇺 Разговоры о важном\n"
+        "• <b>1 урок:</b> 08:35 — 09:15\n"
+        "• <b>2 урок:</b> 09:30 — 10:10\n"
+        "• <b>3 урок:</b> 10:25 — 11:05\n"
+        "• <b>4 урок:</b> 11:25 — 12:05\n"
+        "• <b>5 урок:</b> 12:25 — 13:05\n"
+        "• <b>6 урок:</b> 13:10 — 13:50\n"
+        "• <b>7 урок:</b> 14:00 — 14:40\n\n"
+        "📌 <b>ВТОРНИК — ПЯТНИЦА:</b>\n"
+        "• <b>1 урок:</b> 08:15 — 08:55\n"
+        "• <b>2 урок:</b> 09:10 — 09:50\n"
+        "• <b>3 урок:</b> 10:10 — 10:50\n"
+        "• <b>4 урок:</b> 11:10 — 11:50\n"
+        "• <b>5 урок:</b> 12:10 — 12:50\n"
+        "• <b>6 урок:</b> 13:00 — 13:40\n"
+        "• <b>7 урок:</b> 13:50 — 14:30\n"
+        "• <b>8 урок:</b> 14:40 — 15:20\n\n"
+        "📌 <b>СУББОТА (консультации):</b>\n"
+        "• Консультации и спецкурсы с 10:00"
+    )
 
     if isinstance(event, CallbackQuery):
         await event.answer()

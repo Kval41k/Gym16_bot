@@ -210,7 +210,7 @@
           <button id="admin-moderation-btn" class="hidden px-3 py-1.5 rounded-xl bg-amber-500/15 text-amber-700 dark:text-amber-300 text-xs font-bold border border-amber-500/30 active-press">
             📬 Модерация <span id="admin-pending-badge" class="ml-1 px-1.5 py-0.5 bg-amber-500 text-white rounded-full text-[10px]">0</span>
           </button>
-          <button id="open-propose-modal-btn" class="px-3.5 py-1.5 rounded-xl bg-ios-blue text-white text-xs font-semibold shadow-sm active-press">
+          <button id="open-propose-modal-btn" onclick="openProposeNewsModal()" class="px-3.5 py-1.5 rounded-xl bg-ios-blue text-white text-xs font-semibold shadow-sm active-press">
             Предложить
           </button>
         </div>
@@ -322,7 +322,7 @@
 
       <!-- App Info Card -->
       <div class="rounded-2xl p-4 bg-zinc-100 dark:bg-ios-cardDark2/60 text-center space-y-1 text-xs text-ios-secondaryText">
-        <p class="font-semibold text-zinc-700 dark:text-zinc-300">МБОУ Гимназия №16</p>
+        <p class="font-semibold text-zinc-700 dark:text-zinc-300">МАОУ гимназия №16</p>
         <p>Telegram Mini App v1.0.0 • iOS HIG Edition</p>
         <p class="pt-1 text-[10px] text-zinc-400">Быстрое расписание с фильтром по профилям</p>
       </div>
@@ -399,7 +399,7 @@
             <label class="block text-xs font-semibold text-ios-secondaryText mb-1">Предмет</label>
             <select id="ege-form-subject" class="w-full px-3 py-2 rounded-xl bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-sm text-zinc-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-ios-blue">
               <option value="russian">Русский язык (1–27)</option>
-              <option value="math">Математика (1–19)</option>
+              <option value="math">Математика (1–20)</option>
             </select>
           </div>
           <div>
@@ -846,13 +846,7 @@
     const appTitle = document.getElementById('app-title');
     const headerActionBtn = document.getElementById('header-action-btn');
 
-    tabButtons.forEach(btn => {
-      btn.addEventListener('click', () => {
-        const targetTab = btn.getAttribute('data-tab');
-        switchTab(targetTab);
-        haptic('selection');
-      });
-    });
+    // Tab button events are handled via inline onclick="switchTab('...')"
 
     function switchTab(tabId) {
       try {
@@ -895,7 +889,7 @@
             if (headerBtn) {
               headerBtn.classList.remove('hidden');
               headerBtn.textContent = '+ Материал';
-              headerBtn.onclick = openAddEgeModal;
+              headerBtn.onclick = () => openAddEgeModal();
             }
             const egeBtn = document.getElementById('ege-add-mat-btn');
             if (egeBtn) { egeBtn.classList.remove('hidden'); egeBtn.classList.add('flex'); }
@@ -1136,7 +1130,7 @@
         return `
           <button type="button" data-class="${cls}" class="pick-view-class-btn p-3 rounded-2xl border text-center active-press transition-all ${
             isViewing 
-              ? 'border-ios-blue bg-blue-50 text-ios-blue dark:bg-blue-950/70 dark:text-blue-300 font-bold' 
+              ? 'border-ios-blue bg-blue-50 text-ios-blue dark:bg-blue-950/70 dark:text-blue-300 font-bold ring-2 ring-ios-blue/30' 
               : 'border-zinc-200 dark:border-zinc-800 text-zinc-800 dark:text-zinc-200 font-semibold'
           }">
             <div class="text-base">${cls}</div>
@@ -1148,9 +1142,35 @@
       container.querySelectorAll('.pick-view-class-btn').forEach(btn => {
         btn.addEventListener('click', () => {
           const selected = btn.getAttribute('data-class');
-          switchToClassView(selected);
-          closeViewClassModal();
+
+          // 1. Immediately switch visual active button state inside the modal
+          container.querySelectorAll('.pick-view-class-btn').forEach(b => {
+            const cls = b.getAttribute('data-class');
+            if (cls === selected) {
+              b.className = 'pick-view-class-btn p-3 rounded-2xl border text-center active-press transition-all border-ios-blue bg-blue-50 text-ios-blue dark:bg-blue-950/70 dark:text-blue-300 font-bold ring-2 ring-ios-blue/30';
+            } else {
+              b.className = 'pick-view-class-btn p-3 rounded-2xl border text-center active-press transition-all border-zinc-200 dark:border-zinc-800 text-zinc-800 dark:text-zinc-200 font-semibold';
+            }
+          });
+
+          // 2. Immediately update state, badge and sync profile filter pills
+          state.viewingClass = selected;
+          state.selectedProfileFilter = 'all';
+
+          const badgeEl = document.getElementById('viewing-class-badge');
+          if (badgeEl) badgeEl.textContent = selected;
+
+          // Synchronously hide/show profile filters
+          renderScheduleProfileFilters();
+          updateClassViewUI();
+          loadSchedule();
+
           haptic('selection');
+
+          // 3. Smooth auto-close modal after 180ms
+          setTimeout(() => {
+            closeViewClassModal();
+          }, 180);
         });
       });
 
@@ -1165,13 +1185,16 @@
 
     function switchToClassView(targetClass) {
       state.viewingClass = targetClass;
+      state.selectedProfileFilter = 'all';
+      renderScheduleProfileFilters();
       updateClassViewUI();
       loadSchedule();
     }
 
     function updateClassViewUI() {
       const isViewingOther = state.viewingClass !== state.user.class_name;
-      document.getElementById('viewing-class-badge').textContent = state.viewingClass;
+      const badge = document.getElementById('viewing-class-badge');
+      if (badge) badge.textContent = state.viewingClass;
 
       if (isViewingOther) {
         resetToMyClassBtn.classList.remove('hidden');
@@ -1183,13 +1206,19 @@
       }
 
       // Hide or show "Мой профиль" vs "Весь класс" toggle
-      // If viewing another class, switch mode to "Весь класс" automatically
       const modeSwitchContainer = document.getElementById('mode-switch-container');
       if (isViewingOther) {
         state.onlyMyProfile = false;
-        modeAllClassBtn.className = 'px-2.5 py-1 rounded-lg transition-all bg-white dark:bg-zinc-700 text-zinc-900 dark:text-white shadow-xs';
-        modeMyProfileBtn.className = 'px-2.5 py-1 rounded-lg transition-all text-ios-secondaryText hover:text-zinc-900 dark:hover:text-white';
+        if (typeof modeAllClassBtn !== 'undefined' && modeAllClassBtn) {
+          modeAllClassBtn.className = 'px-2.5 py-1 rounded-lg transition-all bg-white dark:bg-zinc-700 text-zinc-900 dark:text-white shadow-xs';
+        }
+        if (typeof modeMyProfileBtn !== 'undefined' && modeMyProfileBtn) {
+          modeMyProfileBtn.className = 'px-2.5 py-1 rounded-lg transition-all text-ios-secondaryText hover:text-zinc-900 dark:hover:text-white';
+        }
       }
+
+      // Synchronously keep profile filter pills strictly in sync
+      renderScheduleProfileFilters();
     }
 
     openClassPickerBtn?.addEventListener('click', openViewClassModal);
@@ -1443,20 +1472,44 @@
         </div>
       `;
 
-      const posts = await API.get(`/api/news?user_id=${state.user.id}`);
-      if (!posts || posts.length === 0) {
+      try {
+        const uid = state.user?.id || 11116;
+        const posts = await API.get(`/api/news?user_id=${uid}`);
+        if (posts === null) {
+          container.innerHTML = `
+            <div class="py-16 text-center space-y-2">
+              <div class="w-12 h-12 rounded-2xl bg-red-50 dark:bg-red-950/40 text-red-500 mx-auto flex items-center justify-center text-xl">⚠️</div>
+              <h4 class="text-sm font-bold text-zinc-800 dark:text-zinc-200">Не удалось загрузить новости</h4>
+              <p class="text-xs text-ios-secondaryText">Проверьте соединение с интернетом</p>
+              <button onclick="loadNews()" class="mt-2 px-3.5 py-1.5 rounded-xl bg-ios-blue text-white text-xs font-semibold active-press">Повторить</button>
+            </div>
+          `;
+          return;
+        }
+
+        if (posts.length === 0) {
+          container.innerHTML = `
+            <div class="py-16 text-center space-y-2">
+              <div class="w-12 h-12 rounded-2xl bg-zinc-100 dark:bg-ios-cardDark2 text-zinc-400 mx-auto flex items-center justify-center text-xl">📰</div>
+              <h4 class="text-sm font-bold text-zinc-800 dark:text-zinc-200">Пока нет новостей</h4>
+              <p class="text-xs text-ios-secondaryText">Будь первым, кто предложит новость в ленту!</p>
+            </div>
+          `;
+          return;
+        }
+
+        state.news = posts;
+        container.innerHTML = posts.map(p => renderNewsPost(p)).join("");
+      } catch (err) {
+        console.error("loadNews error:", err);
         container.innerHTML = `
           <div class="py-16 text-center space-y-2">
-            <div class="w-12 h-12 rounded-2xl bg-zinc-100 dark:bg-ios-cardDark2 text-zinc-400 mx-auto flex items-center justify-center text-xl">📰</div>
-            <h4 class="text-sm font-bold text-zinc-800 dark:text-zinc-200">Пока нет новостей</h4>
-            <p class="text-xs text-ios-secondaryText">Будь первым, кто предложит новость в ленту!</p>
+            <div class="w-12 h-12 rounded-2xl bg-red-50 dark:bg-red-950/40 text-red-500 mx-auto flex items-center justify-center text-xl">⚠️</div>
+            <h4 class="text-sm font-bold text-zinc-800 dark:text-zinc-200">Ошибка при отображении</h4>
+            <button onclick="loadNews()" class="mt-2 px-3.5 py-1.5 rounded-xl bg-ios-blue text-white text-xs font-semibold active-press">Повторить</button>
           </div>
         `;
-        return;
       }
-
-      state.news = posts;
-      container.innerHTML = posts.map(p => renderNewsPost(p)).join("");
     }
 
     // Event delegation on news feed for reactions, comments, editing, and deleting
@@ -1526,6 +1579,7 @@
     }
 
     function renderReactionBar(postId, reactions) {
+      if (!reactions || !Array.isArray(reactions)) return "";
       return reactions.map(r => `
         <button data-post-id="${postId}" data-emoji="${r.emoji}" class="reaction-btn px-2.5 py-1 rounded-full text-xs font-semibold flex items-center space-x-1 active-press transition-all ${
           r.user_reacted 
@@ -1758,7 +1812,7 @@
     const closeModerationBtn = document.getElementById("close-moderation-modal-btn");
 
     async function checkPendingNewsCount() {
-      if (!state.user || !state.user.is_admin) return;
+      if (!checkIsAdmin()) return;
       try {
         const pending = await API.get(`/api/admin/news/pending?admin_id=${state.user.id}`);
         const badge = document.getElementById("admin-pending-badge");
@@ -2049,6 +2103,7 @@
         }).join('');
       } else {
         container.style.display = 'none';
+        container.innerHTML = '';
         state.selectedProfileFilter = 'all';
       }
     }
@@ -2060,22 +2115,78 @@
     }
 
     // --------------------------------------------------------
-    // EGE (ЕГЭ) Preparation Functions
+    // EGE (ЕГЭ) Preparation Functions & Official FIPI Topics
     // --------------------------------------------------------
+    const FIPI_TOPICS = {
+      russian: {
+        1: "Информационная обработка текстов разных стилей и жанров",
+        2: "Лексическое значение слова в контексте",
+        3: "Стилистический анализ текста",
+        4: "Орфоэпические нормы (постановка ударения)",
+        5: "Лексические нормы (употребление паронимов)",
+        6: "Лексические нормы (плеоназм, тавтология, лексическая сочетаемость)",
+        7: "Морфологические нормы (образование форм слова)",
+        8: "Синтаксические нормы (грамматические ошибки при построении предложений)",
+        9: "Правописание корней (проверяемые, непроверяемые, чередующиеся гласные)",
+        10: "Правописание приставок и букв Ы/И после приставок",
+        11: "Правописание суффиксов различных частей речи (кроме -Н-/-НН-)",
+        12: "Правописание личных окончаний глаголов и суффиксов причастий",
+        13: "Правописание НЕ и НИ с различными частями речи",
+        14: "Слитное, дефисное, раздельное написание слов различных частей речи",
+        15: "Правописание -Н- и -НН- в различных частях речи",
+        16: "Пунктуация в сложносочинённом предложении и с однородными членами",
+        17: "Пунктуация в предложениях с обособленными членами (обороты)",
+        18: "Пунктуация при вводных словах, конструкциях и обращениях",
+        19: "Знаки препинания в сложноподчинённом предложении",
+        20: "Знаки препинания в сложных предложениях с разными видами связи",
+        21: "Пунктуационный анализ текста (тире, двоеточие, запятая)",
+        22: "Текст как речевое произведение. Смысловая и композиционная целостность",
+        23: "Функционально-смысловые типы речи (повествование, описание, рассуждение)",
+        24: "Лексическое значение слова. Синонимы, антонимы, фразеологизмы",
+        25: "Средства связи предложений в тексте",
+        26: "Языковые средства выразительности (тропы, фигуры речи, лексика)",
+        27: "Сочинение по прочитанному тексту"
+      },
+      math: {
+        1: "Планиметрия (треугольники, четырёхугольники, окружности)",
+        2: "Векторы (координаты, операции над векторами, скалярное произведение)",
+        3: "Стереометрия (многогранники и тела вращения, объёмы и площади)",
+        4: "Начала теории вероятностей (классическая вероятность)",
+        5: "Теория вероятностей (сложные события, теоремы о вероятностях)",
+        6: "Простейшие уравнения (рациональные, иррациональные, тригонометрия)",
+        7: "Вычисления и преобразования (алгебраические, показательные, тригонометрия, логарифмы)",
+        8: "Производная и первообразная (геометрический и физический смысл)",
+        9: "Задачи с прикладным содержанием (формулы, расчеты физических процессов)",
+        10: "Текстовые задачи (движение, совместная работа, сплавы, смеси, прогрессии)",
+        11: "Графики функций (исследование и чтение коэффициентов)",
+        12: "Наибольшее и наименьшее значение функций (экстремумы с помощью производной)",
+        13: "Уравнения и отбор корней (развёрнутый ответ: тригонометрия, логарифмы)",
+        14: "Стереометрическая задача (сечения, углы и расстояния в пространстве)",
+        15: "Неравенства (рациональные, показательные, логарифмические)",
+        16: "Финансовая математика (кредиты, дифференцированные платежи, оптимизация)",
+        17: "Планиметрическая задача повышенной сложности (доказательство и вычисление)",
+        18: "Задачи с параметром (исследование уравнений и систем)",
+        19: "Числа и их свойства (делимость, числовые последовательности)",
+        20: "Комплексные числа и дискретные математические структуры"
+      }
+    };
+
     function setEgeSubject(subCode) {
       state.ege.activeSubject = subCode;
       state.ege.selectedTask = null;
       
       const rusBtn = document.getElementById('ege-sub-russian-btn');
       const mathBtn = document.getElementById('ege-sub-math-btn');
+      const hint = document.getElementById('ege-task-count-hint');
+
       if (subCode === 'russian') {
-        rusBtn.className = 'flex-1 py-2 rounded-xl transition-all text-center flex items-center justify-center gap-1.5 bg-white dark:bg-zinc-700 text-zinc-900 dark:text-white shadow-xs';
-        mathBtn.className = 'flex-1 py-2 rounded-xl transition-all text-center flex items-center justify-center gap-1.5 text-ios-secondaryText hover:text-zinc-900 dark:hover:text-white';
-        document.getElementById('ege-task-count-hint').textContent = 'Задания 1–27';
+        if (rusBtn) rusBtn.className = 'flex-1 py-2 rounded-xl transition-all text-center flex items-center justify-center gap-1.5 bg-white dark:bg-zinc-700 text-zinc-900 dark:text-white shadow-xs';
+        if (mathBtn) mathBtn.className = 'flex-1 py-2 rounded-xl transition-all text-center flex items-center justify-center gap-1.5 text-ios-secondaryText hover:text-zinc-900 dark:hover:text-white';
+        if (hint) hint.textContent = 'Задания 1–27';
       } else {
-        mathBtn.className = 'flex-1 py-2 rounded-xl transition-all text-center flex items-center justify-center gap-1.5 bg-white dark:bg-zinc-700 text-zinc-900 dark:text-white shadow-xs';
-        rusBtn.className = 'flex-1 py-2 rounded-xl transition-all text-center flex items-center justify-center gap-1.5 text-ios-secondaryText hover:text-zinc-900 dark:hover:text-white';
-        document.getElementById('ege-task-count-hint').textContent = 'Задания 1–19';
+        if (mathBtn) mathBtn.className = 'flex-1 py-2 rounded-xl transition-all text-center flex items-center justify-center gap-1.5 bg-white dark:bg-zinc-700 text-zinc-900 dark:text-white shadow-xs';
+        if (rusBtn) rusBtn.className = 'flex-1 py-2 rounded-xl transition-all text-center flex items-center justify-center gap-1.5 text-ios-secondaryText hover:text-zinc-900 dark:hover:text-white';
+        if (hint) hint.textContent = 'Задания 1–20';
       }
       
       renderEgeTaskPills();
@@ -2085,7 +2196,7 @@
     function renderEgeTaskPills() {
       const bar = document.getElementById('ege-task-pills-bar');
       if (!bar) return;
-      const maxTasks = state.ege.activeSubject === 'russian' ? 27 : 19;
+      const maxTasks = state.ege.activeSubject === 'russian' ? 27 : 20;
       
       let html = '';
       const allActive = state.ege.selectedTask === null;
@@ -2132,90 +2243,162 @@
       const list = document.getElementById('ege-materials-list');
       if (!list) return;
 
-      if (!materials || materials.length === 0) {
-        const taskText = state.ege.selectedTask ? `по заданию №${state.ege.selectedTask}` : '';
-        list.innerHTML = `
-          <div class="py-16 text-center space-y-2">
-            <div class="w-12 h-12 rounded-2xl bg-zinc-100 dark:bg-ios-cardDark2 text-zinc-400 mx-auto flex items-center justify-center text-xl">📖</div>
-            <h4 class="text-sm font-bold text-zinc-800 dark:text-zinc-200">Материалов пока нет</h4>
-            <p class="text-xs text-ios-secondaryText">Справочные материалы ${taskText} скоро появятся</p>
+      const sub = state.ege.activeSubject || 'russian';
+      const topics = FIPI_TOPICS[sub] || {};
+      const maxTasks = sub === 'russian' ? 27 : 20;
+      const isAdmin = checkIsAdmin();
+
+      // Case A: Specific task filter is selected (e.g. №4)
+      if (state.ege.selectedTask !== null) {
+        const taskNum = state.ege.selectedTask;
+        const topicName = topics[taskNum] || `Задание №${taskNum}`;
+
+        const topicBanner = `
+          <div class="rounded-2xl p-4 bg-gradient-to-r from-blue-500/10 to-indigo-500/10 dark:from-blue-900/30 dark:to-indigo-900/30 border border-ios-blue/30 shadow-ios-sm space-y-1">
+            <div class="flex items-center justify-between">
+              <span class="px-2 py-0.5 rounded-md text-[10px] font-bold bg-ios-blue text-white uppercase tracking-wider">ФИПИ • Задание №${taskNum}</span>
+              ${isAdmin ? `<button onclick="openAddEgeModal(${taskNum})" class="text-xs font-semibold text-ios-blue active-press hover:underline">+ Добавить материал</button>` : ''}
+            </div>
+            <h3 class="text-sm font-bold text-zinc-900 dark:text-white pt-1 leading-snug">${topicName}</h3>
           </div>
         `;
+
+        if (!materials || materials.length === 0) {
+          list.innerHTML = `
+            ${topicBanner}
+            <div class="rounded-3xl p-6 bg-white dark:bg-ios-cardDark border border-zinc-200/60 dark:border-zinc-800/80 shadow-ios-card text-center space-y-2.5 mt-3">
+              <div class="w-12 h-12 rounded-2xl bg-zinc-100 dark:bg-ios-cardDark2 text-zinc-400 mx-auto flex items-center justify-center text-xl">📝</div>
+              <h4 class="text-sm font-bold text-zinc-800 dark:text-zinc-200">Материалы пока не добавлены</h4>
+              <p class="text-xs text-ios-secondaryText max-w-xs mx-auto">Справочные материалы и шпаргалки по этой теме скоро появятся.</p>
+              ${isAdmin ? `<button onclick="openAddEgeModal(${taskNum})" class="mt-2 inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-ios-blue text-white text-xs font-semibold active-press shadow-xs">+ Добавить материал</button>` : ''}
+            </div>
+          `;
+          return;
+        }
+
+        list.innerHTML = topicBanner + materials.map(m => renderSingleEgeMaterialCard(m, isAdmin)).join('');
         return;
       }
 
-      const isAdmin = checkIsAdmin();
-
-      list.innerHTML = materials.map(m => {
-        const adminControls = isAdmin ? `
-          <div class="flex items-center space-x-1.5 ml-auto">
-            <button onclick="openEditEgeModal(${m.id})" class="px-2 py-1 rounded-lg bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-300 text-xs font-medium active-press flex items-center gap-1">
-              <span>✏️</span><span class="hidden sm:inline">Изменить</span>
-            </button>
-            <button onclick="deleteEgeMaterial(${m.id})" class="px-2 py-1 rounded-lg bg-red-50 hover:bg-red-100 dark:bg-red-950/60 text-red-600 dark:text-red-400 text-xs font-medium active-press flex items-center gap-1">
-              <span>🗑</span><span class="hidden sm:inline">Удалить</span>
-            </button>
+      // Case B: "All" tasks view
+      if (!materials || materials.length === 0) {
+        let catalogHtml = `
+          <div class="rounded-2xl p-3 bg-zinc-100 dark:bg-ios-cardDark2/80 border border-zinc-200/50 dark:border-zinc-800 text-xs text-ios-secondaryText mb-2 flex items-center justify-between">
+            <span>Каталог заданий ФИПИ (${sub === 'russian' ? '27 заданий' : '20 заданий'})</span>
+            ${isAdmin ? `<button onclick="openAddEgeModal()" class="text-xs font-bold text-ios-blue active-press">+ Добавить материал</button>` : ''}
           </div>
-        ` : '';
-
-        const imageHtml = m.image_url ? `
-          <div class="mt-3 rounded-2xl overflow-hidden border border-zinc-100 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/30">
-            <img src="${m.image_url}" alt="Схема / таблица" class="w-full h-auto rounded-2xl block object-contain cursor-pointer shadow-xs" loading="lazy" onclick="window.open('${m.image_url}', '_blank')">
-          </div>
-        ` : '';
-
-        const linkHtml = m.link_url ? `
-          <div class="mt-2.5 pt-2 border-t border-zinc-100 dark:border-zinc-800/80">
-            <a href="${m.link_url}" target="_blank" class="inline-flex items-center gap-1.5 text-xs text-ios-blue font-semibold hover:underline">
-              <span>🔗 Источник / Разбор</span>
-              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path></svg>
-            </a>
-          </div>
-        ` : '';
-
-        const formattedTheory = m.theory
-          .split('\n')
-          .map(line => {
-            line = line.trim();
-            if (!line) return '<div class="h-1.5"></div>';
-            if (line.startsWith('📌') || line.startsWith('•') || line.startsWith('-')) {
-              return `<div class="text-xs leading-relaxed font-medium pl-1 text-zinc-800 dark:text-zinc-200">${line}</div>`;
-            }
-            return `<p class="text-xs leading-relaxed text-zinc-700 dark:text-zinc-300">${line}</p>`;
-          })
-          .join('');
-
-        return `
-          <article class="rounded-3xl p-5 bg-white dark:bg-ios-cardDark border border-zinc-200/60 dark:border-zinc-800/80 shadow-ios-card space-y-2.5">
-            <div class="flex items-center justify-between">
-              <div class="flex items-center space-x-2">
-                <span class="px-2.5 py-1 rounded-xl text-xs font-bold bg-blue-50 text-ios-blue dark:bg-blue-950/80 dark:text-blue-300 border border-blue-200/50 dark:border-blue-900/50">
-                  Задание №${m.task_number}
-                </span>
-                <span class="text-[11px] text-ios-secondaryText">${m.created_at || ''}</span>
-              </div>
-              ${adminControls}
-            </div>
-
-            <h3 class="text-base font-bold text-zinc-900 dark:text-white leading-snug">${m.title}</h3>
-            
-            <div class="bg-zinc-50/80 dark:bg-zinc-900/40 p-3.5 rounded-2xl border border-zinc-100 dark:border-zinc-800/60 space-y-1 font-sans">
-              ${formattedTheory}
-            </div>
-
-            ${imageHtml}
-            ${linkHtml}
-          </article>
+          <div class="space-y-2">
         `;
-      }).join('');
+
+        for (let i = 1; i <= maxTasks; i++) {
+          const tName = topics[i] || `Задание №${i}`;
+          catalogHtml += `
+            <div class="rounded-2xl p-3 bg-white dark:bg-ios-cardDark border border-zinc-200/60 dark:border-zinc-800/80 shadow-ios-sm flex items-center justify-between gap-3 active-press cursor-pointer hover:border-ios-blue/40" onclick="setEgeTaskFilter(${i})">
+              <div class="flex items-center gap-2.5 min-w-0">
+                <span class="w-8 h-8 rounded-xl bg-blue-50 text-ios-blue dark:bg-blue-950/80 dark:text-blue-300 font-bold text-xs flex items-center justify-center border border-blue-200/50 dark:border-blue-900/50 flex-shrink-0">
+                  ${i}
+                </span>
+                <div class="min-w-0">
+                  <div class="text-xs font-bold text-zinc-900 dark:text-white truncate">${tName}</div>
+                  <div class="text-[10px] text-ios-secondaryText mt-0.5">ФИПИ • Нажмите для просмотра</div>
+                </div>
+              </div>
+              <div class="flex items-center gap-1.5 flex-shrink-0">
+                ${isAdmin ? `<button onclick="event.stopPropagation(); openAddEgeModal(${i});" class="text-xs font-semibold px-2.5 py-1 rounded-lg bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 text-ios-blue">+ Добавить</button>` : `<span class="text-zinc-400 text-sm">›</span>`}
+              </div>
+            </div>
+          `;
+        }
+        catalogHtml += `</div>`;
+        list.innerHTML = catalogHtml;
+        return;
+      }
+
+      list.innerHTML = materials.map(m => renderSingleEgeMaterialCard(m, isAdmin)).join('');
     }
 
-    function openAddEgeModal() {
+    function renderSingleEgeMaterialCard(m, isAdmin) {
+      const sub = state.ege.activeSubject || 'russian';
+      const topics = FIPI_TOPICS[sub] || {};
+      const topicName = topics[m.task_number] ? ` • ${topics[m.task_number]}` : '';
+
+      const adminControls = isAdmin ? `
+        <div class="flex items-center space-x-1.5 ml-auto">
+          <button onclick="openEditEgeModal(${m.id})" class="px-2 py-1 rounded-lg bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-300 text-xs font-medium active-press flex items-center gap-1">
+            <span>✏️</span><span class="hidden sm:inline">Изменить</span>
+          </button>
+          <button onclick="deleteEgeMaterial(${m.id})" class="px-2 py-1 rounded-lg bg-red-50 hover:bg-red-100 dark:bg-red-950/60 text-red-600 dark:text-red-400 text-xs font-medium active-press flex items-center gap-1">
+            <span>🗑</span><span class="hidden sm:inline">Удалить</span>
+          </button>
+        </div>
+      ` : '';
+
+      const imageHtml = m.image_url ? `
+        <div class="mt-3 rounded-2xl overflow-hidden border border-zinc-100 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/30">
+          <img src="${m.image_url}" alt="Схема / таблица" class="w-full h-auto rounded-2xl block object-contain cursor-pointer shadow-xs" loading="lazy" onclick="window.open('${m.image_url}', '_blank')">
+        </div>
+      ` : '';
+
+      const linkHtml = m.link_url ? `
+        <div class="mt-2.5 pt-2 border-t border-zinc-100 dark:border-zinc-800/80">
+          <a href="${m.link_url}" target="_blank" class="inline-flex items-center gap-1.5 text-xs text-ios-blue font-semibold hover:underline">
+            <span>🔗 Источник / Разбор</span>
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path></svg>
+          </a>
+        </div>
+      ` : '';
+
+      const formattedTheory = m.theory
+        .split('\n')
+        .map(line => {
+          line = line.trim();
+          if (!line) return '<div class="h-1.5"></div>';
+          if (line.startsWith('📌') || line.startsWith('•') || line.startsWith('-')) {
+            return `<div class="text-xs leading-relaxed font-medium pl-1 text-zinc-800 dark:text-zinc-200">${line}</div>`;
+          }
+          return `<p class="text-xs leading-relaxed text-zinc-700 dark:text-zinc-300">${line}</p>`;
+        })
+        .join('');
+
+      return `
+        <article class="rounded-3xl p-5 bg-white dark:bg-ios-cardDark border border-zinc-200/60 dark:border-zinc-800/80 shadow-ios-card space-y-2.5">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center space-x-2">
+              <span class="px-2.5 py-1 rounded-xl text-xs font-bold bg-blue-50 text-ios-blue dark:bg-blue-950/80 dark:text-blue-300 border border-blue-200/50 dark:border-blue-900/50">
+                Задание №${m.task_number}
+              </span>
+              <span class="text-[11px] text-ios-secondaryText">${m.created_at || ''}</span>
+            </div>
+            ${adminControls}
+          </div>
+
+          <div>
+            <h3 class="text-base font-bold text-zinc-900 dark:text-white leading-snug">${m.title}</h3>
+            ${topicName ? `<div class="text-[11px] text-ios-secondaryText mt-0.5">${topicName}</div>` : ''}
+          </div>
+          
+          <div class="bg-zinc-50/80 dark:bg-zinc-900/40 p-3.5 rounded-2xl border border-zinc-100 dark:border-zinc-800/60 space-y-1 font-sans">
+            ${formattedTheory}
+          </div>
+
+          ${imageHtml}
+          ${linkHtml}
+        </article>
+      `;
+    }
+
+    function openAddEgeModal(taskNum = null) {
       document.getElementById('ege-modal-title').innerHTML = '<span>📚</span> Добавить материал ЕГЭ';
       document.getElementById('ege-edit-id').value = '';
-      document.getElementById('ege-form-subject').value = state.ege.activeSubject || 'russian';
-      document.getElementById('ege-form-task-num').value = state.ege.selectedTask || '';
-      document.getElementById('ege-form-title').value = '';
+      const sub = state.ege.activeSubject || 'russian';
+      document.getElementById('ege-form-subject').value = sub;
+      const tNum = taskNum || state.ege.selectedTask || '';
+      document.getElementById('ege-form-task-num').value = tNum;
+      if (tNum && FIPI_TOPICS[sub]?.[tNum]) {
+        document.getElementById('ege-form-title').value = FIPI_TOPICS[sub][tNum];
+      } else {
+        document.getElementById('ege-form-title').value = '';
+      }
       document.getElementById('ege-form-theory').value = '';
       document.getElementById('ege-form-image-url').value = '';
       document.getElementById('ege-form-link').value = '';
@@ -2253,21 +2436,6 @@
     }
 
     async function handleSaveEgeMaterial(e) {
-
-    window.renderScheduleProfileFilters = renderScheduleProfileFilters;
-    window.setScheduleProfileFilter = setScheduleProfileFilter;
-    window.setEgeSubject = setEgeSubject;
-    window.setEgeTaskFilter = setEgeTaskFilter;
-    window.openAddEgeModal = openAddEgeModal;
-    window.openEditEgeModal = openEditEgeModal;
-    window.closeEgeModal = closeEgeModal;
-    window.deleteEgeMaterial = deleteEgeMaterial;
-    window.handleSaveEgeMaterial = handleSaveEgeMaterial;
-    window.openOnboardingModal = openOnboardingModal;
-    window.closeOnboardingModal = closeOnboardingModal;
-    window.openProposeNewsModal = openProposeNewsModal;
-    window.closeProposeNewsModal = closeProposeNewsModal;
-
       e.preventDefault();
       const editId = document.getElementById('ege-edit-id').value;
       const subject = document.getElementById('ege-form-subject').value;
@@ -2278,7 +2446,7 @@
       let imageUrl = document.getElementById('ege-form-image-url').value;
 
       const fileInput = document.getElementById('ege-form-file');
-      if (fileInput.files.length > 0) {
+      if (fileInput && fileInput.files && fileInput.files.length > 0) {
         try {
           const upRes = await API.upload(fileInput.files[0]);
           if (upRes && upRes.url) imageUrl = upRes.url;
@@ -2311,7 +2479,28 @@
       }
     }
 
-  </script>
+    // --------------------------------------------------------
+    // Global Window Function Exports
+    // --------------------------------------------------------
+    window.selectDay = selectDay;
+    window.switchTab = switchTab;
+    window.renderScheduleProfileFilters = renderScheduleProfileFilters;
+    window.setScheduleProfileFilter = setScheduleProfileFilter;
+    window.setEgeSubject = setEgeSubject;
+    window.setEgeTaskFilter = setEgeTaskFilter;
+    window.openAddEgeModal = openAddEgeModal;
+    window.openEditEgeModal = openEditEgeModal;
+    window.closeEgeModal = closeEgeModal;
+    window.deleteEgeMaterial = deleteEgeMaterial;
+    window.handleSaveEgeMaterial = handleSaveEgeMaterial;
+    window.openOnboardingModal = openOnboardingModal;
+    window.closeOnboardingModal = closeOnboardingModal;
+    window.openProposeNewsModal = openProposeNewsModal;
+    window.closeProposeNewsModal = closeProposeNewsModal;
+    window.openViewClassModal = openViewClassModal;
+    window.closeViewClassModal = closeViewClassModal;
+    
+</script>
 
 </body>
 </html>
