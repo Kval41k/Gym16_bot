@@ -149,3 +149,14 @@ class CommentResponse(BaseModel):
 class ModerationActionRequest(BaseModel):
     action: str = Field(..., pattern=r"^(approve|reject)$")
     admin_id: int
+
+class UserAdminItem(BaseModel):
+    id: int
+    first_name: str
+    last_name: Optional[str] = None
+    username: Optional[str] = None
+    class_name: Optional[str] = None
+    profile_name: Optional[str] = None
+    is_admin: bool
+    is_onboarded: bool
+    created_at: Optional[str] = None

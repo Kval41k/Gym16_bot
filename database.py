@@ -3,12 +3,22 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 from sqlalchemy.orm import DeclarativeBase
 from config import settings
 
+def get_db_url() -> str:
+    url = settings.DATABASE_URL
+    if url.startswith("postgres://"):
+        url = url.replace("postgres://", "postgresql+asyncpg://", 1)
+    elif url.startswith("postgresql://") and not url.startswith("postgresql+asyncpg://"):
+        url = url.replace("postgresql://", "postgresql+asyncpg://", 1)
+    return url
+
+DB_URL = get_db_url()
+
 # Async SQLAlchemy engine
 engine = create_async_engine(
-    settings.DATABASE_URL,
+    DB_URL,
     echo=False,
     future=True,
-    connect_args={"check_same_thread": False} if "sqlite" in settings.DATABASE_URL else {}
+    connect_args={"check_same_thread": False} if "sqlite" in DB_URL else {}
 )
 
 # Async session factory
