@@ -286,6 +286,188 @@ LESSONS_11A = [
     }
 ]
 
+LESSONS_11V = [
+    # -------------------------------------------------------------
+    # 11В - ПОНЕДЕЛЬНИК (day_of_week = 0)
+    # -------------------------------------------------------------
+    {"day_of_week": 0, "lesson_number": 1, "class_name": "11В", "subject": "Разговоры о важном", "cabinet": "1/322", "teacher_name": "Левин В.В.", "profile_name": None, "subgroup": None, "note": "Классный час"},
+    {"day_of_week": 0, "lesson_number": 2, "class_name": "11В", "subject": "Алгебра и начала математического анализа", "cabinet": "1/322", "teacher_name": "Левин В.В.", "profile_name": None, "subgroup": None, "note": "Пара (1/2)"},
+    {"day_of_week": 0, "lesson_number": 3, "class_name": "11В", "subject": "Алгебра и начала математического анализа", "cabinet": "1/322", "teacher_name": "Левин В.В.", "profile_name": None, "subgroup": None, "note": "Пара (2/2)"},
+    {"day_of_week": 0, "lesson_number": 4, "class_name": "11В", "subject": "Физическая культура", "cabinet": "сп.зал 3", "teacher_name": "Стародубцев Н.Л.", "profile_name": None, "subgroup": None, "note": "Пара (1/2)"},
+    {"day_of_week": 0, "lesson_number": 5, "class_name": "11В", "subject": "Физическая культура", "cabinet": "сп.зал 3", "teacher_name": "Стародубцев Н.Л.", "profile_name": None, "subgroup": None, "note": "Пара (2/2)"},
+    {"day_of_week": 0, "lesson_number": 6, "class_name": "11В", "subject": "Литература", "cabinet": "3/109", "teacher_name": "Иванова Е.В.", "profile_name": None, "subgroup": None, "note": "Пара (1/2)"},
+    {"day_of_week": 0, "lesson_number": 7, "class_name": "11В", "subject": "Литература", "cabinet": "3/109", "teacher_name": "Иванова Е.В.", "profile_name": None, "subgroup": None, "note": "Пара (2/2)"},
+    {"day_of_week": 0, "lesson_number": 8, "class_name": "11В", "subject": "ЭК Информатика", "cabinet": "1/205", "teacher_name": "Мышко Ю.Ю.", "profile_name": "Инфотех", "subgroup": None, "note": "Элективный курс"},
+    {"day_of_week": 0, "lesson_number": 8, "class_name": "11В", "subject": "Английский язык", "cabinet": "3/111", "teacher_name": "Елагина М.В.", "profile_name": "Инженерный", "subgroup": None, "note": None},
+
+    # -------------------------------------------------------------
+    # 11В - ВТОРНИК (day_of_week = 1)
+    # -------------------------------------------------------------
+    {"day_of_week": 1, "lesson_number": 1, "class_name": "11В", "subject": "Информатика и ИКТ", "cabinet": "3/314", "teacher_name": "Тольянская В.В.", "profile_name": "Инфотех", "subgroup": None, "note": "Пара (1/2)"},
+    {"day_of_week": 1, "lesson_number": 1, "class_name": "11В", "subject": "Физика", "cabinet": "1/404", "teacher_name": "Кукарская Т.Н.", "profile_name": "Инженерный", "subgroup": None, "note": "Пара (1/2)"},
+    {"day_of_week": 1, "lesson_number": 2, "class_name": "11В", "subject": "Информатика и ИКТ", "cabinet": "1/205", "teacher_name": "Мышко Ю.Ю.", "profile_name": "Инфотех", "subgroup": None, "note": "Пара (2/2)"},
+    {"day_of_week": 1, "lesson_number": 2, "class_name": "11В", "subject": "Физика", "cabinet": "1/404", "teacher_name": "Кукарская Т.Н.", "profile_name": "Инженерный", "subgroup": None, "note": "Пара (2/2)"},
+    {"day_of_week": 1, "lesson_number": 3, "class_name": "11В", "subject": "Русский язык", "cabinet": "3/109", "teacher_name": "Иванова Е.В.", "profile_name": None, "subgroup": None, "note": "Пара (1/2)"},
+    {"day_of_week": 1, "lesson_number": 4, "class_name": "11В", "subject": "Русский язык", "cabinet": "3/109", "teacher_name": "Иванова Е.В.", "profile_name": None, "subgroup": None, "note": "Пара (2/2)"},
+    {"day_of_week": 1, "lesson_number": 5, "class_name": "11В", "subject": "Геометрия", "cabinet": "1/322", "teacher_name": "Левин В.В.", "profile_name": None, "subgroup": None, "note": "Пара (1/2)"},
+    {"day_of_week": 1, "lesson_number": 6, "class_name": "11В", "subject": "Геометрия", "cabinet": "1/322", "teacher_name": "Левин В.В.", "profile_name": None, "subgroup": None, "note": "Пара (2/2)"},
+    {"day_of_week": 1, "lesson_number": 7, "class_name": "11В", "subject": "Английский язык", "cabinet": "1/304", "teacher_name": "Мажникова В.Д.", "profile_name": "Инфотех", "subgroup": None, "note": None},
+    {"day_of_week": 1, "lesson_number": 7, "class_name": "11В", "subject": "ЭК Физика", "cabinet": "1/404", "teacher_name": "Кукарская Т.Н.", "profile_name": "Инженерный", "subgroup": None, "note": "Элективный курс"},
+
+    # -------------------------------------------------------------
+    # 11В - СРЕДА (day_of_week = 2)
+    # -------------------------------------------------------------
+    {"day_of_week": 2, "lesson_number": 1, "class_name": "11В", "subject": "История", "cabinet": "1/123", "teacher_name": "Романюк Э.В.", "profile_name": None, "subgroup": None, "note": "Пара (1/2)"},
+    {"day_of_week": 2, "lesson_number": 2, "class_name": "11В", "subject": "История", "cabinet": "1/123", "teacher_name": "Романюк Э.В.", "profile_name": None, "subgroup": None, "note": "Пара (2/2)"},
+    {"day_of_week": 2, "lesson_number": 3, "class_name": "11В", "subject": "Алгебра и начала математического анализа", "cabinet": "1/322", "teacher_name": "Левин В.В.", "profile_name": None, "subgroup": None, "note": "Пара (1/2)"},
+    {"day_of_week": 2, "lesson_number": 4, "class_name": "11В", "subject": "Алгебра и начала математического анализа", "cabinet": "1/322", "teacher_name": "Левин В.В.", "profile_name": None, "subgroup": None, "note": "Пара (2/2)"},
+    {"day_of_week": 2, "lesson_number": 5, "class_name": "11В", "subject": "Основы безопасности и защиты Родины", "cabinet": "1/216", "teacher_name": "Климов Е.Н.", "profile_name": None, "subgroup": None, "note": "Пара (1/2)"},
+    {"day_of_week": 2, "lesson_number": 6, "class_name": "11В", "subject": "Основы безопасности и защиты Родины", "cabinet": "1/216", "teacher_name": "Климов Е.Н.", "profile_name": None, "subgroup": None, "note": "Пара (2/2)"},
+
+    # -------------------------------------------------------------
+    # 11В - ЧЕТВЕРГ (day_of_week = 3)
+    # -------------------------------------------------------------
+    {"day_of_week": 3, "lesson_number": 1, "class_name": "11В", "subject": "Обществознание", "cabinet": "1/225", "teacher_name": "Васильева А.С.", "profile_name": None, "subgroup": None, "note": "Пара (1/2)"},
+    {"day_of_week": 3, "lesson_number": 2, "class_name": "11В", "subject": "Обществознание", "cabinet": "1/225", "teacher_name": "Васильева А.С.", "profile_name": None, "subgroup": None, "note": "Пара (2/2)"},
+    {"day_of_week": 3, "lesson_number": 3, "class_name": "11В", "subject": "Информатика и ИКТ", "cabinet": "1/205", "teacher_name": "Мышко Ю.Ю.", "profile_name": "Инфотех", "subgroup": None, "note": "Пара (1/2)"},
+    {"day_of_week": 3, "lesson_number": 3, "class_name": "11В", "subject": "Физика", "cabinet": "1/404", "teacher_name": "Кукарская Т.Н.", "profile_name": "Инженерный", "subgroup": None, "note": "Пара (1/2)"},
+    {"day_of_week": 3, "lesson_number": 4, "class_name": "11В", "subject": "Информатика и ИКТ", "cabinet": "1/205", "teacher_name": "Мышко Ю.Ю.", "profile_name": "Инфотех", "subgroup": None, "note": "Пара (2/2)"},
+    {"day_of_week": 3, "lesson_number": 4, "class_name": "11В", "subject": "Физика", "cabinet": "1/404", "teacher_name": "Кукарская Т.Н.", "profile_name": "Инженерный", "subgroup": None, "note": "Пара (2/2)"},
+    {"day_of_week": 3, "lesson_number": 5, "class_name": "11В", "subject": "Литература", "cabinet": "3/109", "teacher_name": "Иванова Е.В.", "profile_name": None, "subgroup": None, "note": None},
+    {"day_of_week": 3, "lesson_number": 6, "class_name": "11В", "subject": "ЭК Родной язык в жизни общества", "cabinet": "3/109", "teacher_name": "Иванова Е.В.", "profile_name": None, "subgroup": None, "note": "Элективный курс"},
+    {"day_of_week": 3, "lesson_number": 7, "class_name": "11В", "subject": "Геометрия", "cabinet": "1/322", "teacher_name": "Левин В.В.", "profile_name": None, "subgroup": None, "note": None},
+
+    # -------------------------------------------------------------
+    # 11В - ПЯТНИЦА (day_of_week = 4)
+    # -------------------------------------------------------------
+    {"day_of_week": 4, "lesson_number": 1, "class_name": "11В", "subject": "Английский язык", "cabinet": "1/304", "teacher_name": "Мажникова В.Д.", "profile_name": "Инфотех", "subgroup": None, "note": "Пара (1/2)"},
+    {"day_of_week": 4, "lesson_number": 1, "class_name": "11В", "subject": "Физика", "cabinet": "1/416", "teacher_name": "Кукарская Т.Н.", "profile_name": "Инженерный", "subgroup": None, "note": "Пара (1/2)"},
+    {"day_of_week": 4, "lesson_number": 2, "class_name": "11В", "subject": "Английский язык", "cabinet": "1/304", "teacher_name": "Мажникова В.Д.", "profile_name": "Инфотех", "subgroup": None, "note": "Пара (2/2)"},
+    {"day_of_week": 4, "lesson_number": 2, "class_name": "11В", "subject": "Физика", "cabinet": "1/416", "teacher_name": "Кукарская Т.Н.", "profile_name": "Инженерный", "subgroup": None, "note": "Пара (2/2)"},
+    {"day_of_week": 4, "lesson_number": 3, "class_name": "11В", "subject": "Английский язык", "cabinet": "1/318", "teacher_name": "Зворыгин Я.П.", "profile_name": "Инфотех", "subgroup": None, "note": None},
+    {"day_of_week": 4, "lesson_number": 3, "class_name": "11В", "subject": "Английский язык", "cabinet": "3/111", "teacher_name": "Елагина М.В.", "profile_name": "Инженерный", "subgroup": None, "note": None},
+    {"day_of_week": 4, "lesson_number": 5, "class_name": "11В", "subject": "Биология", "cabinet": "1/311", "teacher_name": "Андронова Е.В.", "profile_name": None, "subgroup": None, "note": "Пара (1/2)"},
+    {"day_of_week": 4, "lesson_number": 6, "class_name": "11В", "subject": "Биология", "cabinet": "1/311", "teacher_name": "Андронова Е.В.", "profile_name": None, "subgroup": None, "note": "Пара (2/2)"},
+    {"day_of_week": 4, "lesson_number": 7, "class_name": "11В", "subject": "Вероятность и статистика", "cabinet": "1/322", "teacher_name": "Левин В.В.", "profile_name": None, "subgroup": None, "note": None},
+]
+
+LESSONS_11G = [
+    # -------------------------------------------------------------
+    # 11Г - ПОНЕДЕЛЬНИК (day_of_week = 0)
+    # -------------------------------------------------------------
+    {"day_of_week": 0, "lesson_number": 1, "class_name": "11Г", "subject": "Разговоры о важном", "cabinet": "1/307", "teacher_name": "Минина О.А.", "profile_name": None, "subgroup": None, "note": "Классный час"},
+    {"day_of_week": 0, "lesson_number": 2, "class_name": "11Г", "subject": "Информатика и ИКТ", "cabinet": "3/314", "teacher_name": "Тольянская В.В.", "profile_name": None, "subgroup": 1, "note": None},
+    {"day_of_week": 0, "lesson_number": 2, "class_name": "11Г", "subject": "Английский язык", "cabinet": "1/304", "teacher_name": "Мажникова В.Д.", "profile_name": None, "subgroup": 2, "note": None},
+    {"day_of_week": 0, "lesson_number": 3, "class_name": "11Г", "subject": "Английский язык", "cabinet": "3/111", "teacher_name": "Елагина М.В.", "profile_name": None, "subgroup": 1, "note": None},
+    {"day_of_week": 0, "lesson_number": 3, "class_name": "11Г", "subject": "Информатика и ИКТ", "cabinet": "3/314", "teacher_name": "Тольянская В.В.", "profile_name": None, "subgroup": 2, "note": None},
+    {"day_of_week": 0, "lesson_number": 5, "class_name": "11Г", "subject": "Литература", "cabinet": "1/423", "teacher_name": "Шабалина Е.В.", "profile_name": None, "subgroup": None, "note": None},
+    {"day_of_week": 0, "lesson_number": 6, "class_name": "11Г", "subject": "Геометрия", "cabinet": "3/311", "teacher_name": "Захарова Н.А.", "profile_name": None, "subgroup": None, "note": "Пара (1/2)"},
+    {"day_of_week": 0, "lesson_number": 7, "class_name": "11Г", "subject": "Геометрия", "cabinet": "3/311", "teacher_name": "Захарова Н.А.", "profile_name": None, "subgroup": None, "note": "Пара (2/2)"},
+    {"day_of_week": 0, "lesson_number": 8, "class_name": "11Г", "subject": "Химия", "cabinet": "1/411", "teacher_name": "Юрина Т.Ю.", "profile_name": None, "subgroup": None, "note": "Углубленный курс"},
+
+    # -------------------------------------------------------------
+    # 11Г - ВТОРНИК (day_of_week = 1)
+    # -------------------------------------------------------------
+    {"day_of_week": 1, "lesson_number": 1, "class_name": "11Г", "subject": "История", "cabinet": "1/123", "teacher_name": "Романюк Э.В.", "profile_name": None, "subgroup": None, "note": None},
+    {"day_of_week": 1, "lesson_number": 2, "class_name": "11Г", "subject": "Обществознание", "cabinet": "1/307", "teacher_name": "Романюк Э.В.", "profile_name": None, "subgroup": None, "note": None},
+    {"day_of_week": 1, "lesson_number": 3, "class_name": "11Г", "subject": "Биология", "cabinet": "1/307", "teacher_name": "Минина О.А.", "profile_name": None, "subgroup": None, "note": "Углубленный курс"},
+    {"day_of_week": 1, "lesson_number": 4, "class_name": "11Г", "subject": "Основы безопасности и защиты Родины", "cabinet": "1/216", "teacher_name": "Климов Е.Н.", "profile_name": None, "subgroup": None, "note": "Пара (1/2)"},
+    {"day_of_week": 1, "lesson_number": 5, "class_name": "11Г", "subject": "Основы безопасности и защиты Родины", "cabinet": "1/216", "teacher_name": "Климов Е.Н.", "profile_name": None, "subgroup": None, "note": "Пара (2/2)"},
+    {"day_of_week": 1, "lesson_number": 6, "class_name": "11Г", "subject": "ЭК Родной язык в жизни общества", "cabinet": "1/423", "teacher_name": "Шабалина Е.В.", "profile_name": None, "subgroup": None, "note": "Элективный курс"},
+
+    # -------------------------------------------------------------
+    # 11Г - СРЕДА (day_of_week = 2)
+    # -------------------------------------------------------------
+    {"day_of_week": 2, "lesson_number": 1, "class_name": "11Г", "subject": "Алгебра и начала математического анализа", "cabinet": "3/311", "teacher_name": "Захарова Н.А.", "profile_name": None, "subgroup": None, "note": "Пара (1/2)"},
+    {"day_of_week": 2, "lesson_number": 2, "class_name": "11Г", "subject": "Алгебра и начала математического анализа", "cabinet": "3/311", "teacher_name": "Захарова Н.А.", "profile_name": None, "subgroup": None, "note": "Пара (2/2)"},
+    {"day_of_week": 2, "lesson_number": 3, "class_name": "11Г", "subject": "Английский язык", "cabinet": "3/111", "teacher_name": "Елагина М.В.", "profile_name": None, "subgroup": 1, "note": None},
+    {"day_of_week": 2, "lesson_number": 3, "class_name": "11Г", "subject": "Английский язык", "cabinet": "1/304", "teacher_name": "Мажникова В.Д.", "profile_name": None, "subgroup": 2, "note": None},
+    {"day_of_week": 2, "lesson_number": 4, "class_name": "11Г", "subject": "Физика", "cabinet": "1/416", "teacher_name": "Трухина Ю.В.", "profile_name": None, "subgroup": None, "note": "Пара (1/2)"},
+    {"day_of_week": 2, "lesson_number": 5, "class_name": "11Г", "subject": "Физика", "cabinet": "1/416", "teacher_name": "Трухина Ю.В.", "profile_name": None, "subgroup": None, "note": "Пара (2/2)"},
+    {"day_of_week": 2, "lesson_number": 6, "class_name": "11Г", "subject": "Алгебра и начала математического анализа", "cabinet": "3/311", "teacher_name": "Захарова Н.А.", "profile_name": None, "subgroup": None, "note": None},
+    {"day_of_week": 2, "lesson_number": 7, "class_name": "11Г", "subject": "ЭК Основы теории химических процессов", "cabinet": "1/411", "teacher_name": "Юрина Т.Ю.", "profile_name": None, "subgroup": None, "note": "Элективный курс"},
+
+    # -------------------------------------------------------------
+    # 11Г - ЧЕТВЕРГ (day_of_week = 3)
+    # -------------------------------------------------------------
+    {"day_of_week": 3, "lesson_number": 1, "class_name": "11Г", "subject": "Химия", "cabinet": "1/411", "teacher_name": "Юрина Т.Ю.", "profile_name": None, "subgroup": None, "note": "Пара (1/2)"},
+    {"day_of_week": 3, "lesson_number": 2, "class_name": "11Г", "subject": "Химия", "cabinet": "1/411", "teacher_name": "Юрина Т.Ю.", "profile_name": None, "subgroup": None, "note": "Пара (2/2)"},
+    {"day_of_week": 3, "lesson_number": 3, "class_name": "11Г", "subject": "Русский язык", "cabinet": "1/423", "teacher_name": "Шабалина Е.В.", "profile_name": None, "subgroup": None, "note": None},
+    {"day_of_week": 3, "lesson_number": 4, "class_name": "11Г", "subject": "Биология", "cabinet": "1/307", "teacher_name": "Минина О.А.", "profile_name": None, "subgroup": None, "note": "Углубленный курс"},
+    {"day_of_week": 3, "lesson_number": 5, "class_name": "11Г", "subject": "Решение генетических задач", "cabinet": "1/307", "teacher_name": "Минина О.А.", "profile_name": None, "subgroup": None, "note": "Спецкурс"},
+    {"day_of_week": 3, "lesson_number": 6, "class_name": "11Г", "subject": "Алгебра и начала математического анализа", "cabinet": "3/311", "teacher_name": "Захарова Н.А.", "profile_name": None, "subgroup": None, "note": None},
+    {"day_of_week": 3, "lesson_number": 7, "class_name": "11Г", "subject": "ЭК Основы теории химических процессов", "cabinet": "1/411", "teacher_name": "Юрина Т.Ю.", "profile_name": None, "subgroup": None, "note": "Элективный курс"},
+
+    # -------------------------------------------------------------
+    # 11Г - ПЯТНИЦА (day_of_week = 4)
+    # -------------------------------------------------------------
+    {"day_of_week": 4, "lesson_number": 1, "class_name": "11Г", "subject": "Литература", "cabinet": "1/423", "teacher_name": "Шабалина Е.В.", "profile_name": None, "subgroup": None, "note": None},
+    {"day_of_week": 4, "lesson_number": 2, "class_name": "11Г", "subject": "Вероятность и статистика", "cabinet": "3/311", "teacher_name": "Захарова Н.А.", "profile_name": None, "subgroup": None, "note": None},
+    {"day_of_week": 4, "lesson_number": 3, "class_name": "11Г", "subject": "Физическая культура", "cabinet": "сп.зал 3", "teacher_name": "Стародубцев Н.Л.", "profile_name": None, "subgroup": None, "note": "Пара (1/2)"},
+    {"day_of_week": 4, "lesson_number": 4, "class_name": "11Г", "subject": "Физическая культура", "cabinet": "сп.зал 3", "teacher_name": "Стародубцев Н.Л.", "profile_name": None, "subgroup": None, "note": "Пара (2/2)"},
+    {"day_of_week": 4, "lesson_number": 5, "class_name": "11Г", "subject": "История", "cabinet": "1/123", "teacher_name": "Романюк Э.В.", "profile_name": None, "subgroup": None, "note": None},
+]
+
+LESSONS_11ZH = [
+    # -------------------------------------------------------------
+    # 11Ж - ПОНЕДЕЛЬНИК (day_of_week = 0)
+    # -------------------------------------------------------------
+    {"day_of_week": 0, "lesson_number": 1, "class_name": "11Ж", "subject": "Разговоры о важном", "cabinet": "1/318", "teacher_name": "Южакова Е.А.", "profile_name": None, "subgroup": None, "note": "Классный час"},
+    {"day_of_week": 0, "lesson_number": 2, "class_name": "11Ж", "subject": "Информатика", "cabinet": "1/205", "teacher_name": "Мышко Ю.Ю.", "profile_name": None, "subgroup": 1, "note": "Пара (1/2)"},
+    {"day_of_week": 0, "lesson_number": 2, "class_name": "11Ж", "subject": "Английский язык", "cabinet": "1/309", "teacher_name": "Петрова А.В.", "profile_name": None, "subgroup": 2, "note": "Пара (1/2)"},
+    {"day_of_week": 0, "lesson_number": 3, "class_name": "11Ж", "subject": "Информатика", "cabinet": "1/205", "teacher_name": "Мышко Ю.Ю.", "profile_name": None, "subgroup": 1, "note": "Пара (2/2)"},
+    {"day_of_week": 0, "lesson_number": 3, "class_name": "11Ж", "subject": "Английский язык", "cabinet": "1/309", "teacher_name": "Петрова А.В.", "profile_name": None, "subgroup": 2, "note": "Пара (2/2)"},
+    {"day_of_week": 0, "lesson_number": 4, "class_name": "11Ж", "subject": "Алгебра и начала математического анализа", "cabinet": "1/318", "teacher_name": "Южакова Е.А.", "profile_name": None, "subgroup": None, "note": "Пара (1/2)"},
+    {"day_of_week": 0, "lesson_number": 5, "class_name": "11Ж", "subject": "Алгебра и начала математического анализа", "cabinet": "1/318", "teacher_name": "Южакова Е.А.", "profile_name": None, "subgroup": None, "note": "Пара (2/2)"},
+    {"day_of_week": 0, "lesson_number": 6, "class_name": "11Ж", "subject": "Обществознание", "cabinet": "1/225", "teacher_name": "Васильева А.С.", "profile_name": None, "subgroup": None, "note": "Пара (1/2)"},
+    {"day_of_week": 0, "lesson_number": 7, "class_name": "11Ж", "subject": "Обществознание", "cabinet": "1/225", "teacher_name": "Васильева А.С.", "profile_name": None, "subgroup": None, "note": "Пара (2/2)"},
+    {"day_of_week": 0, "lesson_number": 8, "class_name": "11Ж", "subject": "Литература", "cabinet": "3/107", "teacher_name": "Ульянов В.Н.", "profile_name": None, "subgroup": None, "note": None},
+
+    # -------------------------------------------------------------
+    # 11Ж - ВТОРНИК (day_of_week = 1)
+    # -------------------------------------------------------------
+    {"day_of_week": 1, "lesson_number": 1, "class_name": "11Ж", "subject": "Литература", "cabinet": "3/107", "teacher_name": "Ульянов В.Н.", "profile_name": None, "subgroup": None, "note": None},
+    {"day_of_week": 1, "lesson_number": 2, "class_name": "11Ж", "subject": "Английский язык", "cabinet": "3/305", "teacher_name": "Першина С.Н.", "profile_name": None, "subgroup": 1, "note": "Пара (1/2)"},
+    {"day_of_week": 1, "lesson_number": 2, "class_name": "11Ж", "subject": "Информатика и ИКТ", "cabinet": "1/205", "teacher_name": "Мышко Ю.Ю.", "profile_name": None, "subgroup": 2, "note": "Пара (1/2)"},
+    {"day_of_week": 1, "lesson_number": 3, "class_name": "11Ж", "subject": "Английский язык", "cabinet": "3/305", "teacher_name": "Першина С.Н.", "profile_name": None, "subgroup": 1, "note": "Пара (2/2)"},
+    {"day_of_week": 1, "lesson_number": 3, "class_name": "11Ж", "subject": "Информатика и ИКТ", "cabinet": "1/205", "teacher_name": "Мышко Ю.Ю.", "profile_name": None, "subgroup": 2, "note": "Пара (2/2)"},
+    {"day_of_week": 1, "lesson_number": 4, "class_name": "11Ж", "subject": "Геометрия", "cabinet": "1/318", "teacher_name": "Южакова Е.А.", "profile_name": None, "subgroup": None, "note": "Пара (1/2)"},
+    {"day_of_week": 1, "lesson_number": 5, "class_name": "11Ж", "subject": "Геометрия", "cabinet": "1/318", "teacher_name": "Южакова Е.А.", "profile_name": None, "subgroup": None, "note": "Пара (2/2)"},
+    {"day_of_week": 1, "lesson_number": 6, "class_name": "11Ж", "subject": "ЭК Родной язык в жизни общества", "cabinet": "3/107", "teacher_name": "Ульянов В.Н.", "profile_name": None, "subgroup": None, "note": "Элективный курс"},
+
+    # -------------------------------------------------------------
+    # 11Ж - СРЕДА (day_of_week = 2)
+    # -------------------------------------------------------------
+    {"day_of_week": 2, "lesson_number": 1, "class_name": "11Ж", "subject": "Физическая культура", "cabinet": "сп.зал 3", "teacher_name": "Стародубцев Н.Л.", "profile_name": None, "subgroup": None, "note": None},
+    {"day_of_week": 2, "lesson_number": 2, "class_name": "11Ж", "subject": "География", "cabinet": "1/222", "teacher_name": "Ушакова И.Н.", "profile_name": None, "subgroup": None, "note": "Пара (1/2)"},
+    {"day_of_week": 2, "lesson_number": 3, "class_name": "11Ж", "subject": "География", "cabinet": "1/222", "teacher_name": "Ушакова И.Н.", "profile_name": None, "subgroup": None, "note": "Пара (2/2)"},
+    {"day_of_week": 2, "lesson_number": 4, "class_name": "11Ж", "subject": "Геометрия", "cabinet": "1/318", "teacher_name": "Южакова Е.А.", "profile_name": None, "subgroup": None, "note": None},
+    {"day_of_week": 2, "lesson_number": 5, "class_name": "11Ж", "subject": "Информатика", "cabinet": "1/205", "teacher_name": "Мышко Ю.Ю.", "profile_name": None, "subgroup": 1, "note": None},
+    {"day_of_week": 2, "lesson_number": 5, "class_name": "11Ж", "subject": "Английский язык", "cabinet": "1/309", "teacher_name": "Петрова А.В.", "profile_name": None, "subgroup": 2, "note": None},
+
+    # -------------------------------------------------------------
+    # 11Ж - ЧЕТВЕРГ (day_of_week = 3)
+    # -------------------------------------------------------------
+    {"day_of_week": 3, "lesson_number": 1, "class_name": "11Ж", "subject": "Алгебра и начала математического анализа", "cabinet": "1/318", "teacher_name": "Южакова Е.А.", "profile_name": None, "subgroup": None, "note": None},
+    {"day_of_week": 3, "lesson_number": 2, "class_name": "11Ж", "subject": "Биология", "cabinet": "1/311", "teacher_name": "Андронова Е.В.", "profile_name": None, "subgroup": None, "note": "Пара (1/2)"},
+    {"day_of_week": 3, "lesson_number": 3, "class_name": "11Ж", "subject": "Биология", "cabinet": "1/311", "teacher_name": "Андронова Е.В.", "profile_name": None, "subgroup": None, "note": "Пара (2/2)"},
+    {"day_of_week": 3, "lesson_number": 4, "class_name": "11Ж", "subject": "Русский язык", "cabinet": "3/107", "teacher_name": "Ульянов В.Н.", "profile_name": None, "subgroup": None, "note": "Пара (1/2)"},
+    {"day_of_week": 3, "lesson_number": 5, "class_name": "11Ж", "subject": "Русский язык", "cabinet": "3/107", "teacher_name": "Ульянов В.Н.", "profile_name": None, "subgroup": None, "note": "Пара (2/2)"},
+    {"day_of_week": 3, "lesson_number": 6, "class_name": "11Ж", "subject": "Информатика", "cabinet": "1/205", "teacher_name": "Мышко Ю.Ю.", "profile_name": None, "subgroup": None, "note": None},
+
+    # -------------------------------------------------------------
+    # 11Ж - ПЯТНИЦА (day_of_week = 4)
+    # -------------------------------------------------------------
+    {"day_of_week": 4, "lesson_number": 1, "class_name": "11Ж", "subject": "Физика", "cabinet": "1/327", "teacher_name": "Уткина И.В.", "profile_name": None, "subgroup": None, "note": None},
+    {"day_of_week": 4, "lesson_number": 2, "class_name": "11Ж", "subject": "История", "cabinet": "1/123", "teacher_name": "Романюк Э.В.", "profile_name": None, "subgroup": None, "note": "Пара (1/2)"},
+    {"day_of_week": 4, "lesson_number": 3, "class_name": "11Ж", "subject": "История", "cabinet": "1/123", "teacher_name": "Романюк Э.В.", "profile_name": None, "subgroup": None, "note": "Пара (2/2)"},
+    {"day_of_week": 4, "lesson_number": 4, "class_name": "11Ж", "subject": "Вероятность и статистика", "cabinet": "1/318", "teacher_name": "Южакова Е.А.", "profile_name": None, "subgroup": None, "note": None},
+    {"day_of_week": 4, "lesson_number": 5, "class_name": "11Ж", "subject": "Английский язык", "cabinet": "3/305", "teacher_name": "Першина С.Н.", "profile_name": None, "subgroup": 1, "note": "Пара (1/2)"},
+    {"day_of_week": 4, "lesson_number": 5, "class_name": "11Ж", "subject": "Информатика и ИКТ", "cabinet": "1/205", "teacher_name": "Мышко Ю.Ю.", "profile_name": None, "subgroup": 2, "note": "Пара (1/2)"},
+    {"day_of_week": 4, "lesson_number": 6, "class_name": "11Ж", "subject": "Английский язык", "cabinet": "3/305", "teacher_name": "Першина С.Н.", "profile_name": None, "subgroup": 1, "note": "Пара (2/2)"},
+    {"day_of_week": 4, "lesson_number": 6, "class_name": "11Ж", "subject": "Информатика и ИКТ", "cabinet": "1/205", "teacher_name": "Мышко Ю.Ю.", "profile_name": None, "subgroup": 2, "note": "Пара (2/2)"},
+]
+
 async def seed():
     logger.info("Initializing database schema...")
     await init_db()
@@ -313,11 +495,12 @@ async def seed():
         for p_name in ALL_PROFILES:
             session.add(Profile(name=p_name))
 
-        # 3. Seed Lessons for 11A
-        logger.info(f"Seeding {len(LESSONS_11A)} lessons for 11А...")
-        await session.execute(delete(Lesson).where(Lesson.class_name == "11А"))
+        # 3. Seed Lessons for 11A, 11В, 11Г, 11Ж
+        all_seeded_lessons = LESSONS_11A + LESSONS_11V + LESSONS_11G + LESSONS_11ZH
+        logger.info(f"Seeding {len(all_seeded_lessons)} lessons across 11А, 11В, 11Г, 11Ж...")
+        await session.execute(delete(Lesson))
 
-        for item in LESSONS_11A:
+        for item in all_seeded_lessons:
             session.add(Lesson(
                 day_of_week=item["day_of_week"],
                 lesson_number=item["lesson_number"],
@@ -325,9 +508,9 @@ async def seed():
                 subject=item["subject"],
                 teacher_name=item["teacher_name"],
                 cabinet=item["cabinet"],
-                profile_name=item["profile_name"],
-                subgroup=item["subgroup"],
-                note=item["note"]
+                profile_name=item.get("profile_name"),
+                subgroup=item.get("subgroup"),
+                note=item.get("note")
             ))
 
         await session.commit()

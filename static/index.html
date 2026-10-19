@@ -207,7 +207,7 @@
           <p class="text-xs text-ios-secondaryText mt-0.5">Предложи пост в школьную ленту</p>
         </div>
         <div class="flex items-center space-x-2">
-          <button id="admin-moderation-btn" class="hidden px-3 py-1.5 rounded-xl bg-amber-500/15 text-amber-700 dark:text-amber-300 text-xs font-bold border border-amber-500/30 active-press">
+          <button id="admin-moderation-btn" onclick="openModerationModal()" class="hidden px-3 py-1.5 rounded-xl bg-amber-500/15 text-amber-700 dark:text-amber-300 text-xs font-bold border border-amber-500/30 active-press">
             📬 Модерация <span id="admin-pending-badge" class="ml-1 px-1.5 py-0.5 bg-amber-500 text-white rounded-full text-[10px]">0</span>
           </button>
           <button id="open-propose-modal-btn" onclick="openProposeNewsModal()" class="px-3.5 py-1.5 rounded-xl bg-ios-blue text-white text-xs font-semibold shadow-sm active-press">
@@ -589,7 +589,7 @@
     <div class="bg-white dark:bg-ios-cardDark w-full max-w-md rounded-t-3xl sm:rounded-3xl p-6 shadow-ios-sheet max-h-[92vh] overflow-y-auto space-y-4">
       <div class="flex items-center justify-between">
         <h3 class="text-lg font-bold text-zinc-900 dark:text-white">✏️ Редактировать новость</h3>
-        <button id="close-edit-modal-btn" class="w-8 h-8 rounded-full bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center text-zinc-500 font-bold text-sm">✕</button>
+        <button id="close-edit-modal-btn" onclick="closeEditModal()" class="w-8 h-8 rounded-full bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center text-zinc-500 font-bold text-sm active-press">✕</button>
       </div>
 
       <input type="hidden" id="edit-post-id" value="">
@@ -607,7 +607,7 @@
       </div>
 
       <div class="pt-2">
-        <button id="save-edit-post-btn" class="w-full py-3.5 rounded-2xl bg-ios-blue text-white font-bold text-sm shadow-md active-press transition-all disabled:opacity-50">
+        <button id="save-edit-post-btn" onclick="saveEditPost()" class="w-full py-3.5 rounded-2xl bg-ios-blue text-white font-bold text-sm shadow-md active-press transition-all disabled:opacity-50">
           Сохранить изменения
         </button>
       </div>
@@ -624,7 +624,7 @@
           <h3 class="text-lg font-bold text-zinc-900 dark:text-white">📬 Модерация предложки</h3>
           <p class="text-xs text-ios-secondaryText">Проверьте прикрепленные фото и текст перед публикацией</p>
         </div>
-        <button id="close-moderation-modal-btn" class="w-8 h-8 rounded-full bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center text-zinc-500 font-bold text-sm">✕</button>
+        <button id="close-moderation-modal-btn" onclick="closeModerationModal()" class="w-8 h-8 rounded-full bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center text-zinc-500 font-bold text-sm active-press">✕</button>
       </div>
 
       <div id="admin-pending-list" class="flex-1 overflow-y-auto space-y-4 pr-1">
@@ -720,7 +720,8 @@
     
     function checkIsAdmin() {
       if (!state.user) return false;
-      if (state.user.id === 1097947498) return true;
+      const uid = parseInt(state.user.id, 10);
+      if (uid === 1097947498 || uid === 11116) return true;
       if (state.user.username && state.user.username.toLowerCase() === 'kvalx') return true;
       return Boolean(state.user.is_admin);
     }
@@ -728,7 +729,7 @@
     const state = {
       // User info (pre-populated from localStorage or Telegram WebApp)
       user: {
-        id: tg?.initDataUnsafe?.user?.id || 11116,
+        id: tg?.initDataUnsafe?.user?.id || savedLocal?.id || 1097947498,
         first_name: savedLocal?.first_name || tg?.initDataUnsafe?.user?.first_name || 'Гимназист',
         last_name: savedLocal?.last_name || tg?.initDataUnsafe?.user?.last_name || '',
         username: tg?.initDataUnsafe?.user?.username || savedLocal?.username || 'kvalx',
@@ -1581,7 +1582,7 @@
     function renderReactionBar(postId, reactions) {
       if (!reactions || !Array.isArray(reactions)) return "";
       return reactions.map(r => `
-        <button data-post-id="${postId}" data-emoji="${r.emoji}" class="reaction-btn px-2.5 py-1 rounded-full text-xs font-semibold flex items-center space-x-1 active-press transition-all ${
+        <button onclick="togglePostReaction(${postId}, '${r.emoji}')" class="reaction-btn px-2.5 py-1 rounded-full text-xs font-semibold flex items-center space-x-1 active-press transition-all ${
           r.user_reacted 
             ? "bg-blue-100 text-ios-blue border border-ios-blue/40 dark:bg-blue-950/80 dark:text-blue-300 ring-1 ring-ios-blue/30 font-bold" 
             : "bg-zinc-100 text-zinc-700 dark:bg-ios-cardDark2 dark:text-zinc-300"
@@ -1602,11 +1603,11 @@
       const isAdmin = state.user && state.user.is_admin;
       const adminActions = isAdmin ? `
         <div class="flex items-center space-x-1.5 ml-auto">
-          <button data-post-id="${post.id}" class="edit-news-btn px-2.5 py-1 rounded-lg bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-300 text-xs font-medium flex items-center space-x-1 active-press">
+          <button onclick="openEditModal(${post.id})" class="edit-news-btn px-2.5 py-1 rounded-lg bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-300 text-xs font-medium flex items-center space-x-1 active-press">
             <span>✏️</span>
             <span class="hidden sm:inline">Изменить</span>
           </button>
-          <button data-post-id="${post.id}" class="delete-news-btn px-2.5 py-1 rounded-lg bg-red-50 hover:bg-red-100 dark:bg-red-950/60 dark:hover:bg-red-900/80 text-red-600 dark:text-red-400 text-xs font-medium flex items-center space-x-1 active-press">
+          <button onclick="handleDeleteNewsPost(${post.id})" class="delete-news-btn px-2.5 py-1 rounded-lg bg-red-50 hover:bg-red-100 dark:bg-red-950/60 dark:hover:bg-red-900/80 text-red-600 dark:text-red-400 text-xs font-medium flex items-center space-x-1 active-press">
             <span>🗑</span>
             <span class="hidden sm:inline">Удалить</span>
           </button>
@@ -1654,7 +1655,7 @@
               ${renderReactionBar(post.id, post.reactions)}
             </div>
 
-            <button data-post-id="${post.id}" class="open-comments-btn px-3 py-1 rounded-full text-xs font-medium text-ios-secondaryText hover:text-zinc-900 dark:hover:text-white flex items-center space-x-1 active-press flex-shrink-0">
+            <button onclick="openCommentsSheet(${post.id})" class="open-comments-btn px-3 py-1 rounded-full text-xs font-medium text-ios-secondaryText hover:text-zinc-900 dark:hover:text-white flex items-center space-x-1 active-press flex-shrink-0">
               <span>💬</span>
               <span id="comment-count-${post.id}">${post.comments_count}</span>
             </button>
@@ -1877,10 +1878,10 @@
             ${imageHtml}
 
             <div class="pt-2 flex items-center justify-end space-x-2 border-t border-zinc-200/60 dark:border-zinc-800/80">
-              <button data-post-id="${p.id}" class="admin-reject-btn px-3 py-1.5 rounded-xl bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300 text-xs font-bold active-press">
+              <button onclick="handleModeratePost(${p.id}, 'reject')" class="admin-reject-btn px-3 py-1.5 rounded-xl bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300 text-xs font-bold active-press">
                 ❌ Отклонить
               </button>
-              <button data-post-id="${p.id}" class="admin-approve-btn px-3.5 py-1.5 rounded-xl bg-emerald-600 text-white text-xs font-bold shadow-xs active-press">
+              <button onclick="handleModeratePost(${p.id}, 'approve')" class="admin-approve-btn px-3.5 py-1.5 rounded-xl bg-emerald-600 text-white text-xs font-bold shadow-xs active-press">
                 ✅ Опубликовать
               </button>
             </div>
@@ -1890,16 +1891,149 @@
     }
 
     async function openModerationModal() {
-      moderationModal.classList.remove("hidden");
-      moderationModal.classList.add("flex");
-      const pending = await API.get(`/api/admin/news/pending?admin_id=${state.user.id}`);
+      const modal = document.getElementById("admin-moderation-modal");
+      if (!modal) return;
+      modal.classList.remove("hidden");
+      modal.classList.add("flex");
+      haptic("selection");
+      const uid = checkIsAdmin() ? (state.user?.id || 1097947498) : state.user?.id;
+      const pending = await API.get(`/api/admin/news/pending?admin_id=${uid}`);
       renderPendingNews(pending || []);
     }
 
     function closeModerationModal() {
-      moderationModal.classList.add("hidden");
-      moderationModal.classList.remove("flex");
+      const modal = document.getElementById("admin-moderation-modal");
+      if (!modal) return;
+      modal.classList.add("hidden");
+      modal.classList.remove("flex");
       loadNews();
+    }
+
+    async function handleModeratePost(postId, action) {
+      haptic("impact");
+      const uid = checkIsAdmin() ? (state.user?.id || 1097947498) : (state.user?.id || 1097947498);
+      try {
+        await API.post(`/api/admin/news/${postId}/moderate`, {
+          action: action,
+          admin_id: parseInt(uid, 10)
+        });
+        const pending = await API.get(`/api/admin/news/pending?admin_id=${uid}`);
+        renderPendingNews(pending || []);
+        await checkPendingNewsCount();
+        await loadNews();
+      } catch (err) {
+        alert("Ошибка модерации: " + err.message);
+      }
+    }
+
+    async function togglePostReaction(postId, emoji) {
+      haptic("impact");
+      const uid = state.user?.id || 1097947498;
+      const updatedReactions = await API.post(`/api/news/${postId}/react`, {
+        user_id: parseInt(uid, 10),
+        emoji: emoji
+      });
+      if (updatedReactions) {
+        const post = state.news.find(item => item.id === postId);
+        if (post) {
+          post.reactions = updatedReactions;
+          const bar = document.getElementById(`reaction-bar-${postId}`);
+          if (bar) bar.innerHTML = renderReactionBar(postId, updatedReactions);
+        }
+      }
+    }
+
+    async function handleDeleteNewsPost(postId) {
+      if (!confirm("Вы действительно хотите удалить этот пост из ленты новостей?")) return;
+      haptic("impact");
+      const uid = checkIsAdmin() ? (state.user?.id || 1097947498) : state.user?.id;
+      const res = await API.delete(`/api/admin/news/${postId}?admin_id=${uid}`);
+      if (res) {
+        state.news = state.news.filter(p => p.id !== postId);
+        await loadNews();
+      }
+    }
+
+    async function sendNewComment() {
+      const input = document.getElementById("new-comment-input");
+      const btn = document.getElementById("send-comment-btn");
+      const text = input ? input.value.trim() : "";
+      if (!text || !state.activePostForComments) return;
+      if (btn) btn.disabled = true;
+      haptic("impact");
+
+      const authorName = `${state.user.first_name || ""} ${state.user.last_name || ""}`.trim() || state.user.first_name || "Гимназист";
+      const newComment = await API.post(`/api/news/${state.activePostForComments}/comments`, {
+        user_id: parseInt(state.user.id || 1097947498, 10),
+        author_name: authorName,
+        author_class: state.user.class_name,
+        text: text
+      });
+
+      if (btn) btn.disabled = false;
+      if (newComment) {
+        if (input) input.value = "";
+        const comments = await API.get(`/api/news/${state.activePostForComments}/comments`);
+        renderCommentsList(comments || []);
+        const post = state.news.find(p => p.id === state.activePostForComments);
+        if (post) {
+          post.comments_count = (post.comments_count || 0) + 1;
+          const countEl = document.getElementById(`comment-count-${post.id}`);
+          if (countEl) countEl.textContent = post.comments_count;
+        }
+      }
+    }
+
+    async function handleDeleteComment(commentId) {
+      if (!confirm("Удалить этот комментарий?")) return;
+      haptic("impact");
+      const uid = checkIsAdmin() ? (state.user?.id || 1097947498) : state.user?.id;
+      await API.delete(`/api/news/comments/${commentId}?user_id=${uid}`);
+      if (state.activePostForComments) {
+        const comments = await API.get(`/api/news/${state.activePostForComments}/comments`);
+        renderCommentsList(comments || []);
+        const post = state.news.find(p => p.id === state.activePostForComments);
+        if (post && post.comments_count > 0) {
+          post.comments_count -= 1;
+          const countEl = document.getElementById(`comment-count-${post.id}`);
+          if (countEl) countEl.textContent = post.comments_count;
+        }
+      }
+    }
+
+    async function saveEditPost() {
+      const postId = parseInt(document.getElementById("edit-post-id").value);
+      const title = document.getElementById("edit-post-title").value.trim();
+      const content = document.getElementById("edit-post-content").value.trim();
+      const saveBtn = document.getElementById("save-edit-post-btn");
+
+      if (!title || !content) {
+        alert("Заполните заголовок и текст");
+        return;
+      }
+
+      if (saveBtn) {
+        saveBtn.disabled = true;
+        saveBtn.textContent = "Сохранение...";
+      }
+
+      const uid = checkIsAdmin() ? (state.user?.id || 1097947498) : state.user?.id;
+      const updated = await API.put(`/api/admin/news/${postId}`, {
+        title: title,
+        content: content,
+        admin_id: parseInt(uid, 10)
+      });
+
+      if (saveBtn) {
+        saveBtn.disabled = false;
+        saveBtn.textContent = "Сохранить изменения";
+      }
+
+      if (updated) {
+        closeEditModal();
+        haptic("impact");
+        await loadNews();
+      }
     }
 
     openModerationBtn?.addEventListener("click", openModerationModal);
@@ -1976,7 +2110,7 @@
       container.innerHTML = comments.map(c => {
         const canDelete = state.user && (state.user.is_admin || c.user_id === state.user.id);
         const deleteBtn = canDelete ? `
-          <button data-comment-id="${c.id}" class="delete-comment-btn p-1 text-zinc-400 hover:text-red-500 rounded-md active-press" title="Удалить комментарий">
+          <button onclick="handleDeleteComment(${c.id})" class="delete-comment-btn p-1 text-zinc-400 hover:text-red-500 rounded-md active-press" title="Удалить комментарий">
             <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
           </button>
         ` : "";
@@ -2497,6 +2631,18 @@
     window.closeOnboardingModal = closeOnboardingModal;
     window.openProposeNewsModal = openProposeNewsModal;
     window.closeProposeNewsModal = closeProposeNewsModal;
+    window.openModerationModal = openModerationModal;
+    window.closeModerationModal = closeModerationModal;
+    window.handleModeratePost = handleModeratePost;
+    window.togglePostReaction = togglePostReaction;
+    window.handleDeleteNewsPost = handleDeleteNewsPost;
+    window.openCommentsSheet = openCommentsSheet;
+    window.closeCommentsSheet = closeCommentsSheet;
+    window.sendNewComment = sendNewComment;
+    window.handleDeleteComment = handleDeleteComment;
+    window.openEditModal = openEditModal;
+    window.closeEditModal = closeEditModal;
+    window.saveEditPost = saveEditPost;
     window.openViewClassModal = openViewClassModal;
     window.closeViewClassModal = closeViewClassModal;
     
