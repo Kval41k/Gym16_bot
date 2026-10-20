@@ -59,6 +59,11 @@ async def init_db() -> None:
     from sqlalchemy import select, text
 
     async with engine.begin() as conn:
+        if is_sqlite:
+            await conn.execute(text("PRAGMA journal_mode = WAL;"))
+            await conn.execute(text("PRAGMA synchronous = NORMAL;"))
+            await conn.execute(text("PRAGMA cache_size = -64000;"))
+            await conn.execute(text("PRAGMA foreign_keys = ON;"))
         await conn.run_sync(Base.metadata.create_all)
         try:
             await conn.execute(text("ALTER TABLE users ADD COLUMN is_banned BOOLEAN DEFAULT 0 NOT NULL"))

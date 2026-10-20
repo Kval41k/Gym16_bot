@@ -883,12 +883,34 @@
     };
 
     // --------------------------------------------------------
-    // API Helper
+    // Security: HTML Sanitization Helper (XSS Protection)
+    // --------------------------------------------------------
+    function escapeHtml(str) {
+      if (str === null || str === undefined) return '';
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+    }
+    window.escapeHtml = escapeHtml;
+
+    // --------------------------------------------------------
+    // Authenticated API Helper (Cryptographic Telegram InitData)
     // --------------------------------------------------------
     const API = {
+      _getHeaders(extra = {}) {
+        const initData = window.Telegram?.WebApp?.initData || '';
+        const headers = { ...extra };
+        if (initData) {
+          headers['X-Telegram-Init-Data'] = initData;
+        }
+        return headers;
+      },
       async get(url) {
         try {
-          const res = await fetch(url);
+          const res = await fetch(url, { headers: this._getHeaders() });
           if (!res.ok) throw new Error(`HTTP ${res.status}`);
           return await res.json();
         } catch (e) {
@@ -900,7 +922,7 @@
         try {
           const res = await fetch(url, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: this._getHeaders({ 'Content-Type': 'application/json' }),
             body: JSON.stringify(data)
           });
           if (!res.ok) {
@@ -923,7 +945,7 @@
         try {
           const res = await fetch(url, {
             method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
+            headers: this._getHeaders({ 'Content-Type': 'application/json' }),
             body: JSON.stringify(data)
           });
           if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -936,7 +958,8 @@
       async delete(url) {
         try {
           const res = await fetch(url, {
-            method: 'DELETE'
+            method: 'DELETE',
+            headers: this._getHeaders()
           });
           if (!res.ok) throw new Error(`HTTP ${res.status}`);
           return await res.json();
@@ -951,6 +974,7 @@
           formData.append('file', file);
           const res = await fetch('/api/upload', {
             method: 'POST',
+            headers: this._getHeaders(),
             body: formData
           });
           if (!res.ok) throw new Error(`Upload error ${res.status}`);
@@ -958,6 +982,9 @@
         } catch (e) {
           console.error('File upload error:', e);
           return null;
+        }
+      }
+    };
         }
       }
     };
@@ -1981,8 +2008,13 @@
         avatarHtml = `<div class="w-9 h-9 rounded-full bg-gradient-to-tr from-ios-blue to-ios-indigo text-white text-xs font-bold flex items-center justify-center shadow-xs">${initial}</div>`;
       }
 
+      const authorSafe = escapeHtml(post.author_name);
+      const titleSafe = escapeHtml(post.title);
+      const contentSafe = escapeHtml(post.content);
+      const dateSafe = escapeHtml(post.created_at);
+
       const authorClassBadge = (!isAnon && post.author_class)
-        ? `<span class="px-1.5 py-0.5 rounded-md bg-blue-50 text-ios-blue dark:bg-blue-950 dark:text-blue-300 text-[10px] font-bold border border-blue-200/50 dark:border-blue-900/50">${post.author_class}</span>`
+        ? `<span class="px-1.5 py-0.5 rounded-md bg-blue-50 text-ios-blue dark:bg-blue-950 dark:text-blue-300 text-[10px] font-bold border border-blue-200/50 dark:border-blue-900/50">${escapeHtml(post.author_class)}</span>`
         : "";
 
       const isAdmin = checkIsAdmin();
@@ -2011,10 +2043,10 @@
               ${avatarHtml}
               <div>
                 <div class="text-xs font-bold text-zinc-900 dark:text-white leading-tight flex items-center space-x-1.5">
-                  <span>${post.author_name}</span>
+                  <span>${authorSafe}</span>
                   ${authorClassBadge}
                 </div>
-                <div class="text-[10px] text-ios-secondaryText">${post.created_at}</div>
+                <div class="text-[10px] text-ios-secondaryText">${dateSafe}</div>
               </div>
             </div>
             ${adminActions}
@@ -2022,8 +2054,8 @@
 
           <!-- Post Content -->
           <div>
-            <h3 class="text-base font-bold text-zinc-900 dark:text-white leading-snug">${post.title}</h3>
-            <p class="mt-1 text-xs text-zinc-600 dark:text-zinc-300 whitespace-pre-line leading-relaxed">${post.content}</p>
+            <h3 class="text-base font-bold text-zinc-900 dark:text-white leading-snug">${titleSafe}</h3>
+            <p class="mt-1 text-xs text-zinc-600 dark:text-zinc-300 whitespace-pre-line leading-relaxed">${contentSafe}</p>
           </div>
 
           ${imageHtml}
@@ -2473,8 +2505,14 @@
         const anonBadge = isAnon 
           ? '<span class="px-2 py-0.5 rounded-md bg-purple-100 text-purple-700 dark:bg-purple-950 dark:text-purple-300 text-[10px] font-bold">🎭 Анонимно в ленте</span>' 
           : "";
+        const authorSafe = escapeHtml(p.author_name);
+        const usernameSafe = p.author_username ? escapeHtml(p.author_username.replace(/^@/, '')) : '';
+        const titleSafe = escapeHtml(p.title);
+        const contentSafe = escapeHtml(p.content);
+        const dateSafe = escapeHtml(p.created_at);
+
         const classBadge = p.author_class 
-          ? `<span class="px-2 py-0.5 rounded-md bg-blue-100 text-ios-blue dark:bg-blue-950 dark:text-blue-300 text-[10px] font-bold">${p.author_class}</span>` 
+          ? `<span class="px-2 py-0.5 rounded-md bg-blue-100 text-ios-blue dark:bg-blue-950 dark:text-blue-300 text-[10px] font-bold">${escapeHtml(p.author_class)}</span>` 
           : "";
 
         // Uncropped photo preview for admin moderation
@@ -2488,17 +2526,17 @@
           <div class="p-4 rounded-2xl bg-zinc-100/80 dark:bg-ios-cardDark2 border border-zinc-200/60 dark:border-zinc-800 space-y-2.5">
             <div class="flex items-center justify-between flex-wrap gap-1">
               <div class="flex items-center space-x-1.5 flex-wrap">
-                <span class="text-xs font-bold text-zinc-900 dark:text-white">${p.author_name}</span>
-                ${p.author_username ? `<span class="text-[11px] font-semibold text-ios-blue">@${p.author_username.replace(/^@/, '')}</span>` : '<span class="text-[11px] text-ios-secondaryText">(нет username)</span>'}
+                <span class="text-xs font-bold text-zinc-900 dark:text-white">${authorSafe}</span>
+                ${usernameSafe ? `<span class="text-[11px] font-semibold text-ios-blue">@${usernameSafe}</span>` : '<span class="text-[11px] text-ios-secondaryText">(нет username)</span>'}
                 ${classBadge}
                 ${anonBadge}
               </div>
-              <span class="text-[10px] text-ios-secondaryText">${p.created_at}</span>
+              <span class="text-[10px] text-ios-secondaryText">${dateSafe}</span>
             </div>
 
             <div>
-              <h4 class="text-sm font-bold text-zinc-900 dark:text-white">${p.title}</h4>
-              <p class="mt-1 text-xs text-zinc-600 dark:text-zinc-300 whitespace-pre-line leading-relaxed">${p.content}</p>
+              <h4 class="text-sm font-bold text-zinc-900 dark:text-white">${titleSafe}</h4>
+              <p class="mt-1 text-xs text-zinc-600 dark:text-zinc-300 whitespace-pre-line leading-relaxed">${contentSafe}</p>
             </div>
 
             ${imageHtml}
@@ -2633,10 +2671,13 @@
 
       listContainer.innerHTML = users.map(u => {
         const isSelfOrAdmin = u.is_admin || (state.user && u.id === state.user.id);
-        const uname = u.username ? `@${u.username.replace(/^@/, '')}` : null;
-        const tgLink = uname ? `https://t.me/${u.username.replace(/^@/, '')}` : null;
-        const classBadge = u.class_name ? `<span class="px-2 py-0.5 rounded-md bg-blue-50 text-ios-blue dark:bg-blue-950 dark:text-blue-300 text-[10px] font-bold border border-blue-200/50 dark:border-blue-900/50">${u.class_name}</span>` : '<span class="text-[10px] text-zinc-400">класс не выбран</span>';
-        const profileBadge = u.profile_name ? `<span class="px-2 py-0.5 rounded-md bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 text-[10px] font-semibold">${u.profile_name}</span>` : '';
+        const cleanUname = u.username ? u.username.replace(/^@/, '') : null;
+        const unameSafe = cleanUname ? `@${escapeHtml(cleanUname)}` : null;
+        const tgLink = cleanUname ? `https://t.me/${encodeURIComponent(cleanUname)}` : null;
+        const fullName = `${u.first_name || 'Гимназист'} ${u.last_name || ''}`.trim();
+        const nameSafe = escapeHtml(fullName);
+        const classBadge = u.class_name ? `<span class="px-2 py-0.5 rounded-md bg-blue-50 text-ios-blue dark:bg-blue-950 dark:text-blue-300 text-[10px] font-bold border border-blue-200/50 dark:border-blue-900/50">${escapeHtml(u.class_name)}</span>` : '<span class="text-[10px] text-zinc-400">класс не выбран</span>';
+        const profileBadge = u.profile_name ? `<span class="px-2 py-0.5 rounded-md bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 text-[10px] font-semibold">${escapeHtml(u.profile_name)}</span>` : '';
         const roleBadge = u.is_admin ? '<span class="px-2 py-0.5 rounded-md bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-300 text-[10px] font-bold">Администратор 👑</span>' : '';
         const statusBadge = u.is_banned 
           ? '<span class="px-2 py-0.5 rounded-md bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300 text-[10px] font-bold">🚫 В бане</span>'
@@ -2664,12 +2705,12 @@
             <div class="flex items-start justify-between gap-2">
               <div>
                 <div class="text-xs font-bold text-zinc-900 dark:text-white flex items-center gap-1.5 flex-wrap">
-                  <span>${u.first_name || 'Гимназист'} ${u.last_name || ''}</span>
+                  <span>${nameSafe}</span>
                   ${roleBadge}
                   ${statusBadge}
                 </div>
                 <div class="flex items-center gap-2 mt-0.5 text-[11px] text-ios-secondaryText flex-wrap">
-                  ${uname ? `<a href="${tgLink}" target="_blank" class="text-ios-blue font-medium hover:underline flex items-center gap-0.5"><span>💬</span> ${uname}</a>` : '<span>(нет @username)</span>'}
+                  ${unameSafe ? `<a href="${tgLink}" target="_blank" class="text-ios-blue font-medium hover:underline flex items-center gap-0.5"><span>💬</span> ${unameSafe}</a>` : '<span>(нет @username)</span>'}
                   <span>• ID: <code>${u.id}</code></span>
                 </div>
               </div>
@@ -2681,7 +2722,7 @@
                 ${classBadge}
                 ${profileBadge}
               </div>
-              <span class="text-[10px] text-ios-secondaryText">${u.created_at || ''}</span>
+              <span class="text-[10px] text-ios-secondaryText">${escapeHtml(u.created_at || '')}</span>
             </div>
           </div>
         `;
@@ -2737,11 +2778,26 @@
     }
     window.filterUsersList = filterUsersList;
 
-    function downloadUsersCsv() {
-      const adminId = state.user?.id || 0;
-      const downloadUrl = `/api/admin/users/export?admin_id=${adminId}`;
-      window.open(downloadUrl, "_blank");
+    async function downloadUsersCsv() {
       haptic("impact");
+      try {
+        const adminId = state.user?.id || 0;
+        const initData = window.Telegram?.WebApp?.initData || '';
+        const headers = initData ? { 'X-Telegram-Init-Data': initData } : {};
+        const res = await fetch(`/api/admin/users/export?admin_id=${adminId}`, { headers });
+        if (!res.ok) throw new Error("Ошибка доступа");
+        const blob = await res.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = "gym16_users.csv";
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        window.URL.revokeObjectURL(url);
+      } catch (e) {
+        alert("Не удалось скачать файл: " + (e.message || "ошибка доступа"));
+      }
     }
     window.downloadUsersCsv = downloadUsersCsv;
 
@@ -2923,16 +2979,21 @@
           </button>
         ` : "";
 
+        const authorSafe = escapeHtml(c.author_name);
+        const classSafe = c.author_class ? `<span class="text-[10px] text-ios-blue font-normal">(${escapeHtml(c.author_class)})</span>` : "";
+        const textSafe = escapeHtml(c.text);
+        const dateSafe = escapeHtml(c.created_at);
+
         return `
           <div class="p-3 rounded-2xl bg-zinc-100 dark:bg-ios-cardDark2 space-y-1">
             <div class="flex items-center justify-between">
-              <span class="text-xs font-bold text-zinc-900 dark:text-white">${c.author_name} ${c.author_class ? `<span class="text-[10px] text-ios-blue font-normal">(${c.author_class})</span>` : ""}</span>
+              <span class="text-xs font-bold text-zinc-900 dark:text-white">${authorSafe} ${classSafe}</span>
               <div class="flex items-center space-x-1.5">
-                <span class="text-[10px] text-ios-secondaryText">${c.created_at}</span>
+                <span class="text-[10px] text-ios-secondaryText">${dateSafe}</span>
                 ${deleteBtn}
               </div>
             </div>
-            <p class="text-xs text-zinc-700 dark:text-zinc-200 whitespace-pre-line leading-relaxed">${c.text}</p>
+            <p class="text-xs text-zinc-700 dark:text-zinc-200 whitespace-pre-line leading-relaxed">${textSafe}</p>
           </div>
         `;
       }).join("");

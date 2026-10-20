@@ -157,6 +157,8 @@ class CommentResponse(BaseModel):
 class ModerationActionRequest(BaseModel):
     action: str = Field(..., pattern=r"^(approve|reject)$")
     admin_id: int
+    ts: Optional[int] = None
+    sign: Optional[str] = None
 
 class UserAdminItem(BaseModel):
     id: int
@@ -173,6 +175,8 @@ class UserAdminItem(BaseModel):
 class UserBanRequest(BaseModel):
     admin_id: int
     is_banned: bool
+    ts: Optional[int] = None
+    sign: Optional[str] = None
 
 class EgeSubjectResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)

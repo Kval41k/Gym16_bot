@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import asyncio
 import csv
+import hashlib
+import hmac
 import io
 import logging
 import os
@@ -62,6 +64,12 @@ def is_admin_user(user_id: Optional[int], username: Optional[str] = None) -> boo
     if username and username.lower().lstrip("@") in settings.admin_usernames:
         return True
     return False
+
+def generate_admin_auth_token(admin_id: int, timestamp: int) -> str:
+    """Generates an HMAC-SHA256 signature for admin URLs using BOT_TOKEN."""
+    msg = f"{admin_id}:{timestamp}".encode("utf-8")
+    key = hashlib.sha256(settings.BOT_TOKEN.encode("utf-8")).digest()
+    return hmac.new(key, msg, hashlib.sha256).hexdigest()
 
 @router.message.outer_middleware()
 async def ban_check_middleware(handler, event: Message, data: dict):
@@ -669,7 +677,9 @@ async def cmd_admin(message: Message):
         f"Используйте команду /pending для модерации новостей или /users для списка пользователей и файла CSV."
     )
 
-    web_url = f"{settings.BASE_URL}/admin/users?admin_id={message.from_user.id}"
+    now_ts = int(datetime.now().timestamp())
+    auth_sign = generate_admin_auth_token(message.from_user.id, now_ts)
+    web_url = f"{settings.BASE_URL}/admin/users?admin_id={message.from_user.id}&ts={now_ts}&sign={auth_sign}"
     markup = InlineKeyboardMarkup(
         inline_keyboard=[
             [
@@ -889,7 +899,9 @@ async def cmd_list_users(message: Message):
     )
 
     separator = "\n\n"
-    web_url = f"{settings.BASE_URL}/admin/users?admin_id={message.from_user.id}"
+    now_ts = int(datetime.now().timestamp())
+    auth_sign = generate_admin_auth_token(message.from_user.id, now_ts)
+    web_url = f"{settings.BASE_URL}/admin/users?admin_id={message.from_user.id}&ts={now_ts}&sign={auth_sign}"
     kb = None
     if settings.BASE_URL:
         kb = InlineKeyboardMarkup(inline_keyboard=[[

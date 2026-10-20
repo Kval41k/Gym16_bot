@@ -155,8 +155,68 @@ def verify_telegram_init_data(init_data_str: str) -> Optional[Dict[str, Any]]:
 # -------------------------------------------------------------
 
 # -------------------------------------------------------------
-# Admin Verification Helper
+# Admin Verification & Cryptographic Authorization
 # -------------------------------------------------------------
+def generate_admin_auth_token(admin_id: int, timestamp: int) -> str:
+    """Generates an HMAC-SHA256 signature for admin URLs using BOT_TOKEN."""
+    msg = f"{admin_id}:{timestamp}".encode("utf-8")
+    key = hashlib.sha256(settings.BOT_TOKEN.encode("utf-8")).digest()
+    return hmac.new(key, msg, hashlib.sha256).hexdigest()
+
+def verify_admin_auth_token(admin_id: int, timestamp: int, signature: str) -> bool:
+    """Verifies HMAC signature and 24-hour expiration window."""
+    if not signature or not timestamp:
+        return False
+    now = int(time.time())
+    if abs(now - timestamp) > 86400:
+        return False
+    expected = generate_admin_auth_token(admin_id, timestamp)
+    return hmac.compare_digest(expected, signature)
+
+async def check_admin_permission_or_raise(
+    admin_id: Optional[int] = None,
+    ts: Optional[int] = None,
+    sign: Optional[str] = None,
+    x_telegram_init_data: Optional[str] = None,
+    db: Optional[AsyncSession] = None
+) -> int:
+    """
+    Cryptographically verifies administrative identity:
+    1. If X-Telegram-Init-Data header is passed, verifies Telegram HMAC-SHA256 signature against BOT_TOKEN.
+       Checks if authenticated user is in settings.admin_ids.
+    2. If signed link (admin_id + ts + sign) is provided, verifies HMAC signature and timestamp validity.
+       Checks if admin_id is in settings.admin_ids.
+    3. If running in local debug mode, permits admin_id in settings.admin_ids as fallback.
+    4. Otherwise, raises HTTP 403 Forbidden.
+    """
+    # 1. Telegram WebApp HMAC verification
+    if x_telegram_init_data:
+        parsed_user = verify_telegram_init_data(x_telegram_init_data)
+        if parsed_user and isinstance(parsed_user, dict):
+            caller_id = parsed_user.get("id")
+            caller_username = parsed_user.get("username")
+            if caller_id and (caller_id in settings.admin_ids or (caller_username and caller_username.lower().lstrip("@") in settings.admin_usernames)):
+                return caller_id
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="⛔ Доступ запрещен. Недействительная цифровая подпись Telegram."
+        )
+
+    # 2. Signed admin URL token verification
+    if admin_id and (ts is not None or sign is not None):
+        if ts is not None and sign is not None and verify_admin_auth_token(admin_id, ts, sign) and (admin_id in settings.admin_ids):
+            return admin_id
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="⛔ Доступ запрещен. Неверная или истекшая цифровая подпись администратора."
+        )
+
+    # 3. Unauthenticated requests are strictly forbidden
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail="⛔ Доступ запрещен. Требуется подтвержденная авторизация администратора."
+    )
+
 async def check_is_admin(admin_id: int, db: AsyncSession) -> bool:
     """Checks if user has admin privileges by ID, username or DB flag."""
     if admin_id in settings.admin_ids:
@@ -1088,15 +1148,21 @@ async def add_comment(
     )
 
 # -------------------------------------------------------------
+# -------------------------------------------------------------
 # Admin Moderation Endpoints
 # -------------------------------------------------------------
 @app.get("/api/admin/news/pending", response_model=List[NewsResponse])
 async def get_pending_news(
-    admin_id: int = Query(...), 
+    admin_id: Optional[int] = Query(None),
+    ts: Optional[int] = Query(None),
+    sign: Optional[str] = Query(None),
+    x_telegram_init_data: Optional[str] = Header(None, alias="X-Telegram-Init-Data"),
     db: AsyncSession = Depends(get_db)
 ):
-    if not await check_is_admin(admin_id, db):
-        raise HTTPException(status_code=403, detail="Admin permissions required")
+    await check_admin_permission_or_raise(
+        admin_id=admin_id, ts=ts, sign=sign,
+        x_telegram_init_data=x_telegram_init_data, db=db
+    )
 
     res = await db.execute(
         select(NewsPost)
@@ -1133,13 +1199,16 @@ async def get_pending_news(
 async def moderate_news(
     post_id: int, 
     payload: ModerationActionRequest, 
+    x_telegram_init_data: Optional[str] = Header(None, alias="X-Telegram-Init-Data"),
     db: AsyncSession = Depends(get_db)
 ):
     """
     Approves or rejects a suggested news item.
     """
-    if not await check_is_admin(payload.admin_id, db):
-        raise HTTPException(status_code=403, detail="Admin permissions required")
+    await check_admin_permission_or_raise(
+        admin_id=payload.admin_id, ts=payload.ts, sign=payload.sign,
+        x_telegram_init_data=x_telegram_init_data, db=db
+    )
 
     post = await db.get(NewsPost, post_id)
     if not post:
@@ -1160,6 +1229,9 @@ async def delete_news_post(
     post_id: int, 
     admin_id: Optional[int] = Query(None), 
     user_id: Optional[int] = Query(None),
+    ts: Optional[int] = Query(None),
+    sign: Optional[str] = Query(None),
+    x_telegram_init_data: Optional[str] = Header(None, alias="X-Telegram-Init-Data"),
     db: AsyncSession = Depends(get_db)
 ):
     """
@@ -1167,8 +1239,10 @@ async def delete_news_post(
     Only authorized administrators can delete posts.
     """
     uid = admin_id or user_id
-    if not uid or not await check_is_admin(uid, db):
-        raise HTTPException(status_code=403, detail="Admin permissions required")
+    await check_admin_permission_or_raise(
+        admin_id=uid, ts=ts, sign=sign,
+        x_telegram_init_data=x_telegram_init_data, db=db
+    )
 
     post = await db.get(NewsPost, post_id)
     if not post:
@@ -1193,14 +1267,17 @@ async def delete_news_post(
 async def edit_news_post(
     post_id: int, 
     payload: NewsEditRequest, 
+    x_telegram_init_data: Optional[str] = Header(None, alias="X-Telegram-Init-Data"),
     db: AsyncSession = Depends(get_db)
 ):
     """
     Allows administrator to edit post title, content, and image directly in the feed.
     """
     admin_uid = payload.admin_id or payload.user_id
-    if not admin_uid or not await check_is_admin(admin_uid, db):
-        raise HTTPException(status_code=403, detail="Admin permissions required")
+    await check_admin_permission_or_raise(
+        admin_id=admin_uid,
+        x_telegram_init_data=x_telegram_init_data, db=db
+    )
 
     post = await db.get(NewsPost, post_id)
     if not post:
@@ -1297,7 +1374,7 @@ async def delete_comment(
 ALLOWED_IMAGE_TYPES = {
     "image/jpeg", "image/png", "image/webp", "image/gif", 
     "image/heic", "image/heif", "image/bmp", "image/jpg", 
-    "image/pjpeg", "image/x-png", "application/octet-stream"
+    "image/pjpeg", "image/x-png"
 }
 ALLOWED_EXTENSIONS = {"jpg", "jpeg", "png", "webp", "gif", "heic", "heif", "bmp"}
 
@@ -1306,29 +1383,37 @@ async def upload_image(file: UploadFile = File(...)):
     """
     Saves an uploaded image locally to /uploads without paid cloud services.
     Supports all mobile image formats (including iPhone HEIC / JPEG / PNG).
-    Returns the relative URL to access the image.
+    Validates file extension, disallows SVG/scripts, and checks image magic bytes.
     """
     ext = file.filename.split(".")[-1].lower() if file.filename and "." in file.filename else "jpg"
-    is_valid_type = (
-        (file.content_type in ALLOWED_IMAGE_TYPES) or 
-        (file.content_type and file.content_type.startswith("image/")) or
-        (ext in ALLOWED_EXTENSIONS)
-    )
-    if not is_valid_type:
-        raise HTTPException(
-            status_code=400, 
-            detail="Неподдерживаемый формат изображения. Разрешены: JPG, PNG, WebP, GIF, HEIC."
-        )
+    if ext not in ALLOWED_EXTENSIONS:
+        ext = "jpg"
 
-    # Generate unique filename
-    ext = file.filename.split(".")[-1].lower() if file.filename and "." in file.filename else "jpg"
-    filename = f"{uuid.uuid4().hex}.{ext}"
-    file_path = settings.UPLOAD_DIR / filename
+    # Reject dangerous SVG or executable formats
+    if file.content_type and "svg" in file.content_type.lower():
+        raise HTTPException(status_code=400, detail="Формат SVG запрещен в целях безопасности.")
 
     content = await file.read()
     # Enforce maximum size 10MB
     if len(content) > 10 * 1024 * 1024:
-        raise HTTPException(status_code=400, detail="Image size exceeds 10MB limit")
+        raise HTTPException(status_code=400, detail="Размер файла превышает лимит 10 МБ.")
+    if len(content) < 16:
+        raise HTTPException(status_code=400, detail="Некорректный файл изображения.")
+
+    # Validate image magic bytes to prevent polyglot / script uploads
+    is_valid_image = (
+        content[:2] == b"\xff\xd8" or                            # JPEG
+        content[:8] == b"\x89PNG\r\n\x1a\n" or                    # PNG
+        content[:4] in (b"GIF8",) or                             # GIF
+        (content[:4] == b"RIFF" and b"WEBP" in content[:16]) or  # WebP
+        b"ftyp" in content[:24] or                               # HEIC / HEIF
+        content[:2] == b"BM"                                     # BMP
+    )
+    if not is_valid_image:
+        raise HTTPException(status_code=400, detail="Файл поврежден или не является допустимым изображением.")
+
+    filename = f"{uuid.uuid4().hex}.{ext}"
+    file_path = settings.UPLOAD_DIR / filename
 
     with open(file_path, "wb") as f:
         f.write(content)
@@ -1513,12 +1598,17 @@ async def delete_ege_material(
 # -------------------------------------------------------------
 @app.get("/api/admin/users", response_model=List[UserAdminItem])
 async def get_all_users_for_admin(
-    admin_id: int = Query(...),
+    admin_id: Optional[int] = Query(None),
+    ts: Optional[int] = Query(None),
+    sign: Optional[str] = Query(None),
+    x_telegram_init_data: Optional[str] = Header(None, alias="X-Telegram-Init-Data"),
     db: AsyncSession = Depends(get_db)
 ):
     """Returns list of registered users for administrator review."""
-    if not await check_is_admin(admin_id, db):
-        raise HTTPException(status_code=403, detail="Admin privileges required")
+    await check_admin_permission_or_raise(
+        admin_id=admin_id, ts=ts, sign=sign,
+        x_telegram_init_data=x_telegram_init_data, db=db
+    )
 
     res = await db.execute(select(User).order_by(User.created_at.desc()))
     users = res.scalars().all()
@@ -1545,11 +1635,14 @@ async def get_all_users_for_admin(
 async def toggle_user_ban(
     user_id: int,
     payload: UserBanRequest,
+    x_telegram_init_data: Optional[str] = Header(None, alias="X-Telegram-Init-Data"),
     db: AsyncSession = Depends(get_db)
 ):
     """Allows administrator to ban or unban a user."""
-    if not await check_is_admin(payload.admin_id, db):
-        raise HTTPException(status_code=403, detail="Admin privileges required")
+    await check_admin_permission_or_raise(
+        admin_id=payload.admin_id, ts=payload.ts, sign=payload.sign,
+        x_telegram_init_data=x_telegram_init_data, db=db
+    )
 
     if user_id in settings.admin_ids:
         raise HTTPException(status_code=400, detail="Нельзя заблокировать администратора")
@@ -1572,12 +1665,17 @@ async def toggle_user_ban(
 
 @app.get("/api/admin/users/export")
 async def export_users_csv(
-    admin_id: int = Query(...),
+    admin_id: Optional[int] = Query(None),
+    ts: Optional[int] = Query(None),
+    sign: Optional[str] = Query(None),
+    x_telegram_init_data: Optional[str] = Header(None, alias="X-Telegram-Init-Data"),
     db: AsyncSession = Depends(get_db)
 ):
     """Exports all registered users into a CSV spreadsheet file."""
-    if not await check_is_admin(admin_id, db):
-        raise HTTPException(status_code=403, detail="Admin privileges required")
+    await check_admin_permission_or_raise(
+        admin_id=admin_id, ts=ts, sign=sign,
+        x_telegram_init_data=x_telegram_init_data, db=db
+    )
 
     res = await db.execute(select(User).order_by(User.created_at.desc()))
     users = res.scalars().all()
@@ -1627,15 +1725,20 @@ async def export_users_csv(
 @app.get("/admin/users", response_class=HTMLResponse)
 async def admin_users_dashboard_page(
     admin_id: Optional[int] = Query(None),
+    ts: Optional[int] = Query(None),
+    sign: Optional[str] = Query(None),
     db: AsyncSession = Depends(get_db)
 ):
     """
     Dedicated web dashboard page where administrator can view all users and toggle bans.
     """
-    admin_uid = admin_id or (settings.admin_ids[0] if settings.admin_ids else None)
-    if not admin_uid or not await check_is_admin(admin_uid, db):
+    try:
+        authenticated_admin_id = await check_admin_permission_or_raise(
+            admin_id=admin_id, ts=ts, sign=sign, db=db
+        )
+    except HTTPException:
         return HTMLResponse(
-            "<h3>⛔ Доступ запрещен. Требуются права администратора.</h3>",
+            "<h3>⛔ Доступ запрещен. Требуется подтвержденная авторизация администратора.</h3>",
             status_code=403
         )
 
@@ -1842,7 +1945,7 @@ async def admin_users_dashboard_page(
                 <p class="text-muted" style="margin: 4px 0 0 0; font-size: 13px;">МАОУ Гимназия №16 • Панель администратора</p>
             </div>
             <div style="display: flex; gap: 8px;">
-                <a href="/api/admin/users/export?admin_id={admin_uid}" class="btn btn-primary">
+                <a href="/api/admin/users/export?admin_id={authenticated_admin_id}&ts={ts or 0}&sign={sign or ''}" class="btn btn-primary">
                     📥 Скачать CSV
                 </a>
             </div>
@@ -1890,7 +1993,9 @@ async def admin_users_dashboard_page(
     </div>
 
     <script>
-        const adminId = {admin_uid};
+        const adminId = {authenticated_admin_id};
+        const authTs = {ts or 0};
+        const authSign = "{sign or ''}";
 
         function filterUsers() {{
             const query = document.getElementById("searchInput").value.toLowerCase();
@@ -1909,7 +2014,7 @@ async def admin_users_dashboard_page(
                 const res = await fetch(`/api/admin/users/${{userId}}/ban`, {{
                     method: "POST",
                     headers: {{ "Content-Type": "application/json" }},
-                    body: JSON.stringify({{ admin_id: adminId, is_banned: setBanned }})
+                    body: JSON.stringify({{ admin_id: adminId, ts: authTs, sign: authSign, is_banned: setBanned }})
                 }});
                 const data = await res.json();
                 if (!res.ok) throw new Error(data.detail || "Ошибка запроса");
