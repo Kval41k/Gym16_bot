@@ -480,10 +480,15 @@ async def get_bells(db: AsyncSession = Depends(get_db)):
     return bells
 
 @app.get("/api/schedule/live", response_model=LiveStatusResponse)
-async def get_live_status(db: AsyncSession = Depends(get_db)):
+async def get_live_status(
+    class_name: Optional[str] = Query(None),
+    profile_name: Optional[str] = Query(None),
+    db: AsyncSession = Depends(get_db)
+):
     """
     Real-time progress calculation synchronized with Tyumen timezone (Asia/Yekaterinburg, UTC+5).
     Differentiates Monday schedule (08:00 «Разговоры о важном») vs Tuesday-Friday standard bells.
+    Enriches status with active/next lesson subject & cabinet if class_name is provided.
     """
     now = datetime.now(TYUMEN_TZ)
     day_of_week = now.weekday() # 0=Mon..6=Sun
@@ -493,6 +498,24 @@ async def get_live_status(db: AsyncSession = Depends(get_db)):
     def parse_minutes(t_str: str) -> int:
         h, m = map(int, t_str.split(":"))
         return h * 60 + m
+
+    async def get_lesson_for_num(num: int) -> Optional[Lesson]:
+        if not class_name or day_of_week > 5:
+            return None
+        q = select(Lesson).where(
+            Lesson.class_name == class_name,
+            Lesson.day_of_week == day_of_week,
+            Lesson.lesson_number == num
+        )
+        res = await db.execute(q)
+        lessons = res.scalars().all()
+        if not lessons:
+            return None
+        if profile_name:
+            for l in lessons:
+                if l.profile_name and l.profile_name.strip().lower() == profile_name.strip().lower():
+                    return l
+        return lessons[0]
 
     # Sunday check
     if day_of_week == 6:
@@ -558,11 +581,13 @@ async def get_live_status(db: AsyncSession = Depends(get_db)):
     if now_minutes < first_start:
         diff = first_start - now_minutes
         target_name = day_bells[0]["title"]
+        next_les = await get_lesson_for_num(day_bells[0]["num"])
+        les_info = f" • {next_les.subject} (каб. {next_les.cabinet})" if next_les else ""
         return LiveStatusResponse(
             current_time=time_str,
             state="before_school",
             minutes_left=diff,
-            message=f"До начала ({target_name}): {diff} мин",
+            message=f"До начала ({target_name}{les_info}): {diff} мин",
             next_lesson_number=day_bells[0]["num"],
             next_lesson_time=day_bells[0]["start"]
         )
@@ -582,12 +607,14 @@ async def get_live_status(db: AsyncSession = Depends(get_db)):
         if b_start <= now_minutes < b_end:
             diff = b_end - now_minutes
             lesson_label = bell["title"]
+            active_les = await get_lesson_for_num(bell["num"])
+            les_info = f" • {active_les.subject} (каб. {active_les.cabinet})" if active_les else ""
             return LiveStatusResponse(
                 current_time=time_str,
                 state="lesson",
                 current_lesson_number=bell["num"],
                 minutes_left=diff,
-                message=f"{lesson_label}: до конца {diff} мин"
+                message=f"{lesson_label}{les_info}: до конца {diff} мин"
             )
 
         if i < len(day_bells) - 1:
@@ -596,12 +623,14 @@ async def get_live_status(db: AsyncSession = Depends(get_db)):
             if b_end <= now_minutes < next_start:
                 diff = next_start - now_minutes
                 next_label = next_b["title"]
+                next_les = await get_lesson_for_num(next_b["num"])
+                les_info = f" • След: {next_les.subject} (каб. {next_les.cabinet})" if next_les else ""
                 return LiveStatusResponse(
                     current_time=time_str,
                     state="break",
                     current_lesson_number=bell["num"],
                     minutes_left=diff,
-                    message=f"Перемена: до {next_label} {diff} мин",
+                    message=f"Перемена{les_info}: до {next_label} {diff} мин",
                     next_lesson_number=next_b["num"],
                     next_lesson_time=next_b["start"]
                 )
