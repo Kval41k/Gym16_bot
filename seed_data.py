@@ -2,7 +2,7 @@ import asyncio
 import logging
 from sqlalchemy import delete, select
 from database import async_session, init_db
-from models import BellSchedule, Lesson, Profile, SchoolClass
+from models import BellSchedule, Lesson, Profile, SchoolClass, User
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 logger = logging.getLogger("SeedData")
@@ -529,6 +529,26 @@ async def seed():
                 subgroup=item.get("subgroup"),
                 note=item.get("note")
             ))
+
+        # 4. Pre-seed Admin Profile so it survives fresh container restarts on Railway
+        admin_id = 1097947498
+        admin_user = await session.get(User, admin_id)
+        if not admin_user:
+            session.add(User(
+                id=admin_id,
+                first_name="Роман",
+                last_name="Куликов",
+                username="kvalx",
+                class_name="11А",
+                profile_name="Соц-гум",
+                is_admin=True
+            ))
+        else:
+            if not admin_user.class_name:
+                admin_user.class_name = "11А"
+            if not admin_user.profile_name:
+                admin_user.profile_name = "Соц-гум"
+            admin_user.is_admin = True
 
         await session.commit()
         logger.info("✅ Database successfully populated with synchronized 11А schedule, bells, and profiles!")

@@ -557,9 +557,9 @@
         <div>
           <label class="text-xs font-semibold text-ios-secondaryText">Фотография (необязательно)</label>
           <div class="mt-1 flex items-center space-x-3">
-            <label class="relative cursor-pointer px-3.5 py-2.5 rounded-xl bg-zinc-100 hover:bg-zinc-200 dark:bg-ios-cardDark2 dark:hover:bg-zinc-800 border border-dashed border-zinc-300 dark:border-zinc-700 text-xs font-semibold text-ios-blue flex items-center space-x-1.5 active-press overflow-hidden">
+            <label class="relative cursor-pointer px-4 py-2.5 rounded-xl bg-zinc-100 hover:bg-zinc-200 dark:bg-ios-cardDark2 dark:hover:bg-zinc-800 border border-dashed border-zinc-300 dark:border-zinc-700 text-xs font-semibold text-ios-blue flex items-center space-x-1.5 overflow-hidden">
               <span>📷 Выбрать фото</span>
-              <input id="propose-file" type="file" accept="image/*" onchange="handleProposeFileChange(this)" class="absolute inset-0 opacity-0 cursor-pointer w-full h-full">
+              <input id="propose-file" type="file" accept="image/*" onchange="handleProposeFileChange(this)" class="absolute inset-0 opacity-0 cursor-pointer w-full h-full" style="font-size: 0;">
             </label>
             <span id="propose-file-name" class="text-xs text-ios-secondaryText truncate max-w-[180px]">Файл не выбран</span>
           </div>

@@ -59,7 +59,7 @@ def get_main_inline_keyboard() -> InlineKeyboardMarkup:
     If BASE_URL is HTTPS, renders native Telegram Web App button.
     If BASE_URL is HTTP (local dev), renders browser link to avoid TelegramBadRequest.
     """
-    web_app_url = f"{settings.BASE_URL}/?v=12.0"
+    web_app_url = f"{settings.BASE_URL}/?v=13.0"
     is_https = web_app_url.startswith("https://")
 
     if is_https:
@@ -173,7 +173,7 @@ async def cmd_start(message: Message, bot: Bot):
                 chat_id=user_id,
                 menu_button=MenuButtonWebApp(
                     text="Гимназия 16",
-                    web_app=WebAppInfo(url=f"{settings.BASE_URL}/?v=12.0")
+                    web_app=WebAppInfo(url=f"{settings.BASE_URL}/?v=13.0")
                 )
             )
         except Exception as e:
@@ -261,6 +261,40 @@ async def show_profile(event: Union[Message, CallbackQuery]):
     user_id = event.from_user.id
     async with async_session() as session:
         user = await session.get(User, user_id)
+        if not user and event.from_user.username:
+            res = await session.execute(
+                select(User).where(func.lower(User.username) == event.from_user.username.lower().strip())
+            )
+            user = res.scalars().first()
+
+        # Auto-heal admin / registered user if missing from fresh DB restart
+        is_admin_user = (
+            user_id in settings.admin_ids 
+            or user_id == 1097947498 
+            or (event.from_user.username and event.from_user.username.lower() == "kvalx")
+        )
+
+        if not user and is_admin_user:
+            user = User(
+                id=user_id,
+                first_name=event.from_user.first_name or "Роман",
+                last_name=event.from_user.last_name or "Куликов",
+                username=event.from_user.username or "kvalx",
+                class_name="11А",
+                profile_name="Соц-гум",
+                is_admin=True
+            )
+            session.add(user)
+            await session.commit()
+            await session.refresh(user)
+        elif user and is_admin_user:
+            if not user.class_name:
+                user.class_name = "11А"
+            if not user.profile_name:
+                user.profile_name = "Соц-гум"
+            user.is_admin = True
+            await session.commit()
+            await session.refresh(user)
 
     if not user or not user.class_name or not user.profile_name:
         text = (
@@ -277,7 +311,7 @@ async def show_profile(event: Union[Message, CallbackQuery]):
             f"Изменить класс и профиль можно в любой момент на вкладке «Профиль» в приложении."
         )
 
-    web_app_url = f"{settings.BASE_URL}/?v=12.0"
+    web_app_url = f"{settings.BASE_URL}/?v=13.0"
     if web_app_url.startswith("https://"):
         app_button = InlineKeyboardButton(
             text="📱 Открыть приложение",
@@ -436,7 +470,7 @@ async def finalize_news_post(user, title: str, content: str, image_url: Optional
         f"📄 <b>Текст:</b>\n{html.quote(content)}\n"
     )
 
-    app_url = f"{settings.BASE_URL}/?v=12.0"
+    app_url = f"{settings.BASE_URL}/?v=13.0"
     admin_kb = None
     if app_url.startswith("https://"):
         admin_kb = InlineKeyboardMarkup(inline_keyboard=[[
