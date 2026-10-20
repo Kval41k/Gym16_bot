@@ -59,7 +59,7 @@ def get_main_inline_keyboard() -> InlineKeyboardMarkup:
     If BASE_URL is HTTPS, renders native Telegram Web App button.
     If BASE_URL is HTTP (local dev), renders browser link to avoid TelegramBadRequest.
     """
-    web_app_url = f"{settings.BASE_URL}/?v=10.0"
+    web_app_url = f"{settings.BASE_URL}/?v=11.0"
     is_https = web_app_url.startswith("https://")
 
     if is_https:
@@ -173,7 +173,7 @@ async def cmd_start(message: Message, bot: Bot):
                 chat_id=user_id,
                 menu_button=MenuButtonWebApp(
                     text="Гимназия 16",
-                    web_app=WebAppInfo(url=f"{settings.BASE_URL}/?v=10.0")
+                    web_app=WebAppInfo(url=f"{settings.BASE_URL}/?v=11.0")
                 )
             )
         except Exception as e:
@@ -277,7 +277,7 @@ async def show_profile(event: Union[Message, CallbackQuery]):
             f"Изменить класс и профиль можно в любой момент на вкладке «Профиль» в приложении."
         )
 
-    web_app_url = f"{settings.BASE_URL}/?v=10.0"
+    web_app_url = f"{settings.BASE_URL}/?v=11.0"
     if web_app_url.startswith("https://"):
         app_button = InlineKeyboardButton(
             text="📱 Открыть приложение",
@@ -436,20 +436,29 @@ async def finalize_news_post(user, title: str, content: str, image_url: Optional
         f"📄 <b>Текст:</b>\n{html.quote(content)}\n"
     )
 
+    app_url = f"{settings.BASE_URL}/?v=11.0"
+    admin_kb = None
+    if app_url.startswith("https://"):
+        admin_kb = InlineKeyboardMarkup(inline_keyboard=[[
+            InlineKeyboardButton(text="📱 Открыть модерацию в приложении", web_app=WebAppInfo(url=app_url))
+        ]])
+
+    admin_notice_text = admin_card_text + "\n\nℹ️ <i>Публикация и отклонение производятся в мини-приложении во вкладке «Новости» → «📬 Модерация».</i>"
+
     for admin_id in settings.admin_ids:
         try:
             if photo_file_id:
                 await bot.send_photo(
                     chat_id=admin_id,
                     photo=photo_file_id,
-                    caption=admin_card_text,
-                    reply_markup=get_admin_inline_keyboard(post_id)
+                    caption=admin_notice_text,
+                    reply_markup=admin_kb
                 )
             else:
                 await bot.send_message(
                     chat_id=admin_id,
-                    text=admin_card_text,
-                    reply_markup=get_admin_inline_keyboard(post_id)
+                    text=admin_notice_text,
+                    reply_markup=admin_kb
                 )
         except Exception as e:
             logger.error(f"Failed to send moderation notice to admin {admin_id}: {e}")

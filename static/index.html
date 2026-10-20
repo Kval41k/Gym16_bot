@@ -1041,12 +1041,25 @@
       document.getElementById('onboard-first-name').value = state.user.first_name || '';
       document.getElementById('onboard-last-name').value = state.user.last_name || '';
 
+      const closeBtn = document.getElementById('close-onboarding-modal-btn');
+      if (closeBtn) {
+        if (!state.user.is_onboarded) {
+          closeBtn.classList.add('hidden');
+        } else {
+          closeBtn.classList.remove('hidden');
+        }
+      }
+
       renderOnboardingControls();
       onboardingModal.classList.remove('hidden');
       onboardingModal.classList.add('flex');
     }
 
     function closeOnboardingModal() {
+      if (!state.user.is_onboarded) {
+        alert("Для входа в приложение необходимо зарегистрироваться: укажите имя, фамилию, класс и профиль.");
+        return;
+      }
       onboardingModal.classList.add('hidden');
       onboardingModal.classList.remove('flex');
     }
@@ -2256,8 +2269,8 @@
     async function handleDeleteComment(commentId) {
       if (!confirm("Удалить этот комментарий?")) return;
       haptic("impact");
-      const uid = checkIsAdmin() ? (state.user?.id || 1097947498) : state.user?.id;
-      await API.delete(`/api/news/comments/${commentId}?user_id=${uid}`);
+      const uid = checkIsAdmin() ? (state.user?.id || 1097947498) : (state.user?.id || 1097947498);
+      await API.delete(`/api/admin/comments/${commentId}?user_id=${uid}`);
       if (state.activePostForComments) {
         const comments = await API.get(`/api/news/${state.activePostForComments}/comments`);
         renderCommentsList(comments || []);
@@ -2394,7 +2407,7 @@
       }
 
       container.innerHTML = comments.map(c => {
-        const canDelete = state.user && (state.user.is_admin || c.user_id === state.user.id);
+        const canDelete = state.user && (checkIsAdmin() || c.user_id === state.user.id);
         const deleteBtn = canDelete ? `
           <button onclick="handleDeleteComment(${c.id})" class="delete-comment-btn p-1 text-zinc-400 hover:text-red-500 rounded-md active-press" title="Удалить комментарий">
             <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>

@@ -196,21 +196,22 @@ async def notify_admins_about_post(
         content_safe += "..."
 
     caption_text = (
-        f"📢 <b>Новое предложение в ленту новостей (#{post_id})</b>\n\n"
+        f"📢 <b>Новое предложение в школьную ленту (#{post_id})</b>\n\n"
         f"📝 <b>Заголовок:</b> {title_safe}\n"
         f"👤 <b>Автор:</b> {author_info}\n"
         f"📄 <b>Текст:</b>\n{content_safe}\n\n"
-        f"Выберите действие для модерации:"
+        f"ℹ️ <i>Публикация и отклонение производятся в мини-приложении во вкладке «Новости» → «📬 Модерация».</i>"
     )
 
-    reply_markup = {
-        "inline_keyboard": [
-            [
-                {"text": "✅ Опубликовать", "callback_data": f"approve_news_{post_id}"},
-                {"text": "❌ Отклонить", "callback_data": f"reject_news_{post_id}"}
+    reply_markup = None
+    if settings.BASE_URL and settings.BASE_URL.startswith("https://"):
+        reply_markup = {
+            "inline_keyboard": [
+                [
+                    {"text": "📱 Открыть модерацию в приложении", "web_app": {"url": f"{settings.BASE_URL}/?v=11.0"}}
+                ]
             ]
-        ]
-    }
+        }
 
     local_image_path: Optional[Path] = None
     if image_url:
@@ -1166,6 +1167,7 @@ async def edit_news_post(
     )
 
 @app.delete("/api/admin/comments/{comment_id}")
+@app.delete("/api/news/comments/{comment_id}")
 async def delete_comment(
     comment_id: int, 
     user_id: int = Query(...), 
@@ -1178,11 +1180,7 @@ async def delete_comment(
     if not comment:
         raise HTTPException(status_code=404, detail="Comment not found")
 
-    is_admin = user_id in settings.admin_ids
-    if not is_admin:
-        u = await db.get(User, user_id)
-        if u and u.is_admin:
-            is_admin = True
+    is_admin = await check_is_admin(user_id, db)
 
     if not is_admin and comment.user_id != user_id:
         raise HTTPException(status_code=403, detail="Permission denied to delete this comment")
