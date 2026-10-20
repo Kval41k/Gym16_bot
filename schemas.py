@@ -109,7 +109,9 @@ class NewsCreateRequest(BaseModel):
 class NewsEditRequest(BaseModel):
     title: str = Field(..., min_length=3, max_length=255)
     content: str = Field(..., min_length=5)
-    admin_id: int
+    image_url: Optional[str] = None
+    admin_id: Optional[int] = None
+    user_id: Optional[int] = None
 
 class ReactionCount(BaseModel):
     emoji: str

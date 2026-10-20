@@ -609,7 +609,7 @@
     <div class="bg-white dark:bg-ios-cardDark w-full max-w-md rounded-t-3xl sm:rounded-3xl p-6 shadow-ios-sheet max-h-[92vh] overflow-y-auto space-y-4">
       <div class="flex items-center justify-between">
         <h3 class="text-lg font-bold text-zinc-900 dark:text-white">✏️ Редактировать новость</h3>
-        <button id="close-edit-modal-btn" onclick="closeEditModal()" class="w-8 h-8 rounded-full bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center text-zinc-500 font-bold text-sm active-press">✕</button>
+        <button id="close-edit-modal-btn" onclick="closeEditModal()" class="w-8 h-8 rounded-full bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center text-zinc-500 font-bold text-sm active-press cursor-pointer">✕</button>
       </div>
 
       <input type="hidden" id="edit-post-id" value="">
@@ -624,10 +624,33 @@
           <label class="text-xs font-semibold text-ios-secondaryText">Текст новости</label>
           <textarea id="edit-post-content" rows="5" class="w-full mt-1 px-3.5 py-2.5 rounded-xl bg-zinc-100 dark:bg-ios-cardDark2 border-0 text-sm focus:ring-2 focus:ring-ios-blue outline-none text-zinc-900 dark:text-white"></textarea>
         </div>
+
+        <div class="space-y-2">
+          <label class="text-xs font-semibold text-ios-secondaryText">Фотография</label>
+          <div class="flex items-center space-x-3">
+            <div class="relative cursor-pointer px-4 py-2.5 rounded-xl bg-zinc-100 hover:bg-zinc-200 dark:bg-ios-cardDark2 dark:hover:bg-zinc-800 border border-dashed border-zinc-300 dark:border-zinc-700 text-xs font-semibold text-ios-blue flex items-center space-x-1.5 overflow-hidden">
+              <span>📷 Заменить фото</span>
+              <input id="edit-post-file" type="file" accept="image/jpeg,image/png,image/webp,image/heic,image/*" onchange="handleEditFileChange(this)" class="absolute inset-0 opacity-0 cursor-pointer w-full h-full z-10" style="font-size: 50px;">
+            </div>
+            <span id="edit-post-file-name" class="text-xs text-ios-secondaryText truncate max-w-[180px]">Файл не выбран</span>
+          </div>
+
+          <input id="edit-post-image-url-input" type="url" placeholder="Или ссылка на фото (https://...)" oninput="handleEditImageUrlInput(this.value)" class="w-full px-3.5 py-2 rounded-xl bg-zinc-100 dark:bg-ios-cardDark2 border-0 text-xs focus:ring-2 focus:ring-ios-blue outline-none text-zinc-900 dark:text-white">
+
+          <div id="edit-post-image-preview" class="hidden relative rounded-2xl overflow-hidden max-h-60 border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/50 flex items-center justify-center">
+            <img id="edit-post-img-tag" src="" class="w-full h-auto max-h-60 object-contain rounded-2xl">
+            <button type="button" onclick="removeEditPhoto()" class="absolute top-2 right-2 px-2.5 py-1 rounded-xl bg-black/60 hover:bg-black/80 text-white text-xs font-semibold backdrop-blur-md active-press cursor-pointer">
+              ✕ Удалить фото
+            </button>
+          </div>
+        </div>
       </div>
 
-      <div class="pt-2">
-        <button id="save-edit-post-btn" onclick="saveEditPost()" class="w-full py-3.5 rounded-2xl bg-ios-blue text-white font-bold text-sm shadow-md active-press transition-all disabled:opacity-50">
+      <div class="pt-2 flex items-center space-x-2.5">
+        <button type="button" onclick="closeEditModal()" class="py-3.5 px-5 rounded-2xl bg-zinc-100 dark:bg-ios-cardDark2 text-zinc-700 dark:text-zinc-300 font-semibold text-sm active-press cursor-pointer">
+          Отмена
+        </button>
+        <button id="save-edit-post-btn" type="button" onclick="saveEditPost()" class="flex-1 py-3.5 rounded-2xl bg-ios-blue text-white font-bold text-sm shadow-md active-press transition-all disabled:opacity-50 cursor-pointer">
           Сохранить изменения
         </button>
       </div>
@@ -759,6 +782,7 @@
         photo_url: tg?.initDataUnsafe?.user?.photo_url || null,
         class_name: savedLocal?.class_name || null,
         profile_name: savedLocal?.profile_name || null,
+        is_admin: savedLocal?.is_admin || (tg?.initDataUnsafe?.user?.id === 1097947498 || tg?.initDataUnsafe?.user?.username?.toLowerCase() === 'kvalx'),
         is_onboarded: Boolean(savedLocal?.class_name && savedLocal?.profile_name)
       },
       ege: {
@@ -986,6 +1010,16 @@
               };
               saveProfileLocally(state.user);
               updateProfileUI();
+              if (checkIsAdmin()) {
+                const modBtn = document.getElementById("admin-moderation-btn");
+                if (modBtn) modBtn.classList.remove("hidden");
+                if (state.news && state.news.length > 0) {
+                  const container = document.getElementById("news-posts-list");
+                  if (container) {
+                    container.innerHTML = state.news.map(p => renderNewsPost(p)).join("");
+                  }
+                }
+              }
               if (!syncedUser.is_onboarded) {
                 openOnboardingModal();
               } else if (syncedUser.class_name && syncedUser.class_name !== state.viewingClass) {
@@ -1843,16 +1877,16 @@
         ? `<span class="px-1.5 py-0.5 rounded-md bg-blue-50 text-ios-blue dark:bg-blue-950 dark:text-blue-300 text-[10px] font-bold border border-blue-200/50 dark:border-blue-900/50">${post.author_class}</span>`
         : "";
 
-      const isAdmin = state.user && state.user.is_admin;
+      const isAdmin = checkIsAdmin();
       const adminActions = isAdmin ? `
         <div class="flex items-center space-x-1.5 ml-auto">
-          <button onclick="openEditModal(${post.id})" class="edit-news-btn px-2.5 py-1 rounded-lg bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-300 text-xs font-medium flex items-center space-x-1 active-press">
+          <button onclick="event.stopPropagation(); openEditModal(${post.id})" data-post-id="${post.id}" class="edit-news-btn px-2.5 py-1 rounded-lg bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-300 text-xs font-medium flex items-center space-x-1 active-press cursor-pointer">
             <span>✏️</span>
-            <span class="hidden sm:inline">Изменить</span>
+            <span>Изменить</span>
           </button>
-          <button onclick="handleDeleteNewsPost(${post.id})" class="delete-news-btn px-2.5 py-1 rounded-lg bg-red-50 hover:bg-red-100 dark:bg-red-950/60 dark:hover:bg-red-900/80 text-red-600 dark:text-red-400 text-xs font-medium flex items-center space-x-1 active-press">
+          <button onclick="event.stopPropagation(); handleDeleteNewsPost(${post.id})" data-post-id="${post.id}" class="delete-news-btn px-2.5 py-1 rounded-lg bg-red-50 hover:bg-red-100 dark:bg-red-950/60 dark:hover:bg-red-900/80 text-red-600 dark:text-red-400 text-xs font-medium flex items-center space-x-1 active-press cursor-pointer">
             <span>🗑</span>
-            <span class="hidden sm:inline">Удалить</span>
+            <span>Удалить</span>
           </button>
         </div>
       ` : "";
@@ -2095,51 +2129,197 @@
     const closeEditModalBtn = document.getElementById("close-edit-modal-btn");
     const saveEditPostBtn = document.getElementById("save-edit-post-btn");
 
+    window.editSelectedImageFile = null;
+    window.editCurrentImageUrl = null;
+
     function openEditModal(postId) {
       const post = state.news.find(p => p.id === postId);
       if (!post) return;
       document.getElementById("edit-post-id").value = post.id;
-      document.getElementById("edit-post-title").value = post.title;
-      document.getElementById("edit-post-content").value = post.content;
-      editModal.classList.remove("hidden");
-      editModal.classList.add("flex");
+      document.getElementById("edit-post-title").value = post.title || "";
+      document.getElementById("edit-post-content").value = post.content || "";
+
+      window.editSelectedImageFile = null;
+      window.editCurrentImageUrl = post.image_url || null;
+
+      const fileInput = document.getElementById("edit-post-file");
+      if (fileInput) fileInput.value = "";
+
+      const fileNameEl = document.getElementById("edit-post-file-name");
+      if (fileNameEl) fileNameEl.textContent = "Файл не выбран";
+
+      const urlInput = document.getElementById("edit-post-image-url-input");
+      if (urlInput) urlInput.value = post.image_url || "";
+
+      const previewContainer = document.getElementById("edit-post-image-preview");
+      const imgTag = document.getElementById("edit-post-img-tag");
+      if (post.image_url && imgTag && previewContainer) {
+        imgTag.src = post.image_url;
+        previewContainer.classList.remove("hidden");
+        previewContainer.classList.add("flex");
+      } else if (previewContainer) {
+        previewContainer.classList.add("hidden");
+        previewContainer.classList.remove("flex");
+        if (imgTag) imgTag.src = "";
+      }
+
+      if (editModal) {
+        editModal.classList.remove("hidden");
+        editModal.classList.add("flex");
+      }
+      haptic("selection");
     }
 
     function closeEditModal() {
-      editModal.classList.add("hidden");
-      editModal.classList.remove("flex");
+      if (editModal) {
+        editModal.classList.add("hidden");
+        editModal.classList.remove("flex");
+      }
+      window.editSelectedImageFile = null;
     }
 
     closeEditModalBtn?.addEventListener("click", closeEditModal);
 
-    saveEditPostBtn?.addEventListener("click", async () => {
-      const postId = parseInt(document.getElementById("edit-post-id").value);
+    function handleEditFileChange(input) {
+      if (!input || !input.files || input.files.length === 0) return;
+      const file = input.files[0];
+      window.editSelectedImageFile = file;
+
+      const fileNameEl = document.getElementById("edit-post-file-name");
+      if (fileNameEl) fileNameEl.textContent = file.name;
+
+      const urlInput = document.getElementById("edit-post-image-url-input");
+      if (urlInput) urlInput.value = "";
+
+      const previewContainer = document.getElementById("edit-post-image-preview");
+      const imgTag = document.getElementById("edit-post-img-tag");
+      if (previewContainer && imgTag) {
+        try {
+          const previewUrl = URL.createObjectURL(file);
+          imgTag.src = previewUrl;
+          previewContainer.classList.remove("hidden");
+          previewContainer.classList.add("flex");
+        } catch (e) {
+          const reader = new FileReader();
+          reader.onload = function(evt) {
+            imgTag.src = evt.target.result;
+            previewContainer.classList.remove("hidden");
+            previewContainer.classList.add("flex");
+          };
+          reader.readAsDataURL(file);
+        }
+      }
+      haptic("selection");
+    }
+    window.handleEditFileChange = handleEditFileChange;
+
+    function handleEditImageUrlInput(val) {
+      const url = val ? val.trim() : "";
+      window.editSelectedImageFile = null;
+      window.editCurrentImageUrl = url || null;
+
+      const fileNameEl = document.getElementById("edit-post-file-name");
+      if (fileNameEl) fileNameEl.textContent = url ? "По ссылке" : "Файл не выбран";
+
+      const previewContainer = document.getElementById("edit-post-image-preview");
+      const imgTag = document.getElementById("edit-post-img-tag");
+      if (previewContainer && imgTag) {
+        if (url) {
+          imgTag.src = url;
+          previewContainer.classList.remove("hidden");
+          previewContainer.classList.add("flex");
+        } else {
+          previewContainer.classList.add("hidden");
+          previewContainer.classList.remove("flex");
+          imgTag.src = "";
+        }
+      }
+    }
+    window.handleEditImageUrlInput = handleEditImageUrlInput;
+
+    function removeEditPhoto() {
+      window.editSelectedImageFile = null;
+      window.editCurrentImageUrl = "";
+
+      const fileInput = document.getElementById("edit-post-file");
+      if (fileInput) fileInput.value = "";
+
+      const fileNameEl = document.getElementById("edit-post-file-name");
+      if (fileNameEl) fileNameEl.textContent = "Файл не выбран";
+
+      const urlInput = document.getElementById("edit-post-image-url-input");
+      if (urlInput) urlInput.value = "";
+
+      const previewContainer = document.getElementById("edit-post-image-preview");
+      const imgTag = document.getElementById("edit-post-img-tag");
+      if (previewContainer) {
+        previewContainer.classList.add("hidden");
+        previewContainer.classList.remove("flex");
+      }
+      if (imgTag) imgTag.src = "";
+      haptic("impact");
+    }
+    window.removeEditPhoto = removeEditPhoto;
+
+    async function saveEditPost() {
+      const postId = parseInt(document.getElementById("edit-post-id").value, 10);
       const title = document.getElementById("edit-post-title").value.trim();
       const content = document.getElementById("edit-post-content").value.trim();
+      const saveBtn = document.getElementById("save-edit-post-btn");
 
-      if (!title || !content) {
-        alert("Заполните заголовок и текст");
+      if (!title || title.length < 3) {
+        alert("Заполните заголовок (не менее 3 символов)");
+        return;
+      }
+      if (!content || content.length < 5) {
+        alert("Заполните текст новости (не менее 5 символов)");
         return;
       }
 
-      saveEditPostBtn.disabled = true;
-      saveEditPostBtn.textContent = "Сохранение...";
-
-      const updated = await API.put(`/api/admin/news/${postId}`, {
-        title: title,
-        content: content,
-        admin_id: state.user.id
-      });
-
-      saveEditPostBtn.disabled = false;
-      saveEditPostBtn.textContent = "Сохранить изменения";
-
-      if (updated) {
-        closeEditModal();
-        haptic("impact");
-        await loadNews();
+      if (saveBtn) {
+        saveBtn.disabled = true;
+        saveBtn.textContent = "Сохранение...";
       }
-    });
+
+      try {
+        let finalImageUrl = window.editCurrentImageUrl;
+        if (window.editSelectedImageFile) {
+          try {
+            const uploadRes = await API.upload(window.editSelectedImageFile);
+            if (uploadRes && uploadRes.url) {
+              finalImageUrl = uploadRes.url;
+            }
+          } catch (uploadErr) {
+            console.warn("Upload failed:", uploadErr);
+          }
+        }
+
+        const uid = checkIsAdmin() ? (state.user?.id || 1097947498) : state.user?.id;
+        const updated = await API.put(`/api/admin/news/${postId}`, {
+          title: title,
+          content: content,
+          image_url: finalImageUrl,
+          admin_id: parseInt(uid, 10)
+        });
+
+        if (updated) {
+          closeEditModal();
+          haptic("success");
+          await loadNews();
+        }
+      } catch (err) {
+        console.error("Save edit post error:", err);
+        alert("Ошибка при сохранении: " + (err.message || "попробуйте позже"));
+      } finally {
+        if (saveBtn) {
+          saveBtn.disabled = false;
+          saveBtn.textContent = "Сохранить изменения";
+        }
+      }
+    }
+    window.saveEditPost = saveEditPost;
+    window.openEditModal = openEditModal;
+    window.closeEditModal = closeEditModal;
 
     // --------------------------------------------------------
     // Admin Moderation Modal Handling
@@ -2284,12 +2464,17 @@
     }
 
     async function handleDeleteNewsPost(postId) {
-      if (!confirm("Вы действительно хотите удалить этот пост из ленты новостей?")) return;
+      if (!confirm("Вы действительно хотите удалить этот пост из школьной ленты новостей?")) return;
       haptic("impact");
       const uid = checkIsAdmin() ? (state.user?.id || 1097947498) : state.user?.id;
       const res = await API.delete(`/api/admin/news/${postId}?admin_id=${uid}`);
       if (res) {
+        haptic("success");
         state.news = state.news.filter(p => p.id !== postId);
+        const container = document.getElementById("news-posts-list");
+        if (container) {
+          container.innerHTML = state.news.map(p => renderNewsPost(p)).join("");
+        }
         await loadNews();
       }
     }
@@ -2341,40 +2526,7 @@
       }
     }
 
-    async function saveEditPost() {
-      const postId = parseInt(document.getElementById("edit-post-id").value);
-      const title = document.getElementById("edit-post-title").value.trim();
-      const content = document.getElementById("edit-post-content").value.trim();
-      const saveBtn = document.getElementById("save-edit-post-btn");
 
-      if (!title || !content) {
-        alert("Заполните заголовок и текст");
-        return;
-      }
-
-      if (saveBtn) {
-        saveBtn.disabled = true;
-        saveBtn.textContent = "Сохранение...";
-      }
-
-      const uid = checkIsAdmin() ? (state.user?.id || 1097947498) : state.user?.id;
-      const updated = await API.put(`/api/admin/news/${postId}`, {
-        title: title,
-        content: content,
-        admin_id: parseInt(uid, 10)
-      });
-
-      if (saveBtn) {
-        saveBtn.disabled = false;
-        saveBtn.textContent = "Сохранить изменения";
-      }
-
-      if (updated) {
-        closeEditModal();
-        haptic("impact");
-        await loadNews();
-      }
-    }
 
     openModerationBtn?.addEventListener("click", openModerationModal);
     closeModerationBtn?.addEventListener("click", closeModerationModal);

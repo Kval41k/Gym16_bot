@@ -208,7 +208,7 @@ async def notify_admins_about_post(
         reply_markup = {
             "inline_keyboard": [
                 [
-                    {"text": "📱 Открыть модерацию в приложении", "web_app": {"url": f"{settings.BASE_URL}/?v=11.0"}}
+                    {"text": "📱 Открыть модерацию в приложении", "web_app": {"url": f"{settings.BASE_URL}/?v=15.0"}}
                 ]
             ]
         }
@@ -1118,15 +1118,19 @@ async def moderate_news(
     return {"status": "success", "post_id": post_id, "action": payload.action}
 
 @app.delete("/api/admin/news/{post_id}")
+@app.delete("/api/news/{post_id}")
 async def delete_news_post(
     post_id: int, 
-    admin_id: int = Query(...), 
+    admin_id: Optional[int] = Query(None), 
+    user_id: Optional[int] = Query(None),
     db: AsyncSession = Depends(get_db)
 ):
     """
     Deletes a news post and removes its attached media file.
+    Only authorized administrators can delete posts.
     """
-    if not await check_is_admin(admin_id, db):
+    uid = admin_id or user_id
+    if not uid or not await check_is_admin(uid, db):
         raise HTTPException(status_code=403, detail="Admin permissions required")
 
     post = await db.get(NewsPost, post_id)
@@ -1141,20 +1145,24 @@ async def delete_news_post(
             except Exception:
                 pass
 
+    await db.execute(delete(Comment).where(Comment.post_id == post_id))
+    await db.execute(delete(Reaction).where(Reaction.post_id == post_id))
     await db.delete(post)
     await db.commit()
     return {"status": "success", "post_id": post_id, "action": "deleted"}
 
 @app.put("/api/admin/news/{post_id}", response_model=NewsResponse)
+@app.put("/api/news/{post_id}", response_model=NewsResponse)
 async def edit_news_post(
     post_id: int, 
     payload: NewsEditRequest, 
     db: AsyncSession = Depends(get_db)
 ):
     """
-    Allows administrator to edit post title and content directly in the feed.
+    Allows administrator to edit post title, content, and image directly in the feed.
     """
-    if not await check_is_admin(payload.admin_id, db):
+    admin_uid = payload.admin_id or payload.user_id
+    if not admin_uid or not await check_is_admin(admin_uid, db):
         raise HTTPException(status_code=403, detail="Admin permissions required")
 
     post = await db.get(NewsPost, post_id)
@@ -1163,22 +1171,64 @@ async def edit_news_post(
 
     post.title = payload.title.strip()
     post.content = payload.content.strip()
-    await db.commit()
-    await db.refresh(post)
+    if payload.image_url is not None:
+        new_img = payload.image_url.strip()
+        post.image_url = new_img if new_img else None
 
-    reactions_list = [ReactionCount(emoji=e, count=0, user_reacted=False) for e in EMOJI_PALETTE]
+    await db.commit()
+
+    # Reload post with full relationships
+    query = (
+        select(NewsPost)
+        .where(NewsPost.id == post_id)
+        .options(selectinload(NewsPost.reactions), selectinload(NewsPost.comments), selectinload(NewsPost.author))
+    )
+    res = await db.execute(query)
+    updated_post = res.scalar_one_or_none() or post
+
+    reaction_counts_dict: Dict[str, int] = {e: 0 for e in EMOJI_PALETTE}
+    user_reacted_dict: Dict[str, bool] = {e: False for e in EMOJI_PALETTE}
+    for r in getattr(updated_post, "reactions", []):
+        reaction_counts_dict[r.emoji] = reaction_counts_dict.get(r.emoji, 0) + 1
+        if admin_uid and r.user_id == admin_uid:
+            user_reacted_dict[r.emoji] = True
+
+    reactions_list = [
+        ReactionCount(
+            emoji=e,
+            count=reaction_counts_dict[e],
+            user_reacted=user_reacted_dict[e]
+        )
+        for e in EMOJI_PALETTE
+    ]
+
+    if updated_post.created_at:
+        post_dt = updated_post.created_at
+        if post_dt.tzinfo is None:
+            post_dt = post_dt.replace(tzinfo=timezone.utc).astimezone(TYUMEN_TZ)
+        else:
+            post_dt = post_dt.astimezone(TYUMEN_TZ)
+        formatted_date = post_dt.strftime("%d.%m.%Y %H:%M")
+    else:
+        formatted_date = ""
+
+    author_photo = None
+    if not updated_post.is_anonymous and updated_post.author and updated_post.author.photo_url:
+        author_photo = updated_post.author.photo_url
+
     return NewsResponse(
-        id=post.id,
-        title=post.title,
-        content=post.content,
-        image_url=post.image_url,
-        author_name="Анонимно" if post.is_anonymous else post.author_name,
-        author_class=None if post.is_anonymous else post.author_class,
-        is_anonymous=post.is_anonymous,
-        status=post.status,
-        created_at=datetime.now(TYUMEN_TZ).strftime("%d.%m.%Y %H:%M"),
+        id=updated_post.id,
+        title=updated_post.title,
+        content=updated_post.content,
+        image_url=updated_post.image_url,
+        author_name="Анонимно" if updated_post.is_anonymous else updated_post.author_name,
+        author_class=None if updated_post.is_anonymous else updated_post.author_class,
+        author_photo_url=author_photo,
+        is_anonymous=updated_post.is_anonymous,
+        status=updated_post.status,
+        created_at=formatted_date,
         reactions=reactions_list,
-        comments_count=0
+        comments_count=len(getattr(updated_post, "comments", []))
     )
 
 @app.delete("/api/admin/comments/{comment_id}")
