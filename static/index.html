@@ -528,7 +528,7 @@
       
       <div class="flex items-center justify-between">
         <h3 class="text-lg font-bold text-zinc-900 dark:text-white">Предложить новость</h3>
-        <button id="close-propose-modal-btn" class="w-8 h-8 rounded-full bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center text-zinc-500 font-bold text-sm">✕</button>
+        <button id="close-propose-modal-btn" type="button" onclick="closeProposeNewsModal()" class="w-8 h-8 rounded-full bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 flex items-center justify-center text-zinc-500 font-bold text-sm active-press cursor-pointer">✕</button>
       </div>
 
       <div class="space-y-3">
@@ -539,15 +539,8 @@
             <span id="propose-author-display" class="font-bold text-zinc-900 dark:text-white">Гимназист</span>
           </div>
           <div class="flex items-center justify-between text-xs">
-            <span class="text-ios-secondaryText font-medium">Класс автора:</span>
-            <select id="propose-class-select" class="px-2.5 py-1 rounded-lg bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 font-bold text-ios-blue text-xs outline-none">
-              <option value="11А">11А</option>
-              <option value="11Б">11Б</option>
-              <option value="11В">11В</option>
-              <option value="11Г">11Г</option>
-              <option value="11Д">11Д</option>
-              <option value="11Ж">11Ж</option>
-            </select>
+            <span class="text-ios-secondaryText font-medium">Класс (из профиля):</span>
+            <span id="propose-class-display" class="font-bold text-ios-blue px-2 py-0.5 rounded-md bg-blue-50 dark:bg-blue-950/70 border border-blue-200/50 dark:border-blue-900/50">11А</span>
           </div>
         </div>
 
@@ -591,8 +584,11 @@
         </div>
       </div>
 
-      <div class="pt-2">
-        <button id="submit-news-btn" onclick="handleSubmitProposeNews()" class="w-full py-3.5 rounded-2xl bg-ios-blue text-white font-bold text-sm shadow-md active-press transition-all disabled:opacity-50">
+      <div class="pt-2 flex items-center space-x-2.5">
+        <button type="button" onclick="closeProposeNewsModal()" class="py-3.5 px-5 rounded-2xl bg-zinc-100 dark:bg-ios-cardDark2 text-zinc-700 dark:text-zinc-300 font-semibold text-sm active-press cursor-pointer">
+          Отмена
+        </button>
+        <button id="submit-news-btn" type="button" onclick="handleSubmitProposeNews()" class="flex-1 py-3.5 rounded-2xl bg-ios-blue text-white font-bold text-sm shadow-md active-press transition-all disabled:opacity-50 cursor-pointer">
           Отправить на модерацию
         </button>
       </div>
@@ -807,11 +803,20 @@
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(data)
           });
-          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          if (!res.ok) {
+            let errorMsg = `HTTP ${res.status}`;
+            try {
+              const errBody = await res.json();
+              if (errBody && errBody.detail) {
+                errorMsg = typeof errBody.detail === 'string' ? errBody.detail : JSON.stringify(errBody.detail);
+              }
+            } catch (_) {}
+            throw new Error(errorMsg);
+          }
           return await res.json();
         } catch (e) {
           console.error(`API POST ${url} error:`, e);
-          return null;
+          throw e;
         }
       },
       async put(url, data) {
@@ -1892,8 +1897,8 @@
       const fullName = `${state.user?.first_name || ""} ${state.user?.last_name || ""}`.trim() || state.user?.first_name || "Гимназист";
       const authorDisp = document.getElementById("propose-author-display");
       if (authorDisp) authorDisp.textContent = fullName;
-      const classSel = document.getElementById("propose-class-select");
-      if (classSel) classSel.value = state.user?.class_name || "11А";
+      const classDisp = document.getElementById("propose-class-display");
+      if (classDisp) classDisp.textContent = state.user?.class_name || "11А";
       haptic("selection");
     }
 
@@ -1910,6 +1915,8 @@
       selectedImageFile = null;
       if (proposeFileName) proposeFileName.textContent = "Файл не выбран";
       if (proposeImagePreview) proposeImagePreview.classList.add("hidden");
+      const fileInput = document.getElementById("propose-file");
+      if (fileInput) fileInput.value = "";
     }
 
     openProposeModalBtn?.addEventListener("click", openProposeNewsModal);
@@ -1958,17 +1965,21 @@
       try {
         let imageUrl = null;
         if (selectedImageFile) {
-          const uploadRes = await API.upload(selectedImageFile);
-          if (uploadRes && uploadRes.url) {
-            imageUrl = uploadRes.url;
+          try {
+            const uploadRes = await API.upload(selectedImageFile);
+            if (uploadRes && uploadRes.url) {
+              imageUrl = uploadRes.url;
+            }
+          } catch (uploadErr) {
+            console.warn("Photo upload failed, proceeding without photo:", uploadErr);
           }
         }
 
         const isAnonymous = document.getElementById("propose-anonymous") ? document.getElementById("propose-anonymous").checked : false;
-        const classSel = document.getElementById("propose-class-select");
-        const authorClass = (classSel ? classSel.value : null) || state.user?.class_name || "11А";
+        const authorClass = state.user?.class_name || "11А";
         const authorName = `${state.user?.first_name || ""} ${state.user?.last_name || ""}`.trim() || state.user?.first_name || "Гимназист";
-        const authorId = parseInt(state.user?.id || 1097947498, 10);
+        const rawId = state.user?.id;
+        const authorId = (rawId && !isNaN(parseInt(rawId, 10))) ? parseInt(rawId, 10) : 1097947498;
 
         const postRes = await API.post("/api/news", {
           title: title,
@@ -1986,12 +1997,10 @@
           alert("Спасибо! Твоя новость успешно отправлена на модерацию администратору.");
           await checkPendingNewsCount();
           await loadNews();
-        } else {
-          alert("Не удалось отправить новость. Попробуйте еще раз.");
         }
       } catch (err) {
         console.error("Submit news error:", err);
-        alert("Ошибка при отправке новости: " + err.message);
+        alert("Ошибка при отправке новости: " + (err.message || "попробуйте позже"));
       } finally {
         if (submitBtn) {
           submitBtn.disabled = false;

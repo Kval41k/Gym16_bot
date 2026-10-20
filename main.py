@@ -827,29 +827,37 @@ async def suggest_news(
 ):
     """
     Students propose a news post.
-    Supports anonymous submissions and captures author_class.
+    Guarantees user exists in DB to prevent foreign key errors and accurately captures author and class.
     """
-    user = await db.get(User, payload.author_id)
-    author_class = payload.author_class
-    if not author_class and user and user.class_name:
-        author_class = user.class_name
+    author_id = payload.author_id or 1097947498
+    user = await db.get(User, author_id)
+    if not user:
+        user = User(
+            id=author_id,
+            first_name=payload.author_name or "Гимназист",
+            last_name="",
+            username=None,
+            class_name=payload.author_class or "11А",
+            is_admin=(author_id in settings.admin_ids)
+        )
+        db.add(user)
+        await db.commit()
+        await db.refresh(user)
 
+    author_class = payload.author_class or user.class_name or "11А"
     author_name = payload.author_name
-    if (not author_name or author_name.strip() in ("", "Гимназист")) and user:
+    if not author_name or author_name.strip() in ("", "Гимназист"):
         u_first = user.first_name or ""
         u_last = user.last_name or ""
         full_name = f"{u_first} {u_last}".strip()
-        if full_name:
-            author_name = full_name
-        elif user.username:
-            author_name = f"@{user.username}"
+        author_name = full_name or user.username or "Гимназист"
 
     new_post = NewsPost(
-        title=payload.title,
-        content=payload.content,
+        title=payload.title.strip(),
+        content=payload.content.strip(),
         image_url=payload.image_url,
-        author_id=payload.author_id,
-        author_name=author_name or "Гимназист",
+        author_id=user.id,
+        author_name=author_name,
         author_class=author_class,
         is_anonymous=payload.is_anonymous,
         status="pending"
@@ -858,7 +866,7 @@ async def suggest_news(
     await db.commit()
     await db.refresh(new_post)
 
-    # Trigger admin notification in background (revealing author to admins for moderation)
+    # Trigger admin notification in background
     background_tasks.add_task(
         notify_admins_about_post,
         post_id=new_post.id,
