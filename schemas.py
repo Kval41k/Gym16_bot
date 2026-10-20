@@ -19,6 +19,8 @@ class UserSyncRequest(BaseModel):
     last_name: Optional[str] = None
     username: Optional[str] = None
     photo_url: Optional[str] = None
+    class_name: Optional[str] = None
+    profile_name: Optional[str] = None
 
 class UserProfileUpdate(BaseModel):
     class_name: str = Field(..., description="11А, 11Б, 11В, 11Г, 11Д, 11Ж")

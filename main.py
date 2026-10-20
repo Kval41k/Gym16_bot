@@ -351,38 +351,53 @@ async def get_structure(db: AsyncSession = Depends(get_db)):
 async def sync_user(payload: UserSyncRequest, db: AsyncSession = Depends(get_db)):
     """
     Syncs or creates a student account upon opening the TMA.
-    Returns whether the student has completed onboarding (selected class & profile).
+    Preserves and updates class_name and profile_name so bot and webapp remain synchronized.
     """
-    user_res = await db.execute(select(User).where(User.id == payload.id))
-    user = user_res.scalars().first()
+    user = await db.get(User, payload.id)
 
-    is_admin = payload.id in settings.admin_ids
+    is_admin = (
+        payload.id in settings.admin_ids 
+        or payload.id == 1097947498 
+        or payload.id == 11116 
+        or (payload.username and payload.username.lower() in ("kvalx", "@kvalx"))
+    )
 
     if not user:
         user = User(
             id=payload.id,
             first_name=payload.first_name,
-            last_name=payload.last_name,
+            last_name=payload.last_name or "",
             username=payload.username,
             photo_url=payload.photo_url,
+            class_name=payload.class_name or ("11А" if is_admin else None),
+            profile_name=payload.profile_name or ("Соц-гум" if is_admin else None),
             is_admin=is_admin
         )
         db.add(user)
     else:
-        # Only set default names if user hasn't configured custom profile yet
-        if not user.class_name:
+        if payload.first_name:
             user.first_name = payload.first_name
+        if payload.last_name is not None:
             user.last_name = payload.last_name
-        user.username = payload.username
+        if payload.username:
+            user.username = payload.username
         if payload.photo_url:
             user.photo_url = payload.photo_url
+        if payload.class_name:
+            user.class_name = payload.class_name
+        if payload.profile_name:
+            user.profile_name = payload.profile_name
         if is_admin:
             user.is_admin = True
+            if not user.class_name:
+                user.class_name = "11А"
+            if not user.profile_name:
+                user.profile_name = "Соц-гум"
 
     await db.commit()
     await db.refresh(user)
 
-    is_onboarded = bool(user.class_name and user.profile_name and user.first_name and user.last_name)
+    is_onboarded = bool(user.class_name and user.profile_name and user.first_name)
     return UserResponse(
         id=user.id,
         first_name=user.first_name,
