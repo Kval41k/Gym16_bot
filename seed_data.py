@@ -27,263 +27,279 @@ PROFILES_11A = [
 # Lessons for 11A fully synchronized with Google Calendar schedule
 LESSONS_11A = [
     # =========================================================
-    # ПОНЕДЕЛЬНИК (day_of_week = 0)
+    # ПОНЕДЕЛЬНИК (day_of_week = 0) 1–8 УРОКИ
     # =========================================================
     {
         "day_of_week": 0, "lesson_number": 1, "class_name": "11А",
-        "subject": "Разговоры о важном", "cabinet": "3/109", "teacher_name": "Иванова Е.В.",
-        "profile_name": None, "subgroup": None, "note": "Классный час (08:00 - 08:30)"
+        "subject": "Разговоры о важном", "cabinet": "3/109", "teacher_name": "Иванова Е. В.",
+        "profile_name": None, "subgroup": None, "note": "08:15 – 08:55"
     },
     {
         "day_of_week": 0, "lesson_number": 2, "class_name": "11А",
-        "subject": "Русский язык", "cabinet": "3/109", "teacher_name": "Иванова Е.В.",
-        "profile_name": None, "subgroup": None, "note": "Пара (1/2)"
+        "subject": "Русский язык", "cabinet": "3/109", "teacher_name": "Иванова Е. В.",
+        "profile_name": None, "subgroup": None, "note": "09:10 – 09:50"
     },
     {
         "day_of_week": 0, "lesson_number": 3, "class_name": "11А",
-        "subject": "Русский язык", "cabinet": "3/109", "teacher_name": "Иванова Е.В.",
-        "profile_name": None, "subgroup": None, "note": "Пара (2/2)"
+        "subject": "Русский язык", "cabinet": "3/109", "teacher_name": "Иванова Е. В.",
+        "profile_name": None, "subgroup": None, "note": "10:10 – 10:50"
     },
     {
         "day_of_week": 0, "lesson_number": 4, "class_name": "11А",
-        "subject": "История", "cabinet": "1/226", "teacher_name": "Подкорытова Р.З.",
-        "profile_name": "Соц-гум", "subgroup": None, "note": "Углубленный курс"
+        "subject": "Обществознание", "cabinet": "1/225", "teacher_name": "Васильева А. С.",
+        "profile_name": "Филологический", "subgroup": None, "note": "11:10 – 11:50"
     },
     {
         "day_of_week": 0, "lesson_number": 4, "class_name": "11А",
-        "subject": "Обществознание", "cabinet": "1/225", "teacher_name": "Васильева А.С.",
-        "profile_name": "Филологический", "subgroup": None, "note": None
+        "subject": "История", "cabinet": "1/226", "teacher_name": "Подкорытова Р. З.",
+        "profile_name": "Соц-гум", "subgroup": None, "note": "11:10 – 11:50"
     },
     {
         "day_of_week": 0, "lesson_number": 5, "class_name": "11А",
-        "subject": "История", "cabinet": "1/226", "teacher_name": "Подкорытова Р.З.",
-        "profile_name": "Соц-гум", "subgroup": None, "note": "Углубленный курс"
+        "subject": "Обществознание", "cabinet": "1/225", "teacher_name": "Васильева А. С.",
+        "profile_name": "Филологический", "subgroup": None, "note": "12:10 – 12:50"
     },
     {
         "day_of_week": 0, "lesson_number": 5, "class_name": "11А",
-        "subject": "Физика", "cabinet": "1/416", "teacher_name": "Трухина Ю.В.",
-        "profile_name": "Филологический", "subgroup": None, "note": None
+        "subject": "История", "cabinet": "1/226", "teacher_name": "Подкорытова Р. З.",
+        "profile_name": "Соц-гум", "subgroup": None, "note": "12:10 – 12:50"
     },
     {
         "day_of_week": 0, "lesson_number": 6, "class_name": "11А",
-        "subject": "Физика", "cabinet": "1/416", "teacher_name": "Трухина Ю.В.",
-        "profile_name": None, "subgroup": None, "note": None
+        "subject": "Физика", "cabinet": "1/416", "teacher_name": "Трухина Ю. В.",
+        "profile_name": None, "subgroup": None, "note": "13:00 – 13:40"
     },
     {
         "day_of_week": 0, "lesson_number": 7, "class_name": "11А",
-        "subject": "Информатика и ИКТ", "cabinet": "3/314", "teacher_name": "Тольянская В.В.",
-        "profile_name": "Соц-гум", "subgroup": None, "note": "IT Lab"
+        "subject": "Физика", "cabinet": "1/416", "teacher_name": "Трухина Ю. В.",
+        "profile_name": None, "subgroup": None, "note": "13:50 – 14:30"
     },
     {
-        "day_of_week": 0, "lesson_number": 7, "class_name": "11А",
-        "subject": "Литература", "cabinet": "3/109", "teacher_name": "Иванова Е.В.",
-        "profile_name": "Филологический", "subgroup": None, "note": None
+        "day_of_week": 0, "lesson_number": 8, "class_name": "11А",
+        "subject": "Литература", "cabinet": "3/109", "teacher_name": "Иванова Е. В.",
+        "profile_name": "Филологический", "subgroup": None, "note": "14:40 – 15:20"
+    },
+    {
+        "day_of_week": 0, "lesson_number": 8, "class_name": "11А",
+        "subject": "Информатика и ИКТ", "cabinet": "3/314", "teacher_name": "Тольянская В. В.",
+        "profile_name": "Соц-гум", "subgroup": None, "note": "14:40 – 15:20"
     },
 
     # =========================================================
-    # ВТОРНИК (day_of_week = 1)
+    # ВТОРНИК (day_of_week = 1) 1–8 УРОКИ
     # =========================================================
     {
         "day_of_week": 1, "lesson_number": 1, "class_name": "11А",
-        "subject": "Английский язык", "cabinet": "1/406", "teacher_name": "Бурейкевич Ю.Ю.",
-        "profile_name": "Соц-гум", "subgroup": None, "note": None
+        "subject": "Английский язык", "cabinet": "3/105", "teacher_name": "Першина С. Н.",
+        "profile_name": "Филологический", "subgroup": None, "note": "08:15 – 08:55"
     },
     {
         "day_of_week": 1, "lesson_number": 1, "class_name": "11А",
-        "subject": "Английский язык", "cabinet": "3/305", "teacher_name": "Першина С.Н.",
-        "profile_name": "Филологический", "subgroup": None, "note": None
+        "subject": "Английский язык", "cabinet": "1/406", "teacher_name": "Буракевич Ю. Ю.",
+        "profile_name": "Соц-гум", "subgroup": None, "note": "08:15 – 08:55"
     },
     {
         "day_of_week": 1, "lesson_number": 2, "class_name": "11А",
-        "subject": "Английский язык", "cabinet": "1/406", "teacher_name": "Бурейкевич Ю.Ю.",
-        "profile_name": "Соц-гум", "subgroup": None, "note": None
+        "subject": "Английский язык", "cabinet": "3/105", "teacher_name": "Першина С. Н.",
+        "profile_name": "Филологический", "subgroup": None, "note": "09:10 – 09:50"
+    },
+    {
+        "day_of_week": 1, "lesson_number": 2, "class_name": "11А",
+        "subject": "Английский язык", "cabinet": "1/406", "teacher_name": "Буракевич Ю. Ю.",
+        "profile_name": "Соц-гум", "subgroup": None, "note": "09:10 – 09:50"
     },
     {
         "day_of_week": 1, "lesson_number": 3, "class_name": "11А",
-        "subject": "География", "cabinet": "1/222", "teacher_name": "Ушакова И.Н.",
-        "profile_name": None, "subgroup": None, "note": "Пара (1/2)"
+        "subject": "География", "cabinet": "1/222", "teacher_name": "Ушакова И. Н.",
+        "profile_name": None, "subgroup": None, "note": "10:10 – 10:50"
     },
     {
         "day_of_week": 1, "lesson_number": 4, "class_name": "11А",
-        "subject": "География", "cabinet": "1/222", "teacher_name": "Ушакова И.Н.",
-        "profile_name": None, "subgroup": None, "note": "Пара (2/2)"
+        "subject": "География", "cabinet": "1/222", "teacher_name": "Ушакова И. Н.",
+        "profile_name": None, "subgroup": None, "note": "11:10 – 11:50"
     },
     {
         "day_of_week": 1, "lesson_number": 5, "class_name": "11А",
-        "subject": "Вероятность и статистика", "cabinet": "3/306", "teacher_name": "Ермакова М.В.",
-        "profile_name": None, "subgroup": None, "note": None
+        "subject": "Вероятность и статистика", "cabinet": "3/306", "teacher_name": "Ермакова М. В.",
+        "profile_name": None, "subgroup": None, "note": "12:10 – 12:50"
     },
     {
         "day_of_week": 1, "lesson_number": 6, "class_name": "11А",
-        "subject": "Алгебра и начала математического анализа", "cabinet": "3/306", "teacher_name": "Ермакова М.В.",
-        "profile_name": None, "subgroup": None, "note": None
+        "subject": "Алгебра и начала мат. анализа", "cabinet": "3/306", "teacher_name": "Ермакова М. В.",
+        "profile_name": None, "subgroup": None, "note": "13:00 – 13:40"
     },
     {
         "day_of_week": 1, "lesson_number": 7, "class_name": "11А",
-        "subject": "ЭК История политической и правовой мысли в России в 2-19 веках", "cabinet": "1/226", "teacher_name": "Подкорытова Р.З.",
-        "profile_name": "Соц-гум", "subgroup": None, "note": "Элективный курс"
+        "subject": "ЭК Родная лит. 19-20 вв.", "cabinet": "3/109", "teacher_name": "Иванова Е. В.",
+        "profile_name": "Филологический", "subgroup": None, "note": "13:50 – 14:30"
     },
     {
         "day_of_week": 1, "lesson_number": 7, "class_name": "11А",
-        "subject": "ЭК Родная литература 19-20 веков", "cabinet": "3/109", "teacher_name": "Иванова Е.В.",
-        "profile_name": "Филологический", "subgroup": None, "note": "Элективный курс"
+        "subject": "ЭК Ист. пол. мысли", "cabinet": "1/226", "teacher_name": "Подкорытова Р. З.",
+        "profile_name": "Соц-гум", "subgroup": None, "note": "13:50 – 14:30"
     },
     {
         "day_of_week": 1, "lesson_number": 8, "class_name": "11А",
-        "subject": "Консультация: Русский язык", "cabinet": "3/109", "teacher_name": "Иванова Е.В.",
-        "profile_name": None, "subgroup": None, "note": "Консультация 11 А"
+        "subject": "Консультация по русскому языку (11 «А»)", "cabinet": "3/109", "teacher_name": "Иванова Е. В.",
+        "profile_name": None, "subgroup": None, "note": "14:40 – 15:20"
     },
 
     # =========================================================
-    # СРЕДА (day_of_week = 2)
+    # СРЕДА (day_of_week = 2) 1–7 УРОКИ
     # =========================================================
     {
         "day_of_week": 2, "lesson_number": 1, "class_name": "11А",
-        "subject": "Обществознание", "cabinet": "1/226", "teacher_name": "Подкорытова Р.З.",
-        "profile_name": "Соц-гум", "subgroup": None, "note": "Пара (1/2)"
+        "subject": "Литература", "cabinet": "3/109", "teacher_name": "Иванова Е. В.",
+        "profile_name": "Филологический", "subgroup": None, "note": "08:15 – 08:55"
     },
     {
         "day_of_week": 2, "lesson_number": 1, "class_name": "11А",
-        "subject": "Литература", "cabinet": "3/109", "teacher_name": "Иванова Е.В.",
-        "profile_name": "Филологический", "subgroup": None, "note": None
+        "subject": "Обществознание", "cabinet": "1/226", "teacher_name": "Подкорытова Р. З.",
+        "profile_name": "Соц-гум", "subgroup": None, "note": "08:15 – 08:55"
     },
     {
         "day_of_week": 2, "lesson_number": 2, "class_name": "11А",
-        "subject": "Обществознание", "cabinet": "1/226", "teacher_name": "Подкорытова Р.З.",
-        "profile_name": "Соц-гум", "subgroup": None, "note": "Пара (2/2)"
+        "subject": "Литература", "cabinet": "3/109", "teacher_name": "Иванова Е. В.",
+        "profile_name": "Филологический", "subgroup": None, "note": "09:10 – 09:50"
+    },
+    {
+        "day_of_week": 2, "lesson_number": 2, "class_name": "11А",
+        "subject": "Обществознание", "cabinet": "1/226", "teacher_name": "Подкорытова Р. З.",
+        "profile_name": "Соц-гум", "subgroup": None, "note": "09:10 – 09:50"
     },
     {
         "day_of_week": 2, "lesson_number": 3, "class_name": "11А",
-        "subject": "Физическая культура", "cabinet": "сп.зал 3", "teacher_name": "Стародубцев Н.Л.",
-        "profile_name": None, "subgroup": None, "note": "Пара (1/2)"
+        "subject": "Физическая культура", "cabinet": "спортзал 3", "teacher_name": "Стародубцев Н. Л.",
+        "profile_name": None, "subgroup": None, "note": "10:10 – 10:50"
     },
     {
         "day_of_week": 2, "lesson_number": 4, "class_name": "11А",
-        "subject": "Физическая культура", "cabinet": "сп.зал 3", "teacher_name": "Стародубцев Н.Л.",
-        "profile_name": None, "subgroup": None, "note": "Пара (2/2)"
+        "subject": "Физическая культура", "cabinet": "спортзал 3", "teacher_name": "Стародубцев Н. Л.",
+        "profile_name": None, "subgroup": None, "note": "11:10 – 11:50"
     },
     {
         "day_of_week": 2, "lesson_number": 5, "class_name": "11А",
-        "subject": "Геометрия", "cabinet": "3/306", "teacher_name": "Ермакова М.В.",
-        "profile_name": None, "subgroup": None, "note": None
+        "subject": "Алгебра и начала мат. анализа", "cabinet": "3/306", "teacher_name": "Ермакова М. В.",
+        "profile_name": None, "subgroup": None, "note": "12:10 – 12:50"
     },
     {
         "day_of_week": 2, "lesson_number": 6, "class_name": "11А",
-        "subject": "Литература", "cabinet": "3/109", "teacher_name": "Иванова Е.В.",
-        "profile_name": "Соц-гум", "subgroup": None, "note": None
+        "subject": "Алгебра и начала мат. анализа", "cabinet": "3/306", "teacher_name": "Ермакова М. В.",
+        "profile_name": None, "subgroup": None, "note": "13:00 – 13:40"
     },
     {
-        "day_of_week": 2, "lesson_number": 6, "class_name": "11А",
-        "subject": "Английский язык", "cabinet": "3/305", "teacher_name": "Першина С.Н.",
-        "profile_name": "Филологический", "subgroup": None, "note": None
+        "day_of_week": 2, "lesson_number": 7, "class_name": "11А",
+        "subject": "Английский язык", "cabinet": "3/305", "teacher_name": "Першина С. Н.",
+        "profile_name": "Филологический", "subgroup": None, "note": "13:50 – 14:30"
+    },
+    {
+        "day_of_week": 2, "lesson_number": 7, "class_name": "11А",
+        "subject": "Литература", "cabinet": "3/109", "teacher_name": "Иванова Е. В.",
+        "profile_name": "Соц-гум", "subgroup": None, "note": "13:50 – 14:30"
     },
 
     # =========================================================
-    # ЧЕТВЕРГ (day_of_week = 3)
+    # ЧЕТВЕРГ (day_of_week = 3) 1–6 УРОКИ
     # =========================================================
     {
         "day_of_week": 3, "lesson_number": 1, "class_name": "11А",
-        "subject": "Английский язык", "cabinet": "1/406", "teacher_name": "Бурейкевич Ю.Ю.",
-        "profile_name": "Соц-гум", "subgroup": None, "note": None
+        "subject": "Информатика и ИКТ", "cabinet": "3/314", "teacher_name": "Тольянская В. В.",
+        "profile_name": "Филологический", "subgroup": None, "note": "08:15 – 08:55"
     },
     {
         "day_of_week": 3, "lesson_number": 1, "class_name": "11А",
-        "subject": "Информатика и ИКТ", "cabinet": "3/314", "teacher_name": "Тольянская В.В.",
-        "profile_name": "Филологический", "subgroup": None, "note": None
+        "subject": "Английский язык", "cabinet": "1/406", "teacher_name": "Буракевич Ю. Ю.",
+        "profile_name": "Соц-гум", "subgroup": None, "note": "08:15 – 08:55"
     },
     {
         "day_of_week": 3, "lesson_number": 2, "class_name": "11А",
-        "subject": "ЭК Родной язык в жизни общества", "cabinet": "3/109", "teacher_name": "Иванова Е.В.",
-        "profile_name": None, "subgroup": None, "note": "Элективный курс"
+        "subject": "ЭК Родной язык в жизни общества", "cabinet": "3/109", "teacher_name": "Иванова Е. В.",
+        "profile_name": None, "subgroup": None, "note": "09:10 – 09:50"
     },
     {
         "day_of_week": 3, "lesson_number": 3, "class_name": "11А",
-        "subject": "Алгебра и начала математического анализа", "cabinet": "3/306", "teacher_name": "Ермакова М.В.",
-        "profile_name": None, "subgroup": None, "note": "Пара (1/2)"
+        "subject": "Геометрия", "cabinet": "3/306", "teacher_name": "Ермакова М. В.",
+        "profile_name": None, "subgroup": None, "note": "10:10 – 10:50"
     },
     {
         "day_of_week": 3, "lesson_number": 4, "class_name": "11А",
-        "subject": "Алгебра и начала математического анализа", "cabinet": "3/306", "teacher_name": "Ермакова М.В.",
-        "profile_name": None, "subgroup": None, "note": "Пара (2/2)"
+        "subject": "Геометрия", "cabinet": "3/306", "teacher_name": "Ермакова М. В.",
+        "profile_name": None, "subgroup": None, "note": "11:10 – 11:50"
     },
     {
         "day_of_week": 3, "lesson_number": 5, "class_name": "11А",
-        "subject": "История", "cabinet": "1/226", "teacher_name": "Подкорытова Р.З.",
-        "profile_name": "Соц-гум", "subgroup": None, "note": None
+        "subject": "История", "cabinet": "1/225", "teacher_name": "Васильева А. С.",
+        "profile_name": "Филологический", "subgroup": None, "note": "12:10 – 12:50"
     },
     {
         "day_of_week": 3, "lesson_number": 5, "class_name": "11А",
-        "subject": "История", "cabinet": "1/225", "teacher_name": "Васильева А.С.",
-        "profile_name": "Филологический", "subgroup": None, "note": None
+        "subject": "История", "cabinet": "1/226", "teacher_name": "Подкорытова Р. З.",
+        "profile_name": "Соц-гум", "subgroup": None, "note": "12:10 – 12:50"
     },
     {
         "day_of_week": 3, "lesson_number": 6, "class_name": "11А",
-        "subject": "Обществознание", "cabinet": "1/226", "teacher_name": "Подкорытова Р.З.",
-        "profile_name": "Соц-гум", "subgroup": None, "note": None
+        "subject": "ЭК Разговорный англ. яз.", "cabinet": "3/305", "teacher_name": "Першина С. Н.",
+        "profile_name": "Филологический", "subgroup": None, "note": "13:00 – 13:40"
     },
     {
-        "day_of_week": 3, "lesson_number": 7, "class_name": "11А",
-        "subject": "ЭК Основы маркетинга", "cabinet": "1/226", "teacher_name": "Подкорытова Р.З.",
-        "profile_name": "Соц-гум", "subgroup": None, "note": "Элективный курс"
-    },
-    {
-        "day_of_week": 3, "lesson_number": 7, "class_name": "11А",
-        "subject": "ЭК Разговорный английский язык", "cabinet": "3/305", "teacher_name": "Першина С.Н.",
-        "profile_name": "Филологический", "subgroup": None, "note": "Элективный курс"
+        "day_of_week": 3, "lesson_number": 6, "class_name": "11А",
+        "subject": "ЭК Основы маркетинга", "cabinet": "1/226", "teacher_name": "Подкорытова Р. З.",
+        "profile_name": "Соц-гум", "subgroup": None, "note": "13:00 – 13:40"
     },
 
     # =========================================================
-    # ПЯТНИЦА (day_of_week = 4)
+    # ПЯТНИЦА (day_of_week = 4) 1–6 УРОКИ (ВСЕ ПАРАМИ)
     # =========================================================
     {
         "day_of_week": 4, "lesson_number": 1, "class_name": "11А",
-        "subject": "Литература", "cabinet": "3/109", "teacher_name": "Иванова Е.В.",
-        "profile_name": "Соц-гум", "subgroup": None, "note": "Пара (1/2)"
+        "subject": "Английский язык", "cabinet": "3/105", "teacher_name": "Першина С. Н.",
+        "profile_name": "Филологический", "subgroup": None, "note": "08:15 – 08:55"
     },
     {
         "day_of_week": 4, "lesson_number": 1, "class_name": "11А",
-        "subject": "Английский язык", "cabinet": "3/305", "teacher_name": "Першина С.Н.",
-        "profile_name": "Филологический", "subgroup": None, "note": None
+        "subject": "Литература", "cabinet": "3/109", "teacher_name": "Иванова Е. В.",
+        "profile_name": "Соц-гум", "subgroup": None, "note": "08:15 – 08:55"
     },
     {
         "day_of_week": 4, "lesson_number": 2, "class_name": "11А",
-        "subject": "Литература", "cabinet": "3/109", "teacher_name": "Иванова Е.В.",
-        "profile_name": None, "subgroup": None, "note": "Пара (2/2)"
+        "subject": "Английский язык", "cabinet": "3/105", "teacher_name": "Першина С. Н.",
+        "profile_name": "Филологический", "subgroup": None, "note": "09:10 – 09:50"
+    },
+    {
+        "day_of_week": 4, "lesson_number": 2, "class_name": "11А",
+        "subject": "Литература", "cabinet": "3/109", "teacher_name": "Иванова Е. В.",
+        "profile_name": "Соц-гум", "subgroup": None, "note": "09:10 – 09:50"
     },
     {
         "day_of_week": 4, "lesson_number": 3, "class_name": "11А",
-        "subject": "Обществознание", "cabinet": "1/226", "teacher_name": "Подкорытова Р.З.",
-        "profile_name": "Соц-гум", "subgroup": None, "note": "Пара (1/2)"
+        "subject": "Литература", "cabinet": "3/109", "teacher_name": "Иванова Е. В.",
+        "profile_name": "Филологический", "subgroup": None, "note": "10:10 – 10:50"
+    },
+    {
+        "day_of_week": 4, "lesson_number": 3, "class_name": "11А",
+        "subject": "Обществознание", "cabinet": "1/226", "teacher_name": "Подкорытова Р. З.",
+        "profile_name": "Соц-гум", "subgroup": None, "note": "10:10 – 10:50"
     },
     {
         "day_of_week": 4, "lesson_number": 4, "class_name": "11А",
-        "subject": "Обществознание", "cabinet": "1/226", "teacher_name": "Подкорытова Р.З.",
-        "profile_name": "Соц-гум", "subgroup": None, "note": "Пара (2/2)"
+        "subject": "Литература", "cabinet": "3/109", "teacher_name": "Иванова Е. В.",
+        "profile_name": "Филологический", "subgroup": None, "note": "11:10 – 11:50"
+    },
+    {
+        "day_of_week": 4, "lesson_number": 4, "class_name": "11А",
+        "subject": "Обществознание", "cabinet": "1/226", "teacher_name": "Подкорытова Р. З.",
+        "profile_name": "Соц-гум", "subgroup": None, "note": "11:10 – 11:50"
     },
     {
         "day_of_week": 4, "lesson_number": 5, "class_name": "11А",
-        "subject": "Химия", "cabinet": "1/411", "teacher_name": "Юрина Т.Ю.",
-        "profile_name": None, "subgroup": None, "note": None
+        "subject": "Химия", "cabinet": "1/411", "teacher_name": "Юрина Т. Ю.",
+        "profile_name": None, "subgroup": None, "note": "12:10 – 12:50"
     },
     {
         "day_of_week": 4, "lesson_number": 6, "class_name": "11А",
-        "subject": "Консультация: Литература", "cabinet": "3/109", "teacher_name": "Иванова Е.В.",
-        "profile_name": None, "subgroup": None, "note": "Консультация 11 А"
+        "subject": "Химия", "cabinet": "1/411", "teacher_name": "Юрина Т. Ю.",
+        "profile_name": None, "subgroup": None, "note": "13:00 – 13:40"
     },
-
-    # =========================================================
-    # СУББОТА (day_of_week = 5)
-    # =========================================================
-    {
-        "day_of_week": 5, "lesson_number": 1, "class_name": "11А",
-        "subject": "Консультация по профильной математике", "cabinet": "3/306", "teacher_name": "Ермакова М.В.",
-        "profile_name": None, "subgroup": None, "note": "10:00 — 12:00"
-    },
-    {
-        "day_of_week": 5, "lesson_number": 2, "class_name": "11А",
-        "subject": "Подготовка к ЕГЭ по информатике", "cabinet": "3/314", "teacher_name": "Тольянская В.В.",
-        "profile_name": None, "subgroup": None, "note": "13:00 — 15:00"
-    }
 ]
 
 LESSONS_11V = [

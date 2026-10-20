@@ -121,6 +121,7 @@ class NewsResponse(BaseModel):
     image_url: Optional[str] = None
     author_name: str
     author_class: Optional[str] = None
+    author_photo_url: Optional[str] = None
     is_anonymous: bool = False
     status: str
     created_at: str

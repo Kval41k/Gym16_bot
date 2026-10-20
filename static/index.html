@@ -657,7 +657,7 @@
       <div class="p-4 border-b border-zinc-200/60 dark:border-zinc-800/80 flex items-center justify-between">
         <div class="w-12 h-1 bg-zinc-300 dark:bg-zinc-700 rounded-full mx-auto absolute left-0 right-0 top-2.5"></div>
         <h4 id="comments-sheet-title" class="text-base font-bold text-zinc-900 dark:text-white pt-2">Комментарии</h4>
-        <button id="close-comments-btn" class="w-8 h-8 rounded-full bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center text-zinc-500 font-bold text-xs pt-1">✕</button>
+        <button id="close-comments-btn" type="button" onclick="closeCommentsSheet()" class="w-8 h-8 rounded-full bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 flex items-center justify-center text-zinc-500 font-bold text-xs pt-1 active-press cursor-pointer">✕</button>
       </div>
 
       <!-- Comments Scrollable List -->
@@ -668,7 +668,7 @@
       <!-- New Comment Input Bar -->
       <div class="p-3 bg-zinc-50 dark:bg-ios-cardDark2 border-t border-zinc-200/60 dark:border-zinc-800/80 bottom-tab-safe flex items-center space-x-2">
         <input id="new-comment-input" type="text" placeholder="Написать комментарий..." class="flex-1 px-4 py-2.5 rounded-full bg-white dark:bg-zinc-800 text-sm border-0 focus:ring-2 focus:ring-ios-blue outline-none text-zinc-900 dark:text-white">
-        <button id="send-comment-btn" class="w-10 h-10 rounded-full bg-ios-blue text-white flex items-center justify-center font-bold text-sm active-press shadow-sm flex-shrink-0">
+        <button id="send-comment-btn" type="button" onclick="sendNewComment()" class="w-10 h-10 rounded-full bg-ios-blue text-white flex items-center justify-center font-bold text-sm active-press shadow-sm flex-shrink-0 cursor-pointer">
           ↑
         </button>
       </div>
@@ -1808,7 +1808,16 @@
 
     function renderNewsPost(post) {
       const isAnon = post.is_anonymous;
-      const avatarContent = isAnon ? "🎭" : (post.author_name ? post.author_name.charAt(0) : "Г");
+      let avatarHtml = "";
+      if (isAnon) {
+        avatarHtml = `<div class="w-9 h-9 rounded-full bg-zinc-200 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 text-sm font-bold flex items-center justify-center shadow-xs">🎭</div>`;
+      } else if (post.author_photo_url) {
+        avatarHtml = `<img src="${post.author_photo_url}" alt="${post.author_name}" class="w-9 h-9 rounded-full object-cover shadow-xs border border-zinc-200/50 dark:border-zinc-700/50" onerror="this.outerHTML='<div class=\'w-9 h-9 rounded-full bg-gradient-to-tr from-ios-blue to-ios-indigo text-white text-xs font-bold flex items-center justify-center shadow-xs\'>${post.author_name ? post.author_name.charAt(0) : 'Г'}</div>'">`;
+      } else {
+        const initial = post.author_name ? post.author_name.charAt(0) : "Г";
+        avatarHtml = `<div class="w-9 h-9 rounded-full bg-gradient-to-tr from-ios-blue to-ios-indigo text-white text-xs font-bold flex items-center justify-center shadow-xs">${initial}</div>`;
+      }
+
       const authorClassBadge = (!isAnon && post.author_class)
         ? `<span class="px-1.5 py-0.5 rounded-md bg-blue-50 text-ios-blue dark:bg-blue-950 dark:text-blue-300 text-[10px] font-bold border border-blue-200/50 dark:border-blue-900/50">${post.author_class}</span>`
         : "";
@@ -1840,9 +1849,7 @@
           <!-- Post Author Header with Name, Class or Anonymous Badge & Admin Controls -->
           <div class="flex items-center justify-between">
             <div class="flex items-center space-x-2.5">
-              <div class="w-9 h-9 rounded-full ${isAnon ? "bg-zinc-200 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 text-sm" : "bg-gradient-to-tr from-ios-blue to-ios-indigo text-white text-xs"} font-bold flex items-center justify-center shadow-xs">
-                ${avatarContent}
-              </div>
+              ${avatarHtml}
               <div>
                 <div class="text-xs font-bold text-zinc-900 dark:text-white leading-tight flex items-center space-x-1.5">
                   <span>${post.author_name}</span>
@@ -1881,15 +1888,6 @@
     // --------------------------------------------------------
     // Propose News Modal Handling
     // --------------------------------------------------------
-    const proposeModal = document.getElementById("propose-news-modal");
-    const openProposeModalBtn = document.getElementById("open-propose-modal-btn");
-    const closeProposeModalBtn = document.getElementById("close-propose-modal-btn");
-    const proposeFileInput = document.getElementById("propose-file");
-    const proposeFileName = document.getElementById("propose-file-name");
-    const proposeImagePreview = document.getElementById("propose-image-preview");
-    const proposeImgTag = document.getElementById("propose-img-tag");
-    // window.selectedImageFile managed globally
-
     function openProposeNewsModal() {
       const modal = document.getElementById("propose-news-modal");
       if (modal) {
@@ -1915,29 +1913,34 @@
       const contentEl = document.getElementById("propose-content");
       if (contentEl) contentEl.value = "";
       window.selectedImageFile = null;
-      if (proposeFileName) proposeFileName.textContent = "Файл не выбран";
-      if (proposeImagePreview) proposeImagePreview.classList.add("hidden");
+      const fn = document.getElementById("propose-file-name");
+      if (fn) fn.textContent = "Файл не выбран";
+      const pr = document.getElementById("propose-image-preview");
+      if (pr) pr.classList.add("hidden");
       const fileInput = document.getElementById("propose-file");
       if (fileInput) fileInput.value = "";
     }
 
-    openProposeModalBtn?.addEventListener("click", openProposeNewsModal);
-    closeProposeModalBtn?.addEventListener("click", closeProposeNewsModal);
+    document.getElementById("open-propose-modal-btn")?.addEventListener("click", openProposeNewsModal);
+    document.getElementById("close-propose-modal-btn")?.addEventListener("click", closeProposeNewsModal);
 
     // Backdrop click to close propose modal
     document.getElementById("propose-news-modal")?.addEventListener("click", (e) => {
       if (e.target.id === "propose-news-modal") closeProposeNewsModal();
     });
 
-    proposeFileInput?.addEventListener("change", (e) => {
+    document.getElementById("propose-file")?.addEventListener("change", (e) => {
       const file = e.target.files[0];
       if (file) {
         window.selectedImageFile = file;
-        if (proposeFileName) proposeFileName.textContent = file.name;
+        const fn = document.getElementById("propose-file-name");
+        if (fn) fn.textContent = file.name;
         const reader = new FileReader();
         reader.onload = (re) => {
-          if (proposeImgTag) proposeImgTag.src = re.target.result;
-          if (proposeImagePreview) proposeImagePreview.classList.remove("hidden");
+          const imgTag = document.getElementById("propose-img-tag");
+          if (imgTag) imgTag.src = re.target.result;
+          const pr = document.getElementById("propose-image-preview");
+          if (pr) pr.classList.remove("hidden");
         };
         reader.readAsDataURL(file);
       }

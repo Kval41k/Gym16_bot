@@ -755,7 +755,7 @@ async def get_news(
     query = (
         select(NewsPost)
         .where(NewsPost.status == "approved")
-        .options(selectinload(NewsPost.reactions), selectinload(NewsPost.comments))
+        .options(selectinload(NewsPost.reactions), selectinload(NewsPost.comments), selectinload(NewsPost.author))
         .order_by(NewsPost.created_at.desc())
         .offset(offset)
         .limit(limit)
@@ -803,6 +803,10 @@ async def get_news(
         else:
             formatted_date = ""
 
+        author_photo = None
+        if not p.is_anonymous and p.author and p.author.photo_url:
+            author_photo = p.author.photo_url
+
         response.append(NewsResponse(
             id=p.id,
             title=p.title,
@@ -810,6 +814,7 @@ async def get_news(
             image_url=p.image_url,
             author_name=display_author,
             author_class=display_class,
+            author_photo_url=author_photo,
             is_anonymous=p.is_anonymous,
             status=p.status,
             created_at=formatted_date,
@@ -880,6 +885,10 @@ async def suggest_news(
 
     reactions_list = [ReactionCount(emoji=e, count=0, user_reacted=False) for e in EMOJI_PALETTE]
 
+    user_photo = None
+    if not new_post.is_anonymous and user and user.photo_url:
+        user_photo = user.photo_url
+
     return NewsResponse(
         id=new_post.id,
         title=new_post.title,
@@ -887,6 +896,7 @@ async def suggest_news(
         image_url=new_post.image_url,
         author_name="Анонимно" if new_post.is_anonymous else new_post.author_name,
         author_class=None if new_post.is_anonymous else new_post.author_class,
+        author_photo_url=user_photo,
         is_anonymous=new_post.is_anonymous,
         status=new_post.status,
         created_at=datetime.now(TYUMEN_TZ).strftime("%d.%m.%Y %H:%M"),
