@@ -42,6 +42,7 @@ class UserResponse(BaseModel):
     subgroup: Optional[int] = None
     is_admin: bool
     is_onboarded: bool = False
+    is_banned: bool = False
 
 # -------------------------------------------------------------
 # Bell & Live Schedule Schemas
@@ -104,6 +105,7 @@ class NewsCreateRequest(BaseModel):
     author_id: Optional[int] = 1097947498
     author_name: Optional[str] = "Гимназист"
     author_class: Optional[str] = None
+    author_username: Optional[str] = None
     is_anonymous: bool = False
 
 class NewsEditRequest(BaseModel):
@@ -126,6 +128,7 @@ class NewsResponse(BaseModel):
     author_name: str
     author_class: Optional[str] = None
     author_photo_url: Optional[str] = None
+    author_username: Optional[str] = None
     is_anonymous: bool = False
     status: str
     created_at: str
@@ -163,8 +166,13 @@ class UserAdminItem(BaseModel):
     class_name: Optional[str] = None
     profile_name: Optional[str] = None
     is_admin: bool
+    is_banned: bool = False
     is_onboarded: bool
     created_at: Optional[str] = None
+
+class UserBanRequest(BaseModel):
+    admin_id: int
+    is_banned: bool
 
 class EgeSubjectResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)

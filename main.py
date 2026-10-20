@@ -21,7 +21,7 @@ from fastapi import (
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.gzip import GZipMiddleware
 import time
-from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import delete, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -35,7 +35,7 @@ from schemas import (
     EgeMaterialCreateRequest, EgeMaterialResponse, EgeSubjectResponse,
     LessonItem, LessonSlot, LiveStatusResponse, ModerationActionRequest,
     NewsCreateRequest, NewsEditRequest, NewsResponse, ReactionCount, ReactionToggleRequest,
-    StructureResponse, UserAdminItem, UserProfileUpdate, UserResponse, UserSyncRequest
+    StructureResponse, UserAdminItem, UserBanRequest, UserProfileUpdate, UserResponse, UserSyncRequest
 )
 
 # Tyumen Timezone: UTC+5 (Asia/Yekaterinburg)
@@ -175,20 +175,27 @@ async def notify_admins_about_post(
     author_name: str, 
     author_class: Optional[str], 
     is_anonymous: bool, 
-    image_url: Optional[str]
+    image_url: Optional[str],
+    author_username: Optional[str] = None,
+    author_id: Optional[int] = None
 ):
     """
     Sends notification to Telegram administrators when a new news post is suggested.
-    Always reveals author identity and class to admins for moderation safety.
+    Always reveals author identity, class, and Telegram username to admins for moderation safety.
     Guarantees photo is attached and delivered via multipart sendPhoto to admins.
     """
     if not settings.BOT_TOKEN or not settings.admin_ids or "ABCdefGHI" in settings.BOT_TOKEN:
         return
 
     bot_url = f"https://api.telegram.org/bot{settings.BOT_TOKEN}"
+    
+    clean_username = f"@{author_username.lstrip('@')}" if author_username else "без @username"
     author_info = f"{html.escape(author_name)} ({html.escape(author_class) if author_class else 'класс не указан'})"
+    username_line = f"💬 <b>Телеграм:</b> <b>{html.escape(clean_username)}</b>"
+    if author_id:
+        username_line += f" [ID: <code>{author_id}</code>]"
     if is_anonymous:
-        author_info += " <b>[🎭 Анонимно в ленте]</b>"
+        username_line += " • <i>(🎭 В ленте будет анонимно)</i>"
 
     title_safe = html.escape(title[:100])
     content_safe = html.escape(content[:450])
@@ -199,6 +206,7 @@ async def notify_admins_about_post(
         f"📢 <b>Новое предложение в школьную ленту (#{post_id})</b>\n\n"
         f"📝 <b>Заголовок:</b> {title_safe}\n"
         f"👤 <b>Автор:</b> {author_info}\n"
+        f"{username_line}\n"
         f"📄 <b>Текст:</b>\n{content_safe}\n\n"
         f"ℹ️ <i>Публикация и отклонение производятся в мини-приложении во вкладке «Новости» → «📬 Модерация».</i>"
     )
@@ -208,7 +216,7 @@ async def notify_admins_about_post(
         reply_markup = {
             "inline_keyboard": [
                 [
-                    {"text": "📱 Открыть модерацию в приложении", "web_app": {"url": f"{settings.BASE_URL}/?v=15.0"}}
+                    {"text": "📱 Открыть модерацию в приложении", "web_app": {"url": f"{settings.BASE_URL}/?v=16.0"}}
                 ]
             ]
         }
@@ -408,6 +416,7 @@ async def sync_user(payload: UserSyncRequest, db: AsyncSession = Depends(get_db)
         profile_name=user.profile_name,
         subgroup=user.subgroup,
         is_admin=user.is_admin,
+        is_banned=user.is_banned,
         is_onboarded=is_onboarded
     )
 
@@ -428,6 +437,7 @@ async def get_user_profile(user_id: int, db: AsyncSession = Depends(get_db)):
         profile_name=user.profile_name,
         subgroup=user.subgroup,
         is_admin=user.is_admin,
+        is_banned=user.is_banned,
         is_onboarded=is_onboarded
     )
 
@@ -450,6 +460,9 @@ async def update_user_profile(user_id: int, payload: UserProfileUpdate, db: Asyn
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
+    if user.is_banned:
+        raise HTTPException(status_code=403, detail="Ваш аккаунт заблокирован администратором.")
+
     user.class_name = payload.class_name.strip()
     user.profile_name = payload.profile_name.strip()
     user.first_name = first_name
@@ -469,6 +482,7 @@ async def update_user_profile(user_id: int, payload: UserProfileUpdate, db: Asyn
         profile_name=user.profile_name,
         subgroup=user.subgroup,
         is_admin=user.is_admin,
+        is_banned=user.is_banned,
         is_onboarded=True
     )
 
@@ -857,11 +871,19 @@ async def suggest_news(
             id=author_id,
             first_name=payload.author_name or "Гимназист",
             last_name="",
-            username=None,
+            username=payload.author_username.lstrip("@") if payload.author_username else None,
             class_name=payload.author_class or "11А",
             is_admin=(author_id in settings.admin_ids)
         )
         db.add(user)
+        await db.commit()
+        await db.refresh(user)
+
+    if user.is_banned:
+        raise HTTPException(status_code=403, detail="Ваш аккаунт заблокирован администратором.")
+
+    if payload.author_username and not user.username:
+        user.username = payload.author_username.lstrip("@")
         await db.commit()
         await db.refresh(user)
 
@@ -896,7 +918,9 @@ async def suggest_news(
         author_name=new_post.author_name,
         author_class=new_post.author_class,
         is_anonymous=new_post.is_anonymous,
-        image_url=new_post.image_url
+        image_url=new_post.image_url,
+        author_username=user.username or payload.author_username,
+        author_id=user.id
     )
 
     reactions_list = [ReactionCount(emoji=e, count=0, user_reacted=False) for e in EMOJI_PALETTE]
@@ -934,6 +958,10 @@ async def toggle_reaction(
     post = await db.get(NewsPost, post_id)
     if not post or post.status != "approved":
         raise HTTPException(status_code=404, detail="News post not found or not approved")
+
+    user = await db.get(User, payload.user_id)
+    if user and user.is_banned:
+        raise HTTPException(status_code=403, detail="Ваш аккаунт заблокирован администратором.")
 
     # Check if this exact reaction already exists
     res = await db.execute(
@@ -1036,6 +1064,10 @@ async def add_comment(
     if not post or post.status != "approved":
         raise HTTPException(status_code=404, detail="News post not found")
 
+    user = await db.get(User, payload.user_id)
+    if user and user.is_banned:
+        raise HTTPException(status_code=403, detail="Ваш аккаунт заблокирован администратором.")
+
     new_comment = Comment(
         post_id=post_id,
         user_id=payload.user_id,
@@ -1075,6 +1107,12 @@ async def get_pending_news(
     )
     posts = res.scalars().all()
 
+    author_ids = {p.author_id for p in posts if p.author_id}
+    users_by_id = {}
+    if author_ids:
+        u_res = await db.execute(select(User).where(User.id.in_(author_ids)))
+        users_by_id = {u.id: u for u in u_res.scalars().all()}
+
     return [
         NewsResponse(
             id=p.id,
@@ -1083,6 +1121,7 @@ async def get_pending_news(
             image_url=p.image_url,
             author_name=p.author_name,
             author_class=p.author_class,
+            author_username=users_by_id.get(p.author_id).username if users_by_id.get(p.author_id) else None,
             is_anonymous=p.is_anonymous,
             status=p.status,
             created_at=p.created_at.strftime("%d.%m.%Y %H:%M") if p.created_at else "",
@@ -1471,7 +1510,8 @@ async def delete_ege_material(
     return {"status": "success", "material_id": material_id, "action": "deleted"}
 
 # -------------------------------------------------------------
-# Admin User List Endpoint
+# -------------------------------------------------------------
+# Admin User List & Management Endpoints
 # -------------------------------------------------------------
 @app.get("/api/admin/users", response_model=List[UserAdminItem])
 async def get_all_users_for_admin(
@@ -1497,7 +1537,405 @@ async def get_all_users_for_admin(
             class_name=u.class_name,
             profile_name=u.profile_name,
             is_admin=u.is_admin,
+            is_banned=u.is_banned,
             is_onboarded=is_onboarded,
             created_at=c_str
         ))
     return result
+
+@app.post("/api/admin/users/{user_id}/ban")
+async def toggle_user_ban(
+    user_id: int,
+    payload: UserBanRequest,
+    db: AsyncSession = Depends(get_db)
+):
+    """Allows administrator to ban or unban a user."""
+    if not await check_is_admin(payload.admin_id, db):
+        raise HTTPException(status_code=403, detail="Admin privileges required")
+
+    if user_id in settings.admin_ids or user_id == 1097947498:
+        raise HTTPException(status_code=400, detail="Нельзя заблокировать администратора")
+
+    user = await db.get(User, user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="Пользователь не найден")
+
+    user.is_banned = payload.is_banned
+    await db.commit()
+    await db.refresh(user)
+
+    action_text = "заблокирован" if user.is_banned else "разблокирован"
+    return {
+        "status": "success",
+        "user_id": user.id,
+        "is_banned": user.is_banned,
+        "message": f"Пользователь {user.first_name} {user.last_name or ''} (@{user.username or 'нет'}) успешно {action_text}."
+    }
+
+@app.get("/api/admin/users/export")
+async def export_users_csv(
+    admin_id: int = Query(...),
+    db: AsyncSession = Depends(get_db)
+):
+    """Exports all registered users into a CSV spreadsheet file."""
+    if not await check_is_admin(admin_id, db):
+        raise HTTPException(status_code=403, detail="Admin privileges required")
+
+    res = await db.execute(select(User).order_by(User.created_at.desc()))
+    users = res.scalars().all()
+
+    import csv
+    import io
+
+    output = io.StringIO()
+    output.write("\ufeff")  # UTF-8 BOM for Microsoft Excel compatibility
+    writer = csv.writer(output, delimiter=";", quoting=csv.QUOTE_MINIMAL)
+    writer.writerow([
+        "Telegram ID",
+        "Имя",
+        "Фамилия",
+        "Username",
+        "Класс",
+        "Профиль",
+        "Статус",
+        "Роль",
+        "Дата регистрации"
+    ])
+
+    for u in users:
+        status_str = "Заблокирован 🚫" if u.is_banned else "Активен 🟢"
+        role_str = "Администратор 👑" if u.is_admin else "Ученик 🎓"
+        uname_str = f"@{u.username}" if u.username else "—"
+        c_str = u.created_at.strftime("%d.%m.%Y %H:%M") if u.created_at else "—"
+        writer.writerow([
+            str(u.id),
+            u.first_name or "",
+            u.last_name or "",
+            uname_str,
+            u.class_name or "—",
+            u.profile_name or "—",
+            status_str,
+            role_str,
+            c_str
+        ])
+
+    csv_bytes = output.getvalue().encode("utf-8")
+    return StreamingResponse(
+        io.BytesIO(csv_bytes),
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": "attachment; filename=gym16_users.csv"}
+    )
+
+@app.get("/admin/users", response_class=HTMLResponse)
+async def admin_users_dashboard_page(
+    admin_id: Optional[int] = Query(None),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Dedicated web dashboard page where administrator can view all users and toggle bans.
+    """
+    admin_uid = admin_id or 1097947498
+    if not await check_is_admin(admin_uid, db):
+        return HTMLResponse(
+            "<h3>⛔ Доступ запрещен. Требуются права администратора.</h3>",
+            status_code=403
+        )
+
+    res = await db.execute(select(User).order_by(User.created_at.desc()))
+    users = res.scalars().all()
+
+    total_count = len(users)
+    banned_count = sum(1 for u in users if u.is_banned)
+    active_count = total_count - banned_count
+
+    rows_html = ""
+    for u in users:
+        is_adm = u.is_admin or u.id in settings.admin_ids or u.id == 1097947498
+        status_badge = (
+            '<span class="badge badge-banned">🚫 Заблокирован</span>'
+            if u.is_banned else
+            '<span class="badge badge-active">🟢 Активен</span>'
+        )
+        role_badge = '<span class="badge badge-admin">Админ 👑</span>' if is_adm else '<span class="badge badge-user">Ученик</span>'
+        uname = f'<a href="https://t.me/{u.username}" target="_blank" class="tg-link">@{u.username}</a>' if u.username else '<span class="text-muted">нет</span>'
+        c_date = u.created_at.strftime("%d.%m.%Y %H:%M") if u.created_at else "—"
+        
+        if is_adm:
+            btn_action = '<span class="text-muted text-sm">Администратор</span>'
+        elif u.is_banned:
+            btn_action = f'<button onclick="toggleBan({u.id}, false)" class="btn btn-unban">✅ Разбанить</button>'
+        else:
+            btn_action = f'<button onclick="toggleBan({u.id}, true)" class="btn btn-ban">🚫 Забанить</button>'
+
+        rows_html += f"""
+        <tr data-user-id="{u.id}" class="user-row {'row-banned' if u.is_banned else ''}">
+            <td><code>{u.id}</code></td>
+            <td><b>{html.escape(u.first_name)} {html.escape(u.last_name or '')}</b></td>
+            <td>{uname}</td>
+            <td><span class="badge badge-class">{html.escape(u.class_name or '—')}</span></td>
+            <td>{html.escape(u.profile_name or '—')}</td>
+            <td>{role_badge}</td>
+            <td id="status-{u.id}">{status_badge}</td>
+            <td class="text-muted text-sm">{c_date}</td>
+            <td id="action-{u.id}">{btn_action}</td>
+        </tr>
+        """
+
+    html_content = f"""<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Управление пользователями — Гимназия №16</title>
+    <style>
+        :root {{
+            --bg: #F2F2F7;
+            --card: #FFFFFF;
+            --text: #1C1C1E;
+            --muted: #8E8E93;
+            --blue: #007AFF;
+            --green: #34C759;
+            --red: #FF3B30;
+            --border: #E5E5EA;
+        }}
+        @media (prefers-color-scheme: dark) {{
+            :root {{
+                --bg: #000000;
+                --card: #1C1C1E;
+                --text: #FFFFFF;
+                --muted: #8E8E93;
+                --blue: #0A84FF;
+                --green: #30D158;
+                --red: #FF453A;
+                --border: #2C2C2E;
+            }}
+        }}
+        body {{
+            font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, sans-serif;
+            background-color: var(--bg);
+            color: var(--text);
+            margin: 0;
+            padding: 20px;
+        }}
+        .container {{
+            max-width: 1100px;
+            margin: 0 auto;
+        }}
+        .header {{
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 12px;
+            margin-bottom: 20px;
+        }}
+        h1 {{
+            margin: 0;
+            font-size: 24px;
+            font-weight: 700;
+        }}
+        .stats {{
+            display: flex;
+            gap: 12px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }}
+        .stat-card {{
+            flex: 1;
+            min-width: 140px;
+            background: var(--card);
+            border-radius: 16px;
+            padding: 14px 18px;
+            border: 1px solid var(--border);
+        }}
+        .stat-num {{
+            font-size: 22px;
+            font-weight: 700;
+        }}
+        .stat-label {{
+            font-size: 12px;
+            color: var(--muted);
+            margin-top: 2px;
+        }}
+        .controls {{
+            display: flex;
+            gap: 12px;
+            margin-bottom: 16px;
+            flex-wrap: wrap;
+        }}
+        .search-box {{
+            flex: 1;
+            min-width: 240px;
+            padding: 10px 14px;
+            border-radius: 12px;
+            border: 1px solid var(--border);
+            background: var(--card);
+            color: var(--text);
+            font-size: 14px;
+            outline: none;
+        }}
+        .btn {{
+            padding: 10px 16px;
+            border-radius: 12px;
+            border: none;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: opacity 0.15s;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }}
+        .btn:hover {{ opacity: 0.85; }}
+        .btn-primary {{ background: var(--blue); color: #fff; }}
+        .btn-ban {{ background: rgba(255, 59, 48, 0.15); color: var(--red); border: 1px solid rgba(255, 59, 48, 0.3); }}
+        .btn-unban {{ background: rgba(52, 199, 89, 0.15); color: var(--green); border: 1px solid rgba(52, 199, 89, 0.3); }}
+        .table-wrap {{
+            background: var(--card);
+            border-radius: 20px;
+            border: 1px solid var(--border);
+            overflow-x: auto;
+        }}
+        table {{
+            width: 100%;
+            border-collapse: collapse;
+            text-align: left;
+            font-size: 13px;
+        }}
+        th, td {{
+            padding: 12px 14px;
+            border-bottom: 1px solid var(--border);
+        }}
+        th {{
+            color: var(--muted);
+            font-weight: 600;
+            text-transform: uppercase;
+            font-size: 11px;
+            letter-spacing: 0.5px;
+        }}
+        tr:last-child td {{ border-bottom: none; }}
+        tr.row-banned td {{
+            background: rgba(255, 59, 48, 0.04);
+        }}
+        .badge {{
+            display: inline-block;
+            padding: 3px 8px;
+            border-radius: 8px;
+            font-size: 11px;
+            font-weight: 600;
+        }}
+        .badge-active {{ background: rgba(52, 199, 89, 0.15); color: var(--green); }}
+        .badge-banned {{ background: rgba(255, 59, 48, 0.15); color: var(--red); }}
+        .badge-admin {{ background: rgba(0, 122, 255, 0.15); color: var(--blue); }}
+        .badge-user {{ background: rgba(142, 142, 147, 0.15); color: var(--muted); }}
+        .badge-class {{ background: rgba(0, 122, 255, 0.1); color: var(--blue); }}
+        .tg-link {{ color: var(--blue); text-decoration: none; font-weight: 600; }}
+        .text-muted {{ color: var(--muted); }}
+        .text-sm {{ font-size: 11px; }}
+        code {{ font-family: monospace; font-size: 12px; }}
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div>
+                <h1>👥 Пользователи бота и приложения</h1>
+                <p class="text-muted" style="margin: 4px 0 0 0; font-size: 13px;">МАОУ Гимназия №16 • Панель администратора</p>
+            </div>
+            <div style="display: flex; gap: 8px;">
+                <a href="/api/admin/users/export?admin_id={admin_uid}" class="btn btn-primary">
+                    📥 Скачать CSV
+                </a>
+            </div>
+        </div>
+
+        <div class="stats">
+            <div class="stat-card">
+                <div class="stat-num">{total_count}</div>
+                <div class="stat-label">Всего зарегистрировано</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-num" style="color: var(--green);">{active_count}</div>
+                <div class="stat-label">Активных учеников</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-num" style="color: var(--red);">{banned_count}</div>
+                <div class="stat-label">Заблокировано</div>
+            </div>
+        </div>
+
+        <div class="controls">
+            <input type="text" id="searchInput" class="search-box" placeholder="🔍 Поиск по имени, фамилии, классу или @username..." oninput="filterUsers()">
+        </div>
+
+        <div class="table-wrap">
+            <table id="usersTable">
+                <thead>
+                    <tr>
+                        <th>TG ID</th>
+                        <th>Имя и Фамилия</th>
+                        <th>Username</th>
+                        <th>Класс</th>
+                        <th>Профиль</th>
+                        <th>Роль</th>
+                        <th>Статус</th>
+                        <th>Регистрация</th>
+                        <th>Действие</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {rows_html}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <script>
+        const adminId = {admin_uid};
+
+        function filterUsers() {{
+            const query = document.getElementById("searchInput").value.toLowerCase();
+            const rows = document.querySelectorAll("#usersTable tbody tr");
+            rows.forEach(r => {{
+                const text = r.innerText.toLowerCase();
+                r.style.display = text.includes(query) ? "" : "none";
+            }});
+        }}
+
+        async function toggleBan(userId, setBanned) {{
+            const action = setBanned ? "заблокировать" : "разблокировать";
+            if (!confirm(`Вы действительно хотите ${{action}} этого пользователя?`)) return;
+
+            try {{
+                const res = await fetch(`/api/admin/users/${{userId}}/ban`, {{
+                    method: "POST",
+                    headers: {{ "Content-Type": "application/json" }},
+                    body: JSON.stringify({{ admin_id: adminId, is_banned: setBanned }})
+                }});
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.detail || "Ошибка запроса");
+
+                const statusEl = document.getElementById(`status-${{userId}}`);
+                const actionEl = document.getElementById(`action-${{userId}}`);
+                const row = document.querySelector(`tr[data-user-id="${{userId}}"]`);
+
+                if (setBanned) {{
+                    statusEl.innerHTML = '<span class="badge badge-banned">🚫 Заблокирован</span>';
+                    actionEl.innerHTML = `<button onclick="toggleBan(${{userId}}, false)" class="btn btn-unban">✅ Разбанить</button>`;
+                    row?.classList.add("row-banned");
+                }} else {{
+                    statusEl.innerHTML = '<span class="badge badge-active">🟢 Активен</span>';
+                    actionEl.innerHTML = `<button onclick="toggleBan(${{userId}}, true)" class="btn btn-ban">🚫 Забанить</button>`;
+                    row?.classList.remove("row-banned");
+                }}
+            }} catch (err) {{
+                alert("Ошибка: " + err.message);
+            }}
+        }}
+    </script>
+</body>
+</html>
+"""
+    return HTMLResponse(content=html_content)
+

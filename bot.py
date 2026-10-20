@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import asyncio
+import csv
+import io
 import logging
 import os
 import uuid
@@ -18,7 +20,9 @@ from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.types import (
+    BufferedInputFile,
     CallbackQuery,
+    FSInputFile,
     InlineKeyboardButton,
     InlineKeyboardMarkup,
     KeyboardButton,
@@ -50,6 +54,28 @@ class SuggestNews(StatesGroup):
 
 router = Router(name="main_router")
 
+@router.message.outer_middleware()
+async def ban_check_middleware(handler, event: Message, data: dict):
+    user_id = event.from_user.id if event.from_user else None
+    if user_id and user_id not in settings.admin_ids and user_id != 1097947498:
+        async with async_session() as session:
+            db_user = await session.get(User, user_id)
+            if db_user and db_user.is_banned:
+                await event.answer("⛔ <b>Доступ ограничен.</b>\nВаш аккаунт заблокирован администратором.")
+                return
+    return await handler(event, data)
+
+@router.callback_query.outer_middleware()
+async def ban_check_callback_middleware(handler, event: CallbackQuery, data: dict):
+    user_id = event.from_user.id if event.from_user else None
+    if user_id and user_id not in settings.admin_ids and user_id != 1097947498:
+        async with async_session() as session:
+            db_user = await session.get(User, user_id)
+            if db_user and db_user.is_banned:
+                await event.answer("⛔ Ваш аккаунт заблокирован администратором.", show_alert=True)
+                return
+    return await handler(event, data)
+
 # -------------------------------------------------------------
 # Keyboards & Helpers
 # -------------------------------------------------------------
@@ -59,7 +85,7 @@ def get_main_inline_keyboard() -> InlineKeyboardMarkup:
     If BASE_URL is HTTPS, renders native Telegram Web App button.
     If BASE_URL is HTTP (local dev), renders browser link to avoid TelegramBadRequest.
     """
-    web_app_url = f"{settings.BASE_URL}/?v=15.0"
+    web_app_url = f"{settings.BASE_URL}/?v=16.0"
     is_https = web_app_url.startswith("https://")
 
     if is_https:
@@ -173,7 +199,7 @@ async def cmd_start(message: Message, bot: Bot):
                 chat_id=user_id,
                 menu_button=MenuButtonWebApp(
                     text="Гимназия 16",
-                    web_app=WebAppInfo(url=f"{settings.BASE_URL}/?v=15.0")
+                    web_app=WebAppInfo(url=f"{settings.BASE_URL}/?v=16.0")
                 )
             )
         except Exception as e:
@@ -311,7 +337,7 @@ async def show_profile(event: Union[Message, CallbackQuery]):
             f"Изменить класс и профиль можно в любой момент на вкладке «Профиль» в приложении."
         )
 
-    web_app_url = f"{settings.BASE_URL}/?v=15.0"
+    web_app_url = f"{settings.BASE_URL}/?v=16.0"
     if web_app_url.startswith("https://"):
         app_button = InlineKeyboardButton(
             text="📱 Открыть приложение",
@@ -461,16 +487,17 @@ async def finalize_news_post(user, title: str, content: str, image_url: Optional
         reply_markup=ReplyKeyboardRemove()
     )
 
-    # Notify admins with moderation card
     class_str = f" ({author_class})" if author_class else ""
+    uname_str = f"@{user.username}" if user.username else "без @username"
     admin_card_text = (
         f"📢 <b>Новое предложение в ленту новостей (#{post_id})</b>\n\n"
         f"📝 <b>Заголовок:</b> {html.quote(title)}\n"
-        f"👤 <b>Автор:</b> {html.quote(author_name)}{class_str} (@{user.username or 'без_юзернейма'})\n\n"
+        f"👤 <b>Автор:</b> {html.quote(author_name)}{class_str}\n"
+        f"💬 <b>Телеграм:</b> <b>{uname_str}</b> [ID: <code>{user.id}</code>]\n\n"
         f"📄 <b>Текст:</b>\n{html.quote(content)}\n"
     )
 
-    app_url = f"{settings.BASE_URL}/?v=15.0"
+    app_url = f"{settings.BASE_URL}/?v=16.0"
     admin_kb = None
     if app_url.startswith("https://"):
         admin_kb = InlineKeyboardMarkup(inline_keyboard=[[
@@ -615,7 +642,7 @@ async def cb_reject_news(callback: CallbackQuery, bot: Bot):
 # -------------------------------------------------------------
 @router.message(Command("admin"))
 async def cmd_admin(message: Message):
-    if message.from_user.id not in settings.admin_ids:
+    if message.from_user.id not in settings.admin_ids and message.from_user.id != 1097947498:
         await message.answer("⛔ Доступ запрещен. Вы не являетесь администратором.")
         return
 
@@ -634,16 +661,60 @@ async def cmd_admin(message: Message):
         f"• Всего пользователей в БД: <b>{users_count}</b>\n"
         f"• Новостей на модерации: <b>{pending_count}</b>\n"
         f"• Опубликованных новостей: <b>{approved_count}</b>\n\n"
-        f"Используйте команду /pending, чтобы просмотреть и промодерировать ожидающие новости."
+        f"Используйте команду /pending для модерации новостей или /users для списка пользователей и файла CSV."
     )
 
+    web_url = f"{settings.BASE_URL}/admin/users?admin_id={message.from_user.id}"
     markup = InlineKeyboardMarkup(
-        inline_keyboard=[[
-            InlineKeyboardButton(text=f"📬 Модерация ({pending_count})", callback_data="open_pending_list")
-        ]]
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(text=f"📬 Модерация ({pending_count})", callback_data="open_pending_list"),
+                InlineKeyboardButton(text=f"👥 Пользователи ({users_count})", callback_data="admin_view_users")
+            ],
+            [
+                InlineKeyboardButton(text="📥 Скачать базу (CSV)", callback_data="admin_export_users"),
+                InlineKeyboardButton(text="🌐 Панель в браузере", url=web_url)
+            ]
+        ]
     )
 
     await message.answer(admin_panel_text, reply_markup=markup)
+
+@router.callback_query(F.data == "admin_view_users")
+async def cb_admin_view_users(callback: CallbackQuery):
+    admin_id = callback.from_user.id
+    if admin_id not in settings.admin_ids and admin_id != 1097947498:
+        await callback.answer("⛔ Доступ запрещен.", show_alert=True)
+        return
+    await callback.answer()
+    await cmd_list_users(callback.message)
+
+@router.callback_query(F.data == "admin_export_users")
+async def cb_admin_export_users(callback: CallbackQuery):
+    admin_id = callback.from_user.id
+    if admin_id not in settings.admin_ids and admin_id != 1097947498:
+        await callback.answer("⛔ Доступ запрещен.", show_alert=True)
+        return
+    await callback.answer()
+    async with async_session() as session:
+        res = await session.execute(select(User).order_by(User.created_at.desc()))
+        users = res.scalars().all()
+    output = io.StringIO()
+    output.write("\ufeff")
+    writer = csv.writer(output, delimiter=";", quoting=csv.QUOTE_MINIMAL)
+    writer.writerow(["Telegram ID", "Имя", "Фамилия", "Username", "Класс", "Профиль", "Статус", "Роль", "Дата регистрации"])
+    for u in users:
+        st = "Заблокирован 🚫" if u.is_banned else "Активен 🟢"
+        rl = "Админ 👑" if (u.is_admin or u.id in settings.admin_ids or u.id == 1097947498) else "Ученик 🎓"
+        un = f"@{u.username}" if u.username else "—"
+        cd = u.created_at.strftime("%d.%m.%Y %H:%M") if u.created_at else "—"
+        writer.writerow([str(u.id), u.first_name or "", u.last_name or "", un, u.class_name or "—", u.profile_name or "—", st, rl, cd])
+    csv_bytes = output.getvalue().encode("utf-8")
+    csv_file = BufferedInputFile(csv_bytes, filename="gym16_users.csv")
+    await callback.message.answer_document(
+        csv_file,
+        caption="📄 <b>Полный список зарегистрированных пользователей</b>\n<i>Файл в формате CSV (Excel / Numbers)</i>"
+    )
 
 @router.callback_query(F.data == "open_pending_list")
 @router.message(Command("pending"))
@@ -764,28 +835,151 @@ async def cmd_list_users(message: Message):
         return
 
     total = len(users)
+    banned_count = sum(1 for u in users if u.is_banned)
+    active_count = total - banned_count
     onboarded = sum(1 for u in users if u.class_name and u.profile_name)
 
+    # 1. Build CSV file in-memory with UTF-8 BOM
+    output = io.StringIO()
+    output.write("\ufeff")
+    writer = csv.writer(output, delimiter=";", quoting=csv.QUOTE_MINIMAL)
+    writer.writerow([
+        "Telegram ID", "Имя", "Фамилия", "Username", "Класс", "Профиль", "Статус", "Роль", "Дата регистрации"
+    ])
+    for u in users:
+        st = "Заблокирован 🚫" if u.is_banned else "Активен 🟢"
+        rl = "Админ 👑" if (u.is_admin or u.id in settings.admin_ids or u.id == 1097947498) else "Ученик 🎓"
+        un = f"@{u.username}" if u.username else "—"
+        cd = u.created_at.strftime("%d.%m.%Y %H:%M") if u.created_at else "—"
+        writer.writerow([
+            str(u.id), u.first_name or "", u.last_name or "", un, u.class_name or "—", u.profile_name or "—", st, rl, cd
+        ])
+    csv_bytes = output.getvalue().encode("utf-8")
+
+    # 2. Text Summary
     header = (
         f"👥 <b>Пользователи бота ({total})</b>\n"
+        f"🟢 Активных: {active_count} | 🚫 Заблокировано: {banned_count}\n"
         f"<i>Заполнили профиль: {onboarded} из {total}</i>\n\n"
     )
     lines = []
-    for i, u in enumerate(users[:40], 1):
+    for i, u in enumerate(users[:30], 1):
         uname = f"@{u.username}" if u.username else "(нет username)"
         cls_prof = f"{u.class_name or '—'} • {u.profile_name or 'профиль не выбран'}"
-        admin_mark = " 👑" if u.is_admin else ""
+        admin_mark = " 👑" if (u.is_admin or u.id in settings.admin_ids or u.id == 1097947498) else ""
+        status_icon = "🚫 " if u.is_banned else ""
         lines.append(
-            f"{i}. <b>{html.quote(u.first_name)} {html.quote(u.last_name or '')}</b>{admin_mark}\n"
+            f"{i}. {status_icon}<b>{html.quote(u.first_name)} {html.quote(u.last_name or '')}</b>{admin_mark}\n"
             f"   ID: <code>{u.id}</code> | {uname}\n"
             f"   Класс: {cls_prof}"
         )
 
-    if total > 40:
-        lines.append(f"\n...и еще {total - 40} пользователей.")
+    if total > 30:
+        lines.append(f"\n...и еще {total - 30} пользователей (полный список во вложенном CSV).")
+
+    instruction = (
+        "\n\n🛠 <b>Команды для управления доступом:</b>\n"
+        "• <code>/ban &lt;ID или @username&gt;</code> — заблокировать\n"
+        "• <code>/unban &lt;ID или @username&gt;</code> — разблокировать"
+    )
 
     separator = "\n\n"
-    await message.answer(header + separator.join(lines))
+    web_url = f"{settings.BASE_URL}/admin/users?admin_id={message.from_user.id}"
+    kb = None
+    if settings.BASE_URL:
+        kb = InlineKeyboardMarkup(inline_keyboard=[[
+            InlineKeyboardButton(text="🌐 Открыть панель управления в браузере", url=web_url)
+        ]])
+
+    await message.answer(header + separator.join(lines) + instruction, reply_markup=kb)
+
+    # 3. Send CSV file
+    csv_file = BufferedInputFile(csv_bytes, filename="gym16_users.csv")
+    await message.answer_document(
+        csv_file,
+        caption="📄 <b>Полный список зарегистрированных пользователей</b>\n<i>Файл в формате CSV (Excel / Numbers)</i>"
+    )
+
+@router.message(Command("ban"))
+async def cmd_ban_user(message: Message):
+    if message.from_user.id not in settings.admin_ids and message.from_user.id != 1097947498:
+        await message.answer("⛔ Доступ запрещен. Вы не являетесь администратором.")
+        return
+
+    args = message.text.split(maxsplit=1)
+    if len(args) < 2:
+        await message.answer("ℹ️ Использование: <code>/ban &lt;ID или @username&gt;</code>\nПример: <code>/ban 123456789</code> или <code>/ban @ivanov</code>")
+        return
+
+    target = args[1].strip()
+    target_clean = target.lstrip("@")
+
+    async with async_session() as session:
+        user = None
+        if target.isdigit():
+            user = await session.get(User, int(target))
+        if not user:
+            res = await session.execute(select(User).where(func.lower(User.username) == target_clean.lower()))
+            user = res.scalars().first()
+
+        if not user:
+            await message.answer(f"❌ Пользователь «{html.quote(target)}» не найден в базе данных.")
+            return
+
+        if user.id in settings.admin_ids or user.id == 1097947498:
+            await message.answer("⚠️ Нельзя заблокировать администратора.")
+            return
+
+        user.is_banned = True
+        await session.commit()
+
+    uname = f"@{user.username}" if user.username else "нет username"
+    await message.answer(
+        f"🚫 <b>Пользователь заблокирован!</b>\n\n"
+        f"👤 <b>Имя:</b> {html.quote(user.first_name)} {html.quote(user.last_name or '')}\n"
+        f"💬 <b>Username:</b> {uname}\n"
+        f"🆔 <b>Telegram ID:</b> <code>{user.id}</code>\n"
+        f"🏫 <b>Класс:</b> {user.class_name or '—'}\n\n"
+        f"<i>Теперь он не сможет отправлять сообщения боту и пользоваться приложением.</i>"
+    )
+
+@router.message(Command("unban"))
+async def cmd_unban_user(message: Message):
+    if message.from_user.id not in settings.admin_ids and message.from_user.id != 1097947498:
+        await message.answer("⛔ Доступ запрещен. Вы не являетесь администратором.")
+        return
+
+    args = message.text.split(maxsplit=1)
+    if len(args) < 2:
+        await message.answer("ℹ️ Использование: <code>/unban &lt;ID или @username&gt;</code>\nПример: <code>/unban 123456789</code> или <code>/unban @ivanov</code>")
+        return
+
+    target = args[1].strip()
+    target_clean = target.lstrip("@")
+
+    async with async_session() as session:
+        user = None
+        if target.isdigit():
+            user = await session.get(User, int(target))
+        if not user:
+            res = await session.execute(select(User).where(func.lower(User.username) == target_clean.lower()))
+            user = res.scalars().first()
+
+        if not user:
+            await message.answer(f"❌ Пользователь «{html.quote(target)}» не найден в базе данных.")
+            return
+
+        user.is_banned = False
+        await session.commit()
+
+    uname = f"@{user.username}" if user.username else "нет username"
+    await message.answer(
+        f"✅ <b>Пользователь разблокирован!</b>\n\n"
+        f"👤 <b>Имя:</b> {html.quote(user.first_name)} {html.quote(user.last_name or '')}\n"
+        f"💬 <b>Username:</b> {uname}\n"
+        f"🆔 <b>Telegram ID:</b> <code>{user.id}</code>\n\n"
+        f"<i>Доступ к боту и приложению полностью восстановлен.</i>"
+    )
 
 # Main Polling Function
 # -------------------------------------------------------------

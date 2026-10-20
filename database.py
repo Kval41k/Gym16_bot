@@ -56,10 +56,14 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
 async def init_db() -> None:
     from models import SchoolClass, Profile, BellSchedule
     from config import DEFAULT_CLASSES, ALL_PROFILES, DEFAULT_BELLS
-    from sqlalchemy import select
+    from sqlalchemy import select, text
 
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+        try:
+            await conn.execute(text("ALTER TABLE users ADD COLUMN is_banned BOOLEAN DEFAULT 0 NOT NULL"))
+        except Exception:
+            pass
 
     async with async_session() as session:
         # 1. Seed classes if missing

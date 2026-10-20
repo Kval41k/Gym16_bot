@@ -108,6 +108,9 @@
 
       <!-- Right Action Button in Header -->
       <div id="header-actions" class="flex items-center space-x-2">
+        <button id="header-users-btn" onclick="openUsersModal()" class="hidden px-2.5 py-1 rounded-full text-xs font-semibold bg-blue-500/15 text-blue-700 dark:text-blue-300 border border-blue-500/30 active-press items-center space-x-1 shadow-sm cursor-pointer">
+          <span>👥 Пользователи</span>
+        </button>
         <button id="header-moderation-btn" onclick="openModerationModal()" class="hidden px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/30 active-press items-center space-x-1 shadow-sm">
           <span>📬 Модерация</span>
           <span id="header-pending-badge" class="px-1.5 py-0.5 bg-amber-500 text-white rounded-full text-[10px] font-bold">0</span>
@@ -317,6 +320,11 @@
       <!-- Change Profile Button -->
       <button id="edit-profile-btn" class="w-full py-3.5 rounded-2xl bg-white dark:bg-ios-cardDark border border-zinc-200/60 dark:border-zinc-800/80 text-ios-blue text-sm font-semibold shadow-ios-sm active-press flex items-center justify-center space-x-2">
         <span>Редактировать имя, класс или профиль</span>
+      </button>
+
+      <!-- Admin Users Management Button -->
+      <button id="admin-users-btn" onclick="openUsersModal()" class="hidden w-full py-3.5 rounded-2xl bg-white dark:bg-ios-cardDark border border-zinc-200/60 dark:border-zinc-800/80 text-ios-blue text-sm font-semibold shadow-ios-sm active-press items-center justify-center space-x-2 cursor-pointer">
+        <span>👥 Управление пользователями и баны</span>
       </button>
 
       <!-- App Info Card -->
@@ -677,6 +685,68 @@
   </div>
 
   <!-- ======================================================== -->
+  <!-- MODAL: ADMIN USERS MANAGEMENT (УПРАВЛЕНИЕ ПОЛЬЗОВАТЕЛЯМИ) -->
+  <!-- ======================================================== -->
+  <div id="admin-users-modal" class="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm hidden items-end sm:items-center justify-center transition-opacity">
+    <div class="bg-white dark:bg-ios-cardDark w-full max-w-xl rounded-t-3xl sm:rounded-3xl p-5 shadow-ios-sheet max-h-[92vh] flex flex-col space-y-3.5 animate-slide-up">
+      <div class="flex items-center justify-between pb-2 border-b border-zinc-200/60 dark:border-zinc-800">
+        <div>
+          <h3 class="text-lg font-bold text-zinc-900 dark:text-white flex items-center gap-2">
+            <span>👥</span> Управление пользователями
+          </h3>
+          <p class="text-xs text-ios-secondaryText">Список зарегистрированных учеников и блокировки</p>
+        </div>
+        <button onclick="closeUsersModal()" class="w-8 h-8 rounded-full bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center text-zinc-500 font-bold text-sm active-press cursor-pointer">✕</button>
+      </div>
+
+      <!-- Stats Bar & Export Button -->
+      <div class="flex items-center justify-between gap-2 flex-wrap">
+        <div class="flex items-center gap-2 text-xs">
+          <span class="px-2.5 py-1 rounded-xl bg-zinc-100 dark:bg-zinc-800 font-semibold text-zinc-700 dark:text-zinc-300">
+            Всего: <b id="users-stat-total">0</b>
+          </span>
+          <span class="px-2.5 py-1 rounded-xl bg-green-50 text-green-700 dark:bg-green-950 dark:text-green-300 font-semibold border border-green-200/50 dark:border-green-900/50">
+            Активны: <b id="users-stat-active">0</b>
+          </span>
+          <span class="px-2.5 py-1 rounded-xl bg-red-50 text-red-700 dark:bg-red-950 dark:text-red-300 font-semibold border border-red-200/50 dark:border-red-900/50">
+            В бане: <b id="users-stat-banned">0</b>
+          </span>
+        </div>
+        <button onclick="downloadUsersCsv()" class="px-3 py-1.5 rounded-xl bg-ios-blue text-white text-xs font-semibold shadow-xs active-press flex items-center gap-1.5 cursor-pointer">
+          <span>📥</span> Скачать CSV
+        </button>
+      </div>
+
+      <!-- Search Box -->
+      <div>
+        <input id="users-search-input" type="text" placeholder="🔍 Поиск по имени, классу или @username..." oninput="filterUsersList()" class="w-full px-3.5 py-2 rounded-xl bg-zinc-100 dark:bg-ios-cardDark2 border-0 text-xs focus:ring-2 focus:ring-ios-blue outline-none text-zinc-900 dark:text-white">
+      </div>
+
+      <!-- Users List -->
+      <div id="admin-users-list" class="flex-1 overflow-y-auto space-y-2.5 pr-1 max-h-[60vh]">
+        <!-- Populated dynamically -->
+      </div>
+    </div>
+  </div>
+
+  <!-- ======================================================== -->
+  <!-- BANNED USER FULLSCREEN OVERLAY                           -->
+  <!-- ======================================================== -->
+  <div id="banned-overlay" class="fixed inset-0 z-50 bg-white dark:bg-black hidden flex-col items-center justify-center p-6 text-center space-y-4">
+    <div class="w-20 h-20 rounded-full bg-red-100 dark:bg-red-950/80 text-red-600 dark:text-red-400 flex items-center justify-center text-4xl shadow-inner">
+      🚫
+    </div>
+    <div class="space-y-1">
+      <h2 class="text-xl font-bold text-zinc-900 dark:text-white">Доступ ограничен</h2>
+      <p class="text-sm text-ios-secondaryText max-w-xs mx-auto">Ваш аккаунт заблокирован администратором гимназии. Вы не можете пользоваться мини-приложением и ботом.</p>
+    </div>
+    <div class="pt-4 text-xs text-zinc-400">
+      Если вы считаете, что это ошибка, обратитесь к администратору.
+    </div>
+  </div>
+
+
+  <!-- ======================================================== -->
   <!-- BOTTOM SHEET: COMMENTS (ШТОРКА КОММЕНТАРИЕВ)            -->
   <!-- ======================================================== -->
   <div id="comments-sheet" class="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm hidden items-end justify-center transition-opacity">
@@ -927,6 +997,8 @@
         const headerBtn = document.getElementById('header-action-btn');
 
         const headerModBtn = document.getElementById('header-moderation-btn');
+        const headerModBtn = document.getElementById('header-moderation-btn');
+        const headerUsersBtn = document.getElementById('header-users-btn');
         if (headerModBtn) {
           if (tabId === 'tab-news' && checkIsAdmin()) {
             headerModBtn.classList.remove('hidden');
@@ -934,6 +1006,15 @@
           } else {
             headerModBtn.classList.add('hidden');
             headerModBtn.classList.remove('flex');
+          }
+        }
+        if (headerUsersBtn) {
+          if (tabId === 'tab-news' && checkIsAdmin()) {
+            headerUsersBtn.classList.remove('hidden');
+            headerUsersBtn.classList.add('flex');
+          } else {
+            headerUsersBtn.classList.add('hidden');
+            headerUsersBtn.classList.remove('flex');
           }
         }
 
@@ -968,6 +1049,16 @@
         } else if (tabId === 'tab-profile') {
           if (appTitleEl) appTitleEl.textContent = 'Профиль';
           if (headerBtn) headerBtn.classList.add('hidden');
+          const adminUsersBtn = document.getElementById('admin-users-btn');
+          if (adminUsersBtn) {
+            if (checkIsAdmin()) {
+              adminUsersBtn.classList.remove('hidden');
+              adminUsersBtn.classList.add('flex');
+            } else {
+              adminUsersBtn.classList.add('hidden');
+              adminUsersBtn.classList.remove('flex');
+            }
+          }
           updateProfileUI();
         }
       } catch (err) {
@@ -1010,9 +1101,29 @@
               };
               saveProfileLocally(state.user);
               updateProfileUI();
+
+              // Ban check lockout
+              if (syncedUser.is_banned) {
+                const overlay = document.getElementById("banned-overlay");
+                if (overlay) {
+                  overlay.classList.remove("hidden");
+                  overlay.classList.add("flex");
+                }
+                const nav = document.querySelector("nav");
+                if (nav) nav.classList.add("hidden");
+                return;
+              }
+
               if (checkIsAdmin()) {
                 const modBtn = document.getElementById("admin-moderation-btn");
                 if (modBtn) modBtn.classList.remove("hidden");
+                const headerModBtn = document.getElementById("header-moderation-btn");
+                if (headerModBtn) headerModBtn.classList.remove("hidden");
+                const headerUsersBtn = document.getElementById("header-users-btn");
+                if (headerUsersBtn) headerUsersBtn.classList.remove("hidden");
+                const adminUsersBtn = document.getElementById("admin-users-btn");
+                if (adminUsersBtn) adminUsersBtn.classList.remove("hidden");
+
                 if (state.news && state.news.length > 0) {
                   const container = document.getElementById("news-posts-list");
                   if (container) {
@@ -1880,10 +1991,6 @@
       const isAdmin = checkIsAdmin();
       const adminActions = isAdmin ? `
         <div class="flex items-center space-x-1.5 ml-auto">
-          <button onclick="event.stopPropagation(); openEditModal(${post.id})" data-post-id="${post.id}" class="edit-news-btn px-2.5 py-1 rounded-lg bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-300 text-xs font-medium flex items-center space-x-1 active-press cursor-pointer">
-            <span>✏️</span>
-            <span>Изменить</span>
-          </button>
           <button onclick="event.stopPropagation(); handleDeleteNewsPost(${post.id})" data-post-id="${post.id}" class="delete-news-btn px-2.5 py-1 rounded-lg bg-red-50 hover:bg-red-100 dark:bg-red-950/60 dark:hover:bg-red-900/80 text-red-600 dark:text-red-400 text-xs font-medium flex items-center space-x-1 active-press cursor-pointer">
             <span>🗑</span>
             <span>Удалить</span>
@@ -2098,6 +2205,7 @@
           author_id: authorId,
           author_name: authorName,
           author_class: authorClass,
+          author_username: state.user?.username || (window.Telegram?.WebApp?.initDataUnsafe?.user?.username) || null,
           is_anonymous: isAnonymous
         });
 
@@ -2382,8 +2490,9 @@
         return `
           <div class="p-4 rounded-2xl bg-zinc-100/80 dark:bg-ios-cardDark2 border border-zinc-200/60 dark:border-zinc-800 space-y-2.5">
             <div class="flex items-center justify-between flex-wrap gap-1">
-              <div class="flex items-center space-x-1.5">
+              <div class="flex items-center space-x-1.5 flex-wrap">
                 <span class="text-xs font-bold text-zinc-900 dark:text-white">${p.author_name}</span>
+                ${p.author_username ? `<span class="text-[11px] font-semibold text-ios-blue">@${p.author_username.replace(/^@/, '')}</span>` : '<span class="text-[11px] text-ios-secondaryText">(нет username)</span>'}
                 ${classBadge}
                 ${anonBadge}
               </div>
@@ -2445,6 +2554,199 @@
         alert("Ошибка модерации: " + err.message);
       }
     }
+
+    // --------------------------------------------------------
+    // Admin Users Management & Ban System
+    // --------------------------------------------------------
+    let cachedAdminUsers = [];
+
+    async function openUsersModal() {
+      if (!checkIsAdmin()) return;
+      const modal = document.getElementById("admin-users-modal");
+      if (modal) {
+        modal.classList.remove("hidden");
+        modal.classList.add("flex");
+      }
+      haptic("selection");
+      await loadAdminUsers();
+    }
+    window.openUsersModal = openUsersModal;
+
+    function closeUsersModal() {
+      const modal = document.getElementById("admin-users-modal");
+      if (modal) {
+        modal.classList.add("hidden");
+        modal.classList.remove("flex");
+      }
+    }
+    window.closeUsersModal = closeUsersModal;
+
+    async function loadAdminUsers() {
+      const listContainer = document.getElementById("admin-users-list");
+      if (!listContainer) return;
+      listContainer.innerHTML = `
+        <div class="py-10 text-center text-xs text-ios-secondaryText flex items-center justify-center gap-2">
+          <div class="w-4 h-4 border-2 border-ios-blue border-t-transparent rounded-full animate-spin"></div>
+          <span>Загрузка списка пользователей...</span>
+        </div>
+      `;
+
+      try {
+        const adminId = state.user?.id || 1097947498;
+        const users = await API.get(`/api/admin/users?admin_id=${adminId}`);
+        cachedAdminUsers = Array.isArray(users) ? users : [];
+        updateUsersStats(cachedAdminUsers);
+        renderAdminUsers(cachedAdminUsers);
+      } catch (err) {
+        console.error("loadAdminUsers error:", err);
+        listContainer.innerHTML = `
+          <div class="py-10 text-center text-xs text-red-500">
+            Ошибка при загрузке пользователей: ${err.message || "попробуйте позже"}
+          </div>
+        `;
+      }
+    }
+    window.loadAdminUsers = loadAdminUsers;
+
+    function updateUsersStats(users) {
+      const total = users.length;
+      const banned = users.filter(u => u.is_banned).length;
+      const active = total - banned;
+      const totalEl = document.getElementById("users-stat-total");
+      const activeEl = document.getElementById("users-stat-active");
+      const bannedEl = document.getElementById("users-stat-banned");
+      if (totalEl) totalEl.textContent = total;
+      if (activeEl) activeEl.textContent = active;
+      if (bannedEl) bannedEl.textContent = banned;
+    }
+
+    function renderAdminUsers(users) {
+      const listContainer = document.getElementById("admin-users-list");
+      if (!listContainer) return;
+
+      if (!users || users.length === 0) {
+        listContainer.innerHTML = `
+          <div class="py-12 text-center text-xs text-ios-secondaryText space-y-1">
+            <p class="text-2xl">👥</p>
+            <p class="font-bold text-zinc-700 dark:text-zinc-300">Пользователи не найдены</p>
+          </div>
+        `;
+        return;
+      }
+
+      listContainer.innerHTML = users.map(u => {
+        const isSelfOrAdmin = u.is_admin || u.id === 1097947498 || u.id === 11116 || (state.user && u.id === state.user.id);
+        const uname = u.username ? `@${u.username.replace(/^@/, '')}` : null;
+        const tgLink = uname ? `https://t.me/${u.username.replace(/^@/, '')}` : null;
+        const classBadge = u.class_name ? `<span class="px-2 py-0.5 rounded-md bg-blue-50 text-ios-blue dark:bg-blue-950 dark:text-blue-300 text-[10px] font-bold border border-blue-200/50 dark:border-blue-900/50">${u.class_name}</span>` : '<span class="text-[10px] text-zinc-400">класс не выбран</span>';
+        const profileBadge = u.profile_name ? `<span class="px-2 py-0.5 rounded-md bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 text-[10px] font-semibold">${u.profile_name}</span>` : '';
+        const roleBadge = u.is_admin ? '<span class="px-2 py-0.5 rounded-md bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-300 text-[10px] font-bold">Администратор 👑</span>' : '';
+        const statusBadge = u.is_banned 
+          ? '<span class="px-2 py-0.5 rounded-md bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300 text-[10px] font-bold">🚫 В бане</span>'
+          : '<span class="px-2 py-0.5 rounded-md bg-green-100 text-green-700 dark:bg-green-950 dark:text-green-300 text-[10px] font-bold">🟢 Активен</span>';
+
+        let actionBtn = '';
+        if (isSelfOrAdmin) {
+          actionBtn = '<span class="text-[11px] text-zinc-400 italic">Защищен</span>';
+        } else if (u.is_banned) {
+          actionBtn = `
+            <button onclick="toggleUserBan(${u.id}, false)" class="px-3 py-1 rounded-xl bg-green-100 hover:bg-green-200 text-green-800 dark:bg-green-950 dark:hover:bg-green-900 dark:text-green-300 text-xs font-semibold active-press cursor-pointer">
+              ✅ Разбанить
+            </button>
+          `;
+        } else {
+          actionBtn = `
+            <button onclick="toggleUserBan(${u.id}, true)" class="px-3 py-1 rounded-xl bg-red-100 hover:bg-red-200 text-red-700 dark:bg-red-950 dark:hover:bg-red-900 dark:text-red-300 text-xs font-semibold active-press cursor-pointer">
+              🚫 Забанить
+            </button>
+          `;
+        }
+
+        return `
+          <div class="p-3.5 rounded-2xl bg-zinc-50 dark:bg-ios-cardDark2 border border-zinc-200/60 dark:border-zinc-800 space-y-2">
+            <div class="flex items-start justify-between gap-2">
+              <div>
+                <div class="text-xs font-bold text-zinc-900 dark:text-white flex items-center gap-1.5 flex-wrap">
+                  <span>${u.first_name || 'Гимназист'} ${u.last_name || ''}</span>
+                  ${roleBadge}
+                  ${statusBadge}
+                </div>
+                <div class="flex items-center gap-2 mt-0.5 text-[11px] text-ios-secondaryText flex-wrap">
+                  ${uname ? `<a href="${tgLink}" target="_blank" class="text-ios-blue font-medium hover:underline flex items-center gap-0.5"><span>💬</span> ${uname}</a>` : '<span>(нет @username)</span>'}
+                  <span>• ID: <code>${u.id}</code></span>
+                </div>
+              </div>
+              <div>${actionBtn}</div>
+            </div>
+
+            <div class="flex items-center justify-between text-xs pt-1 border-t border-zinc-200/40 dark:border-zinc-800/60">
+              <div class="flex items-center gap-1.5 flex-wrap">
+                ${classBadge}
+                ${profileBadge}
+              </div>
+              <span class="text-[10px] text-ios-secondaryText">${u.created_at || ''}</span>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    async function toggleUserBan(userId, isBanned) {
+      const actionText = isBanned ? "заблокировать" : "разблокировать";
+      if (!confirm(`Вы действительно хотите ${actionText} этого пользователя?`)) return;
+      haptic("impact");
+
+      try {
+        const adminId = state.user?.id || 1097947498;
+        const res = await API.post(`/api/admin/users/${userId}/ban`, {
+          admin_id: parseInt(adminId, 10),
+          is_banned: isBanned
+        });
+
+        if (res && res.status === "success") {
+          haptic("success");
+          const target = cachedAdminUsers.find(u => u.id === userId);
+          if (target) {
+            target.is_banned = isBanned;
+          }
+          updateUsersStats(cachedAdminUsers);
+          filterUsersList();
+        } else {
+          alert("Не удалось изменить статус пользователя");
+        }
+      } catch (err) {
+        console.error("toggleUserBan error:", err);
+        alert("Ошибка: " + (err.message || "попробуйте позже"));
+      }
+    }
+    window.toggleUserBan = toggleUserBan;
+
+    function filterUsersList() {
+      const input = document.getElementById("users-search-input");
+      const q = input ? input.value.trim().toLowerCase() : "";
+      if (!q) {
+        renderAdminUsers(cachedAdminUsers);
+        return;
+      }
+      const filtered = cachedAdminUsers.filter(u => {
+        const name = `${u.first_name || ''} ${u.last_name || ''}`.toLowerCase();
+        const uname = (u.username || '').toLowerCase();
+        const cls = (u.class_name || '').toLowerCase();
+        const prof = (u.profile_name || '').toLowerCase();
+        const uid = String(u.id);
+        return name.includes(q) || uname.includes(q) || cls.includes(q) || prof.includes(q) || uid.includes(q);
+      });
+      renderAdminUsers(filtered);
+    }
+    window.filterUsersList = filterUsersList;
+
+    function downloadUsersCsv() {
+      const adminId = state.user?.id || 1097947498;
+      const downloadUrl = `/api/admin/users/export?admin_id=${adminId}`;
+      window.open(downloadUrl, "_blank");
+      haptic("impact");
+    }
+    window.downloadUsersCsv = downloadUsersCsv;
 
     async function togglePostReaction(postId, emoji) {
       haptic("impact");
