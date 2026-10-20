@@ -1192,18 +1192,30 @@ async def delete_comment(
 # -------------------------------------------------------------
 # Media Storage & Proxy Endpoints
 # -------------------------------------------------------------
-ALLOWED_IMAGE_TYPES = {"image/jpeg", "image/png", "image/webp", "image/gif"}
+ALLOWED_IMAGE_TYPES = {
+    "image/jpeg", "image/png", "image/webp", "image/gif", 
+    "image/heic", "image/heif", "image/bmp", "image/jpg", 
+    "image/pjpeg", "image/x-png", "application/octet-stream"
+}
+ALLOWED_EXTENSIONS = {"jpg", "jpeg", "png", "webp", "gif", "heic", "heif", "bmp"}
 
 @app.post("/api/upload")
 async def upload_image(file: UploadFile = File(...)):
     """
     Saves an uploaded image locally to /uploads without paid cloud services.
+    Supports all mobile image formats (including iPhone HEIC / JPEG / PNG).
     Returns the relative URL to access the image.
     """
-    if file.content_type not in ALLOWED_IMAGE_TYPES:
+    ext = file.filename.split(".")[-1].lower() if file.filename and "." in file.filename else "jpg"
+    is_valid_type = (
+        (file.content_type in ALLOWED_IMAGE_TYPES) or 
+        (file.content_type and file.content_type.startswith("image/")) or
+        (ext in ALLOWED_EXTENSIONS)
+    )
+    if not is_valid_type:
         raise HTTPException(
             status_code=400, 
-            detail="Unsupported image format. Allowed: JPEG, PNG, WebP, GIF."
+            detail="Неподдерживаемый формат изображения. Разрешены: JPG, PNG, WebP, GIF, HEIC."
         )
 
     # Generate unique filename

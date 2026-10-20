@@ -557,14 +557,17 @@
         <div>
           <label class="text-xs font-semibold text-ios-secondaryText">Фотография (необязательно)</label>
           <div class="mt-1 flex items-center space-x-3">
-            <label class="cursor-pointer px-3.5 py-2 rounded-xl bg-zinc-100 dark:bg-ios-cardDark2 border border-dashed border-zinc-300 dark:border-zinc-700 text-xs font-semibold text-ios-blue flex items-center space-x-1 active-press">
+            <label class="relative cursor-pointer px-3.5 py-2.5 rounded-xl bg-zinc-100 hover:bg-zinc-200 dark:bg-ios-cardDark2 dark:hover:bg-zinc-800 border border-dashed border-zinc-300 dark:border-zinc-700 text-xs font-semibold text-ios-blue flex items-center space-x-1.5 active-press overflow-hidden">
               <span>📷 Выбрать фото</span>
-              <input id="propose-file" type="file" accept="image/*" class="hidden">
+              <input id="propose-file" type="file" accept="image/*" onchange="handleProposeFileChange(this)" class="absolute inset-0 opacity-0 cursor-pointer w-full h-full">
             </label>
             <span id="propose-file-name" class="text-xs text-ios-secondaryText truncate max-w-[180px]">Файл не выбран</span>
           </div>
-          <div id="propose-image-preview" class="hidden mt-2 rounded-xl overflow-hidden max-h-60 border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/50 flex items-center justify-center">
-            <img id="propose-img-tag" src="" class="w-full h-auto max-h-60 object-contain">
+          <div id="propose-image-preview" class="hidden mt-2 relative rounded-2xl overflow-hidden max-h-60 border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/50 flex items-center justify-center">
+            <img id="propose-img-tag" src="" class="w-full h-auto max-h-60 object-contain rounded-2xl">
+            <button type="button" onclick="removeSelectedPhoto()" class="absolute top-2 right-2 px-2.5 py-1 rounded-xl bg-black/60 hover:bg-black/80 text-white text-xs font-semibold backdrop-blur-md active-press cursor-pointer">
+              ✕ Удалить
+            </button>
           </div>
         </div>
 
@@ -1942,21 +1945,42 @@
       if (e.target.id === "propose-news-modal") closeProposeNewsModal();
     });
 
-    document.getElementById("propose-file")?.addEventListener("change", (e) => {
-      const file = e.target.files[0];
-      if (file) {
-        window.selectedImageFile = file;
-        const fn = document.getElementById("propose-file-name");
-        if (fn) fn.textContent = file.name;
-        const reader = new FileReader();
-        reader.onload = (re) => {
-          const imgTag = document.getElementById("propose-img-tag");
-          if (imgTag) imgTag.src = re.target.result;
-          const pr = document.getElementById("propose-image-preview");
-          if (pr) pr.classList.remove("hidden");
-        };
-        reader.readAsDataURL(file);
-      }
+    function handleProposeFileChange(input) {
+      const file = input && input.files && input.files[0];
+      if (!file) return;
+      window.selectedImageFile = file;
+
+      const fn = document.getElementById("propose-file-name");
+      if (fn) fn.textContent = file.name || "Фото выбрано";
+
+      const reader = new FileReader();
+      reader.onload = function(re) {
+        const imgTag = document.getElementById("propose-img-tag");
+        if (imgTag) imgTag.src = re.target.result;
+        const pr = document.getElementById("propose-image-preview");
+        if (pr) pr.classList.remove("hidden");
+      };
+      reader.readAsDataURL(file);
+      haptic("selection");
+    }
+    window.handleProposeFileChange = handleProposeFileChange;
+
+    function removeSelectedPhoto() {
+      window.selectedImageFile = null;
+      const fileInput = document.getElementById("propose-file");
+      if (fileInput) fileInput.value = "";
+      const fn = document.getElementById("propose-file-name");
+      if (fn) fn.textContent = "Файл не выбран";
+      const pr = document.getElementById("propose-image-preview");
+      if (pr) pr.classList.add("hidden");
+      const imgTag = document.getElementById("propose-img-tag");
+      if (imgTag) imgTag.src = "";
+      haptic("impact");
+    }
+    window.removeSelectedPhoto = removeSelectedPhoto;
+
+    document.getElementById("propose-file")?.addEventListener("change", function(e) {
+      handleProposeFileChange(e.target);
     });
 
     async function handleSubmitProposeNews() {
