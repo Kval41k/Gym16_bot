@@ -276,7 +276,7 @@ async def notify_admins_about_post(
         reply_markup = {
             "inline_keyboard": [
                 [
-                    {"text": "📱 Открыть модерацию в приложении", "web_app": {"url": f"{settings.BASE_URL}/?v=16.0"}}
+                    {"text": "📱 Открыть модерацию в приложении", "web_app": {"url": f"{settings.BASE_URL}/?v=17.0"}}
                 ]
             ]
         }

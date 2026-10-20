@@ -102,7 +102,7 @@ def get_main_inline_keyboard() -> InlineKeyboardMarkup:
     If BASE_URL is HTTPS, renders native Telegram Web App button.
     If BASE_URL is HTTP (local dev), renders browser link to avoid TelegramBadRequest.
     """
-    web_app_url = f"{settings.BASE_URL}/?v=16.0"
+    web_app_url = f"{settings.BASE_URL}/?v=17.0"
     is_https = web_app_url.startswith("https://")
 
     if is_https:
@@ -133,6 +133,10 @@ def get_main_inline_keyboard() -> InlineKeyboardMarkup:
                 InlineKeyboardButton(
                     text="👤 Мой профиль",
                     callback_data="view_my_profile"
+                ),
+                InlineKeyboardButton(
+                    text="💬 Написать разработчику",
+                    url="https://t.me/untiltedvoid"
                 )
             ]
         ]
@@ -216,7 +220,7 @@ async def cmd_start(message: Message, bot: Bot):
                 chat_id=user_id,
                 menu_button=MenuButtonWebApp(
                     text="Гимназия 16",
-                    web_app=WebAppInfo(url=f"{settings.BASE_URL}/?v=16.0")
+                    web_app=WebAppInfo(url=f"{settings.BASE_URL}/?v=17.0")
                 )
             )
         except Exception as e:
@@ -253,7 +257,8 @@ async def cmd_help(message: Message):
         "/profile — Информация о твоем профиле и классе\n"
         "/bells — Расписание звонков гимназии\n"
         "/suggest — Предложить новость в ленту\n"
-        "/help — Справка по командам\n"
+        "/help — Справка по командам\n\n"
+        "💬 <b>Связь с разработчиком:</b> @untiltedvoid (сообщить о баге или предложить идею)\n"
     )
     if message.from_user.id in settings.admin_ids:
         help_text += (
@@ -350,7 +355,7 @@ async def show_profile(event: Union[Message, CallbackQuery]):
             f"Изменить класс и профиль можно в любой момент на вкладке «Профиль» в приложении."
         )
 
-    web_app_url = f"{settings.BASE_URL}/?v=16.0"
+    web_app_url = f"{settings.BASE_URL}/?v=17.0"
     if web_app_url.startswith("https://"):
         app_button = InlineKeyboardButton(
             text="📱 Открыть приложение",
@@ -510,7 +515,7 @@ async def finalize_news_post(user, title: str, content: str, image_url: Optional
         f"📄 <b>Текст:</b>\n{html.quote(content)}\n"
     )
 
-    app_url = f"{settings.BASE_URL}/?v=16.0"
+    app_url = f"{settings.BASE_URL}/?v=17.0"
     admin_kb = None
     if app_url.startswith("https://"):
         admin_kb = InlineKeyboardMarkup(inline_keyboard=[[
