@@ -59,7 +59,7 @@ def get_main_inline_keyboard() -> InlineKeyboardMarkup:
     If BASE_URL is HTTPS, renders native Telegram Web App button.
     If BASE_URL is HTTP (local dev), renders browser link to avoid TelegramBadRequest.
     """
-    web_app_url = f"{settings.BASE_URL}/?v=8.0"
+    web_app_url = f"{settings.BASE_URL}/?v=9.0"
     is_https = web_app_url.startswith("https://")
 
     if is_https:
@@ -173,7 +173,7 @@ async def cmd_start(message: Message, bot: Bot):
                 chat_id=user_id,
                 menu_button=MenuButtonWebApp(
                     text="Гимназия 16",
-                    web_app=WebAppInfo(url=f"{settings.BASE_URL}/?v=8.0")
+                    web_app=WebAppInfo(url=f"{settings.BASE_URL}/?v=9.0")
                 )
             )
         except Exception as e:
@@ -277,7 +277,7 @@ async def show_profile(event: Union[Message, CallbackQuery]):
             f"Изменить класс и профиль можно в любой момент на вкладке «Профиль» в приложении."
         )
 
-    web_app_url = f"{settings.BASE_URL}/?v=8.0"
+    web_app_url = f"{settings.BASE_URL}/?v=9.0"
     if web_app_url.startswith("https://"):
         app_button = InlineKeyboardButton(
             text="📱 Открыть приложение",

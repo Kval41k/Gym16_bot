@@ -680,6 +680,9 @@
   <!-- JAVASCRIPT APPLICATION LOGIC                             -->
   <!-- ======================================================== -->
   <script>
+    // Global upload file reference (prevents TDZ / initialization order issues)
+    window.selectedImageFile = null;
+
     // --------------------------------------------------------
     // Telegram WebApp Initialization & Theme Binding
     // --------------------------------------------------------
@@ -947,49 +950,48 @@
     // User Sync & Onboarding
     // --------------------------------------------------------
     async function initUser() {
-      // Immediate local rendering (0ms delay)
+      // 1. Immediate local UI & Schedule rendering (0ms delay, zero waiting!)
       updateProfileUI();
-      updateLiveScheduleStatus();
+      updateLiveScheduleStatus().catch(() => {});
+      loadSchedule().catch(console.error);
 
-      // 1. Fetch metadata structure
-      const struct = await API.get('/api/meta/structure');
-      if (struct) state.structure = struct;
-
-      // 2. Sync user with backend
-      const syncedUser = await API.post('/api/user/sync', {
-        id: state.user.id,
-        first_name: state.user.first_name,
-        last_name: state.user.last_name,
-        username: state.user.username,
-        photo_url: state.user.photo_url
-      });
-
-      if (syncedUser) {
-        state.user = {
-          ...state.user,
-          ...syncedUser,
-          // Preserve custom name if saved locally
-          first_name: syncedUser.first_name || state.user.first_name,
-          last_name: syncedUser.last_name !== null ? syncedUser.last_name : state.user.last_name
-        };
-
-        saveProfileLocally(state.user);
-        updateProfileUI();
-
-        // If user has not completed onboarding yet, open modal
-        if (!syncedUser.is_onboarded) {
-          openOnboardingModal();
-        } else {
-          state.viewingClass = state.user.class_name;
-        }
+      // 2. Parallel background sync & metadata fetching (never blocks schedule display!)
+      try {
+        Promise.allSettled([
+          API.get('/api/meta/structure').then(struct => { if (struct) state.structure = struct; }),
+          loadBells(),
+          loadNews(),
+          checkPendingNewsCount(),
+          API.post('/api/user/sync', {
+            id: state.user.id,
+            first_name: state.user.first_name,
+            last_name: state.user.last_name,
+            username: state.user.username,
+            photo_url: state.user.photo_url
+          }).then(syncedUser => {
+            if (syncedUser) {
+              state.user = {
+                ...state.user,
+                ...syncedUser,
+                first_name: syncedUser.first_name || state.user.first_name,
+                last_name: syncedUser.last_name !== null ? syncedUser.last_name : state.user.last_name
+              };
+              saveProfileLocally(state.user);
+              updateProfileUI();
+              if (!syncedUser.is_onboarded) {
+                openOnboardingModal();
+              } else if (syncedUser.class_name && syncedUser.class_name !== state.viewingClass) {
+                state.viewingClass = syncedUser.class_name;
+                loadSchedule().catch(() => {});
+              }
+            }
+          })
+        ]).finally(() => {
+          updateLiveScheduleStatus().catch(() => {});
+        });
+      } catch (err) {
+        console.error("initUser background sync error:", err);
       }
-
-      // Initial loads
-      await loadBells();
-      await updateLiveScheduleStatus();
-      await loadSchedule();
-      await loadNews();
-      await checkPendingNewsCount();
 
       // Start live interval
       setInterval(updateLiveScheduleStatus, 15000);
@@ -1886,7 +1888,7 @@
     const proposeFileName = document.getElementById("propose-file-name");
     const proposeImagePreview = document.getElementById("propose-image-preview");
     const proposeImgTag = document.getElementById("propose-img-tag");
-    let selectedImageFile = null;
+    // window.selectedImageFile managed globally
 
     function openProposeNewsModal() {
       const modal = document.getElementById("propose-news-modal");
@@ -1912,7 +1914,7 @@
       if (titleEl) titleEl.value = "";
       const contentEl = document.getElementById("propose-content");
       if (contentEl) contentEl.value = "";
-      selectedImageFile = null;
+      window.selectedImageFile = null;
       if (proposeFileName) proposeFileName.textContent = "Файл не выбран";
       if (proposeImagePreview) proposeImagePreview.classList.add("hidden");
       const fileInput = document.getElementById("propose-file");
@@ -1930,7 +1932,7 @@
     proposeFileInput?.addEventListener("change", (e) => {
       const file = e.target.files[0];
       if (file) {
-        selectedImageFile = file;
+        window.selectedImageFile = file;
         if (proposeFileName) proposeFileName.textContent = file.name;
         const reader = new FileReader();
         reader.onload = (re) => {
@@ -1964,9 +1966,9 @@
 
       try {
         let imageUrl = null;
-        if (selectedImageFile) {
+        if (window.selectedImageFile) {
           try {
-            const uploadRes = await API.upload(selectedImageFile);
+            const uploadRes = await API.upload(window.selectedImageFile);
             if (uploadRes && uploadRes.url) {
               imageUrl = uploadRes.url;
             }
