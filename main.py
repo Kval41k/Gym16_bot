@@ -829,18 +829,27 @@ async def suggest_news(
     Students propose a news post.
     Supports anonymous submissions and captures author_class.
     """
+    user = await db.get(User, payload.author_id)
     author_class = payload.author_class
-    if not author_class:
-        user = await db.get(User, payload.author_id)
-        if user:
-            author_class = user.class_name
+    if not author_class and user and user.class_name:
+        author_class = user.class_name
+
+    author_name = payload.author_name
+    if (not author_name or author_name.strip() in ("", "Гимназист")) and user:
+        u_first = user.first_name or ""
+        u_last = user.last_name or ""
+        full_name = f"{u_first} {u_last}".strip()
+        if full_name:
+            author_name = full_name
+        elif user.username:
+            author_name = f"@{user.username}"
 
     new_post = NewsPost(
         title=payload.title,
         content=payload.content,
         image_url=payload.image_url,
         author_id=payload.author_id,
-        author_name=payload.author_name,
+        author_name=author_name or "Гимназист",
         author_class=author_class,
         is_anonymous=payload.is_anonymous,
         status="pending"
