@@ -6,17 +6,17 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 BASE_DIR = Path(__file__).resolve().parent
 
 class Settings(BaseSettings):
-    # Telegram Bot Token & Admins
-    BOT_TOKEN: str = "8797348665:AAGLYigdB8ikqeAzqR7x5TMeGNIvC2YbD4E"
-    ADMIN_IDS: str = "1097947498"
+    # Telegram Bot Token & Admins (loaded securely from .env or environment variables)
+    BOT_TOKEN: str = ""
+    ADMIN_IDS: str = ""
     ADMIN_IDS_RAW: str = ""
-    ADMIN_USERNAME: str = "kvalx"
+    ADMIN_USERNAME: str = ""
     
     # App & Server Configuration
-    BASE_URL: str = "https://osevj-85-11-167-132.free.pinggy.net"
+    BASE_URL: str = ""
     HOST: str = "0.0.0.0"
     PORT: int = 8000
-    DEBUG: bool = True
+    DEBUG: bool = False
     
     # Database & Storage
     DATABASE_URL: str = f"sqlite+aiosqlite:///{BASE_DIR}/gym16.db"
@@ -48,6 +48,13 @@ class Settings(BaseSettings):
             if cleaned.isdigit():
                 ids.append(int(cleaned))
         return ids
+
+    @property
+    def admin_usernames(self) -> List[str]:
+        raw_val = self.ADMIN_USERNAME
+        if not raw_val:
+            return []
+        return [u.strip().lower().lstrip("@") for u in str(raw_val).split(",") if u.strip()]
 
 settings = Settings()
 

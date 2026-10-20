@@ -159,10 +159,10 @@ def verify_telegram_init_data(init_data_str: str) -> Optional[Dict[str, Any]]:
 # -------------------------------------------------------------
 async def check_is_admin(admin_id: int, db: AsyncSession) -> bool:
     """Checks if user has admin privileges by ID, username or DB flag."""
-    if admin_id in settings.admin_ids or admin_id == 1097947498 or admin_id == 11116:
+    if admin_id in settings.admin_ids:
         return True
     user = await db.get(User, admin_id)
-    if user and (user.is_admin or (user.username and user.username.lower() == "kvalx")):
+    if user and (user.is_admin or (user.username and user.username.lower().lstrip("@") in settings.admin_usernames)):
         return True
     return False
 
@@ -365,9 +365,7 @@ async def sync_user(payload: UserSyncRequest, db: AsyncSession = Depends(get_db)
 
     is_admin = (
         payload.id in settings.admin_ids 
-        or payload.id == 1097947498 
-        or payload.id == 11116 
-        or (payload.username and payload.username.lower() in ("kvalx", "@kvalx"))
+        or (payload.username and payload.username.lower().lstrip("@") in settings.admin_usernames)
     )
 
     if not user:
@@ -864,7 +862,7 @@ async def suggest_news(
     Students propose a news post.
     Guarantees user exists in DB to prevent foreign key errors and accurately captures author and class.
     """
-    author_id = payload.author_id or 1097947498
+    author_id = payload.author_id or (settings.admin_ids[0] if settings.admin_ids else 0)
     user = await db.get(User, author_id)
     if not user:
         user = User(
@@ -1553,7 +1551,7 @@ async def toggle_user_ban(
     if not await check_is_admin(payload.admin_id, db):
         raise HTTPException(status_code=403, detail="Admin privileges required")
 
-    if user_id in settings.admin_ids or user_id == 1097947498:
+    if user_id in settings.admin_ids:
         raise HTTPException(status_code=400, detail="Нельзя заблокировать администратора")
 
     user = await db.get(User, user_id)
@@ -1634,8 +1632,8 @@ async def admin_users_dashboard_page(
     """
     Dedicated web dashboard page where administrator can view all users and toggle bans.
     """
-    admin_uid = admin_id or 1097947498
-    if not await check_is_admin(admin_uid, db):
+    admin_uid = admin_id or (settings.admin_ids[0] if settings.admin_ids else None)
+    if not admin_uid or not await check_is_admin(admin_uid, db):
         return HTMLResponse(
             "<h3>⛔ Доступ запрещен. Требуются права администратора.</h3>",
             status_code=403
@@ -1650,7 +1648,7 @@ async def admin_users_dashboard_page(
 
     rows_html = ""
     for u in users:
-        is_adm = u.is_admin or u.id in settings.admin_ids or u.id == 1097947498
+        is_adm = u.is_admin or u.id in settings.admin_ids
         status_badge = (
             '<span class="badge badge-banned">🚫 Заблокирован</span>'
             if u.is_banned else

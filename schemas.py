@@ -102,7 +102,7 @@ class NewsCreateRequest(BaseModel):
     title: str = Field(..., min_length=3, max_length=255)
     content: str = Field(..., min_length=5)
     image_url: Optional[str] = None
-    author_id: Optional[int] = 1097947498
+    author_id: Optional[int] = None
     author_name: Optional[str] = "Гимназист"
     author_class: Optional[str] = None
     author_username: Optional[str] = None

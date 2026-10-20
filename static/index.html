@@ -836,23 +836,20 @@
     
     function checkIsAdmin() {
       if (!state.user) return false;
-      const uid = parseInt(state.user.id, 10);
-      if (uid === 1097947498 || uid === 11116) return true;
-      if (state.user.username && state.user.username.toLowerCase() === 'kvalx') return true;
       return Boolean(state.user.is_admin);
     }
 
     const state = {
       // User info (pre-populated from localStorage or Telegram WebApp)
       user: {
-        id: tg?.initDataUnsafe?.user?.id || savedLocal?.id || 1097947498,
+        id: tg?.initDataUnsafe?.user?.id || savedLocal?.id || 0,
         first_name: savedLocal?.first_name || tg?.initDataUnsafe?.user?.first_name || 'Гимназист',
         last_name: savedLocal?.last_name || tg?.initDataUnsafe?.user?.last_name || '',
-        username: tg?.initDataUnsafe?.user?.username || savedLocal?.username || 'kvalx',
+        username: tg?.initDataUnsafe?.user?.username || savedLocal?.username || null,
         photo_url: tg?.initDataUnsafe?.user?.photo_url || null,
         class_name: savedLocal?.class_name || null,
         profile_name: savedLocal?.profile_name || null,
-        is_admin: savedLocal?.is_admin || (tg?.initDataUnsafe?.user?.id === 1097947498 || tg?.initDataUnsafe?.user?.username?.toLowerCase() === 'kvalx'),
+        is_admin: Boolean(savedLocal?.is_admin),
         is_onboarded: Boolean(savedLocal?.class_name && savedLocal?.profile_name)
       },
       ege: {
@@ -1851,7 +1848,7 @@
       `;
 
       try {
-        const uid = state.user?.id || 11116;
+        const uid = state.user?.id || '';
         const posts = await API.get(`/api/news?user_id=${uid}`);
         if (posts === null) {
           container.innerHTML = `
@@ -2196,7 +2193,7 @@
         const authorClass = state.user?.class_name || "11А";
         const authorName = `${state.user?.first_name || ""} ${state.user?.last_name || ""}`.trim() || state.user?.first_name || "Гимназист";
         const rawId = state.user?.id;
-        const authorId = (rawId && !isNaN(parseInt(rawId, 10))) ? parseInt(rawId, 10) : 1097947498;
+        const authorId = (rawId && !isNaN(parseInt(rawId, 10))) ? parseInt(rawId, 10) : (state.user?.id || null);
 
         const postRes = await API.post("/api/news", {
           title: title,
@@ -2402,7 +2399,7 @@
           }
         }
 
-        const uid = checkIsAdmin() ? (state.user?.id || 1097947498) : state.user?.id;
+        const uid = state.user?.id || 0;
         const updated = await API.put(`/api/admin/news/${postId}`, {
           title: title,
           content: content,
@@ -2525,7 +2522,7 @@
       modal.classList.remove("hidden");
       modal.classList.add("flex");
       haptic("selection");
-      const uid = checkIsAdmin() ? (state.user?.id || 1097947498) : state.user?.id;
+      const uid = state.user?.id || 0;
       const pending = await API.get(`/api/admin/news/pending?admin_id=${uid}`);
       renderPendingNews(pending || []);
     }
@@ -2540,7 +2537,7 @@
 
     async function handleModeratePost(postId, action) {
       haptic("impact");
-      const uid = checkIsAdmin() ? (state.user?.id || 1097947498) : (state.user?.id || 1097947498);
+      const uid = state.user?.id || 0;
       try {
         await API.post(`/api/admin/news/${postId}/moderate`, {
           action: action,
@@ -2592,7 +2589,7 @@
       `;
 
       try {
-        const adminId = state.user?.id || 1097947498;
+        const adminId = state.user?.id || 0;
         const users = await API.get(`/api/admin/users?admin_id=${adminId}`);
         cachedAdminUsers = Array.isArray(users) ? users : [];
         updateUsersStats(cachedAdminUsers);
@@ -2635,7 +2632,7 @@
       }
 
       listContainer.innerHTML = users.map(u => {
-        const isSelfOrAdmin = u.is_admin || u.id === 1097947498 || u.id === 11116 || (state.user && u.id === state.user.id);
+        const isSelfOrAdmin = u.is_admin || (state.user && u.id === state.user.id);
         const uname = u.username ? `@${u.username.replace(/^@/, '')}` : null;
         const tgLink = uname ? `https://t.me/${u.username.replace(/^@/, '')}` : null;
         const classBadge = u.class_name ? `<span class="px-2 py-0.5 rounded-md bg-blue-50 text-ios-blue dark:bg-blue-950 dark:text-blue-300 text-[10px] font-bold border border-blue-200/50 dark:border-blue-900/50">${u.class_name}</span>` : '<span class="text-[10px] text-zinc-400">класс не выбран</span>';
@@ -2697,7 +2694,7 @@
       haptic("impact");
 
       try {
-        const adminId = state.user?.id || 1097947498;
+        const adminId = state.user?.id || 0;
         const res = await API.post(`/api/admin/users/${userId}/ban`, {
           admin_id: parseInt(adminId, 10),
           is_banned: isBanned
@@ -2741,7 +2738,7 @@
     window.filterUsersList = filterUsersList;
 
     function downloadUsersCsv() {
-      const adminId = state.user?.id || 1097947498;
+      const adminId = state.user?.id || 0;
       const downloadUrl = `/api/admin/users/export?admin_id=${adminId}`;
       window.open(downloadUrl, "_blank");
       haptic("impact");
@@ -2750,7 +2747,7 @@
 
     async function togglePostReaction(postId, emoji) {
       haptic("impact");
-      const uid = state.user?.id || 1097947498;
+      const uid = state.user?.id || 0;
       const updatedReactions = await API.post(`/api/news/${postId}/react`, {
         user_id: parseInt(uid, 10),
         emoji: emoji
@@ -2768,7 +2765,7 @@
     async function handleDeleteNewsPost(postId) {
       if (!confirm("Вы действительно хотите удалить этот пост из школьной ленты новостей?")) return;
       haptic("impact");
-      const uid = checkIsAdmin() ? (state.user?.id || 1097947498) : state.user?.id;
+      const uid = state.user?.id || 0;
       const res = await API.delete(`/api/admin/news/${postId}?admin_id=${uid}`);
       if (res) {
         haptic("success");
@@ -2791,7 +2788,7 @@
 
       const authorName = `${state.user.first_name || ""} ${state.user.last_name || ""}`.trim() || state.user.first_name || "Гимназист";
       const newComment = await API.post(`/api/news/${state.activePostForComments}/comments`, {
-        user_id: parseInt(state.user.id || 1097947498, 10),
+        user_id: parseInt(state.user.id || 0, 10),
         author_name: authorName,
         author_class: state.user.class_name,
         text: text
@@ -2814,7 +2811,7 @@
     async function handleDeleteComment(commentId) {
       if (!confirm("Удалить этот комментарий?")) return;
       haptic("impact");
-      const uid = checkIsAdmin() ? (state.user?.id || 1097947498) : (state.user?.id || 1097947498);
+      const uid = state.user?.id || 0;
       await API.delete(`/api/admin/comments/${commentId}?user_id=${uid}`);
       if (state.activePostForComments) {
         const comments = await API.get(`/api/news/${state.activePostForComments}/comments`);

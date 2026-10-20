@@ -54,10 +54,19 @@ class SuggestNews(StatesGroup):
 
 router = Router(name="main_router")
 
+def is_admin_user(user_id: Optional[int], username: Optional[str] = None) -> bool:
+    if not user_id:
+        return False
+    if user_id in settings.admin_ids:
+        return True
+    if username and username.lower().lstrip("@") in settings.admin_usernames:
+        return True
+    return False
+
 @router.message.outer_middleware()
 async def ban_check_middleware(handler, event: Message, data: dict):
     user_id = event.from_user.id if event.from_user else None
-    if user_id and user_id not in settings.admin_ids and user_id != 1097947498:
+    if user_id and not is_admin_user(user_id, event.from_user.username):
         async with async_session() as session:
             db_user = await session.get(User, user_id)
             if db_user and db_user.is_banned:
@@ -68,7 +77,7 @@ async def ban_check_middleware(handler, event: Message, data: dict):
 @router.callback_query.outer_middleware()
 async def ban_check_callback_middleware(handler, event: CallbackQuery, data: dict):
     user_id = event.from_user.id if event.from_user else None
-    if user_id and user_id not in settings.admin_ids and user_id != 1097947498:
+    if user_id and not is_admin_user(user_id, event.from_user.username):
         async with async_session() as session:
             db_user = await session.get(User, user_id)
             if db_user and db_user.is_banned:
@@ -294,18 +303,14 @@ async def show_profile(event: Union[Message, CallbackQuery]):
             user = res.scalars().first()
 
         # Auto-heal admin / registered user if missing from fresh DB restart
-        is_admin_user = (
-            user_id in settings.admin_ids 
-            or user_id == 1097947498 
-            or (event.from_user.username and event.from_user.username.lower() == "kvalx")
-        )
+        is_adm = is_admin_user(user_id, event.from_user.username)
 
-        if not user and is_admin_user:
+        if not user and is_adm:
             user = User(
                 id=user_id,
-                first_name=event.from_user.first_name or "Роман",
-                last_name=event.from_user.last_name or "Куликов",
-                username=event.from_user.username or "kvalx",
+                first_name=event.from_user.first_name or "Администратор",
+                last_name=event.from_user.last_name or "",
+                username=event.from_user.username,
                 class_name="11А",
                 profile_name="Соц-гум",
                 is_admin=True
@@ -313,7 +318,7 @@ async def show_profile(event: Union[Message, CallbackQuery]):
             session.add(user)
             await session.commit()
             await session.refresh(user)
-        elif user and is_admin_user:
+        elif user and is_adm:
             if not user.class_name:
                 user.class_name = "11А"
             if not user.profile_name:
@@ -642,7 +647,7 @@ async def cb_reject_news(callback: CallbackQuery, bot: Bot):
 # -------------------------------------------------------------
 @router.message(Command("admin"))
 async def cmd_admin(message: Message):
-    if message.from_user.id not in settings.admin_ids and message.from_user.id != 1097947498:
+    if not is_admin_user(message.from_user.id, message.from_user.username):
         await message.answer("⛔ Доступ запрещен. Вы не являетесь администратором.")
         return
 
@@ -683,7 +688,7 @@ async def cmd_admin(message: Message):
 @router.callback_query(F.data == "admin_view_users")
 async def cb_admin_view_users(callback: CallbackQuery):
     admin_id = callback.from_user.id
-    if admin_id not in settings.admin_ids and admin_id != 1097947498:
+    if not is_admin_user(admin_id, callback.from_user.username):
         await callback.answer("⛔ Доступ запрещен.", show_alert=True)
         return
     await callback.answer()
@@ -692,7 +697,7 @@ async def cb_admin_view_users(callback: CallbackQuery):
 @router.callback_query(F.data == "admin_export_users")
 async def cb_admin_export_users(callback: CallbackQuery):
     admin_id = callback.from_user.id
-    if admin_id not in settings.admin_ids and admin_id != 1097947498:
+    if not is_admin_user(admin_id, callback.from_user.username):
         await callback.answer("⛔ Доступ запрещен.", show_alert=True)
         return
     await callback.answer()
@@ -705,7 +710,7 @@ async def cb_admin_export_users(callback: CallbackQuery):
     writer.writerow(["Telegram ID", "Имя", "Фамилия", "Username", "Класс", "Профиль", "Статус", "Роль", "Дата регистрации"])
     for u in users:
         st = "Заблокирован 🚫" if u.is_banned else "Активен 🟢"
-        rl = "Админ 👑" if (u.is_admin or u.id in settings.admin_ids or u.id == 1097947498) else "Ученик 🎓"
+        rl = "Админ 👑" if (u.is_admin or u.id in settings.admin_ids) else "Ученик 🎓"
         un = f"@{u.username}" if u.username else "—"
         cd = u.created_at.strftime("%d.%m.%Y %H:%M") if u.created_at else "—"
         writer.writerow([str(u.id), u.first_name or "", u.last_name or "", un, u.class_name or "—", u.profile_name or "—", st, rl, cd])
@@ -822,7 +827,7 @@ async def cmd_delete_comment(message: Message):
 
 @router.message(Command("users"))
 async def cmd_list_users(message: Message):
-    if message.from_user.id not in settings.admin_ids and message.from_user.id != 1097947498:
+    if not is_admin_user(message.from_user.id, message.from_user.username):
         await message.answer("⛔ Доступ запрещен. Вы не являетесь администратором.")
         return
 
@@ -848,7 +853,7 @@ async def cmd_list_users(message: Message):
     ])
     for u in users:
         st = "Заблокирован 🚫" if u.is_banned else "Активен 🟢"
-        rl = "Админ 👑" if (u.is_admin or u.id in settings.admin_ids or u.id == 1097947498) else "Ученик 🎓"
+        rl = "Админ 👑" if (u.is_admin or u.id in settings.admin_ids) else "Ученик 🎓"
         un = f"@{u.username}" if u.username else "—"
         cd = u.created_at.strftime("%d.%m.%Y %H:%M") if u.created_at else "—"
         writer.writerow([
@@ -866,7 +871,7 @@ async def cmd_list_users(message: Message):
     for i, u in enumerate(users[:30], 1):
         uname = f"@{u.username}" if u.username else "(нет username)"
         cls_prof = f"{u.class_name or '—'} • {u.profile_name or 'профиль не выбран'}"
-        admin_mark = " 👑" if (u.is_admin or u.id in settings.admin_ids or u.id == 1097947498) else ""
+        admin_mark = " 👑" if (u.is_admin or u.id in settings.admin_ids) else ""
         status_icon = "🚫 " if u.is_banned else ""
         lines.append(
             f"{i}. {status_icon}<b>{html.quote(u.first_name)} {html.quote(u.last_name or '')}</b>{admin_mark}\n"
@@ -902,7 +907,7 @@ async def cmd_list_users(message: Message):
 
 @router.message(Command("ban"))
 async def cmd_ban_user(message: Message):
-    if message.from_user.id not in settings.admin_ids and message.from_user.id != 1097947498:
+    if not is_admin_user(message.from_user.id, message.from_user.username):
         await message.answer("⛔ Доступ запрещен. Вы не являетесь администратором.")
         return
 
@@ -926,7 +931,7 @@ async def cmd_ban_user(message: Message):
             await message.answer(f"❌ Пользователь «{html.quote(target)}» не найден в базе данных.")
             return
 
-        if user.id in settings.admin_ids or user.id == 1097947498:
+        if user.id in settings.admin_ids or user.is_admin:
             await message.answer("⚠️ Нельзя заблокировать администратора.")
             return
 
@@ -945,7 +950,7 @@ async def cmd_ban_user(message: Message):
 
 @router.message(Command("unban"))
 async def cmd_unban_user(message: Message):
-    if message.from_user.id not in settings.admin_ids and message.from_user.id != 1097947498:
+    if not is_admin_user(message.from_user.id, message.from_user.username):
         await message.answer("⛔ Доступ запрещен. Вы не являетесь администратором.")
         return
 

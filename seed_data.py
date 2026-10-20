@@ -530,25 +530,26 @@ async def seed():
                 note=item.get("note")
             ))
 
-        # 4. Pre-seed Admin Profile so it survives fresh container restarts on Railway
-        admin_id = 1097947498
-        admin_user = await session.get(User, admin_id)
-        if not admin_user:
-            session.add(User(
-                id=admin_id,
-                first_name="Роман",
-                last_name="Куликов",
-                username="kvalx",
-                class_name="11А",
-                profile_name="Соц-гум",
-                is_admin=True
-            ))
-        else:
-            if not admin_user.class_name:
-                admin_user.class_name = "11А"
-            if not admin_user.profile_name:
-                admin_user.profile_name = "Соц-гум"
-            admin_user.is_admin = True
+        # 4. Pre-seed Admin Profile dynamically from environment variables
+        if settings.admin_ids:
+            for aid in settings.admin_ids:
+                admin_user = await session.get(User, aid)
+                if not admin_user:
+                    session.add(User(
+                        id=aid,
+                        first_name="Администратор",
+                        last_name="",
+                        username=settings.admin_usernames[0] if settings.admin_usernames else None,
+                        class_name="11А",
+                        profile_name="Соц-гум",
+                        is_admin=True
+                    ))
+                else:
+                    if not admin_user.class_name:
+                        admin_user.class_name = "11А"
+                    if not admin_user.profile_name:
+                        admin_user.profile_name = "Соц-гум"
+                    admin_user.is_admin = True
 
         await session.commit()
         logger.info("✅ Database successfully populated with synchronized 11А schedule, bells, and profiles!")
