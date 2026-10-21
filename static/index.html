@@ -108,13 +108,6 @@
 
       <!-- Right Action Button in Header -->
       <div id="header-actions" class="flex items-center space-x-2">
-        <button id="header-users-btn" onclick="openUsersModal()" class="hidden px-2.5 py-1 rounded-full text-xs font-semibold bg-blue-500/15 text-blue-700 dark:text-blue-300 border border-blue-500/30 active-press items-center space-x-1 shadow-sm cursor-pointer">
-          <span>👥 Пользователи</span>
-        </button>
-        <button id="header-moderation-btn" onclick="openModerationModal()" class="hidden px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/30 active-press items-center space-x-1 shadow-sm">
-          <span>📬 Модерация</span>
-          <span id="header-pending-badge" class="px-1.5 py-0.5 bg-amber-500 text-white rounded-full text-[10px] font-bold">0</span>
-        </button>
         <button id="header-action-btn" onclick="openProposeNewsModal()" class="hidden px-3 py-1 rounded-full text-xs font-semibold bg-ios-blue text-white active-press shadow-sm">
           + Новость
         </button>
@@ -328,17 +321,86 @@
         <span>Связаться с разработчиком</span>
       </button>
 
-      <!-- Admin Users Management Button -->
-      <button id="admin-users-btn" onclick="openUsersModal()" class="hidden w-full py-3.5 rounded-2xl bg-white dark:bg-ios-cardDark border border-zinc-200/60 dark:border-zinc-800/80 text-ios-blue text-sm font-semibold shadow-ios-sm active-press items-center justify-center space-x-2 cursor-pointer">
-        <span>👥 Управление пользователями и баны</span>
-      </button>
-
       <!-- App Info Card -->
       <div class="rounded-2xl p-4 bg-zinc-100 dark:bg-ios-cardDark2/60 text-center space-y-1 text-xs text-ios-secondaryText">
         <p class="font-semibold text-zinc-700 dark:text-zinc-300">МАОУ гимназия №16</p>
         <p class="text-[11px] text-zinc-500 dark:text-zinc-400">Проект сделан <a href="https://t.me/untiltedvoid" onclick="contactDeveloper(); return false;" class="text-ios-blue font-semibold hover:underline">@untiltedvoid</a></p>
         <p>Telegram Mini App v1.0.0 • iOS HIG Edition</p>
         <p class="pt-1 text-[10px] text-zinc-400">Быстрое расписание с фильтром по профилям</p>
+      </div>
+
+    </section>
+
+    <!-- ---------------------------------------------------- -->
+    <!-- TAB 5: ADMIN PANEL (АДМИН ПАНЕЛЬ)                    -->
+    <!-- ---------------------------------------------------- -->
+    <section id="tab-admin" class="tab-page hidden space-y-4 px-4 pt-3 pb-24">
+      
+      <!-- Admin Header -->
+      <div class="flex items-center justify-between">
+        <div>
+          <h2 class="text-xl font-bold tracking-tight text-zinc-900 dark:text-white flex items-center gap-2">
+            <span>⚙️</span> Админ панель
+          </h2>
+          <p class="text-xs text-ios-secondaryText mt-0.5">Модерация предложки и управление пользователями</p>
+        </div>
+      </div>
+
+      <!-- Segmented Control: Moderation vs Users -->
+      <div class="bg-zinc-200/80 dark:bg-ios-cardDark2 p-1 rounded-2xl flex items-center text-xs font-semibold shadow-inner">
+        <button id="admin-subtab-moderation-btn" onclick="setAdminSubtab('moderation')" class="flex-1 py-2 rounded-xl transition-all text-center flex items-center justify-center gap-1.5 bg-white dark:bg-zinc-700 text-zinc-900 dark:text-white shadow-xs">
+          <span>📬</span>
+          <span>Модерация</span>
+          <span id="admin-subtab-pending-badge" class="hidden px-1.5 py-0.2 bg-amber-500 text-white rounded-full text-[10px] font-bold">0</span>
+        </button>
+        <button id="admin-subtab-users-btn" onclick="setAdminSubtab('users')" class="flex-1 py-2 rounded-xl transition-all text-center flex items-center justify-center gap-1.5 text-ios-secondaryText hover:text-zinc-900 dark:hover:text-white">
+          <span>👥</span>
+          <span>Пользователи</span>
+        </button>
+      </div>
+
+      <!-- SUBSECTION 1: MODERATION -->
+      <div id="admin-section-moderation" class="space-y-3.5">
+        <div class="flex items-center justify-between text-xs text-ios-secondaryText px-1">
+          <span class="font-medium">Предложенные посты в новостную ленту:</span>
+          <button onclick="loadAdminPendingNews()" class="text-ios-blue hover:underline font-semibold flex items-center gap-1 cursor-pointer">
+            <span>🔄</span> Обновить
+          </button>
+        </div>
+        <div id="admin-pending-list" class="space-y-4">
+          <!-- Populated dynamically -->
+        </div>
+      </div>
+
+      <!-- SUBSECTION 2: USERS -->
+      <div id="admin-section-users" class="hidden space-y-3.5">
+        <!-- Stats Bar & Export Button -->
+        <div class="flex items-center justify-between gap-2 flex-wrap bg-white dark:bg-ios-cardDark p-3 rounded-2xl border border-zinc-200/60 dark:border-zinc-800 shadow-ios-sm">
+          <div class="flex items-center gap-2 text-xs flex-wrap">
+            <span class="px-2.5 py-1 rounded-xl bg-zinc-100 dark:bg-zinc-800 font-semibold text-zinc-700 dark:text-zinc-300">
+              Всего: <b id="users-stat-total">0</b>
+            </span>
+            <span class="px-2.5 py-1 rounded-xl bg-green-50 text-green-700 dark:bg-green-950 dark:text-green-300 font-semibold border border-green-200/50 dark:border-green-900/50">
+              Активны: <b id="users-stat-active">0</b>
+            </span>
+            <span class="px-2.5 py-1 rounded-xl bg-red-50 text-red-700 dark:bg-red-950 dark:text-red-300 font-semibold border border-red-200/50 dark:border-red-900/50">
+              В бане: <b id="users-stat-banned">0</b>
+            </span>
+          </div>
+          <button onclick="downloadUsersCsv()" class="px-3 py-1.5 rounded-xl bg-ios-blue text-white text-xs font-semibold shadow-xs active-press flex items-center gap-1.5 cursor-pointer">
+            <span>📥</span> Экспорт CSV
+          </button>
+        </div>
+
+        <!-- Search Box -->
+        <div>
+          <input id="users-search-input" type="text" placeholder="🔍 Поиск по имени, классу или @username..." oninput="filterUsersList()" class="w-full px-3.5 py-2.5 rounded-2xl bg-white dark:bg-ios-cardDark border border-zinc-200/60 dark:border-zinc-800 text-xs focus:ring-2 focus:ring-ios-blue outline-none text-zinc-900 dark:text-white shadow-ios-sm">
+        </div>
+
+        <!-- Users List -->
+        <div id="admin-users-list" class="space-y-2.5">
+          <!-- Populated dynamically -->
+        </div>
       </div>
 
     </section>
@@ -381,6 +443,17 @@
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path>
         </svg>
         <span class="text-[10px] font-semibold mt-0.5">Профиль</span>
+      </button>
+
+      <!-- Tab 5: Admin Panel (Visible only to admins) -->
+      <button id="nav-tab-admin" data-tab="tab-admin" onclick="switchTab('tab-admin')" class="nav-tab-btn hidden flex-1 flex flex-col items-center justify-center active-press text-ios-secondaryText hover:text-zinc-900 dark:hover:text-white relative">
+        <div class="relative flex items-center justify-center">
+          <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path>
+          </svg>
+          <span id="nav-admin-badge" class="hidden absolute -top-1 -right-2 px-1.5 py-0.2 bg-amber-500 text-white rounded-full text-[9px] font-bold">0</span>
+        </div>
+        <span class="text-[10px] font-semibold mt-0.5">Админ</span>
       </button>
 
     </div>
@@ -788,6 +861,46 @@
   <script>
     // Global upload file reference (prevents TDZ / initialization order issues)
     window.selectedImageFile = null;
+    var cachedAdminUsers = [];
+    window.cachedAdminUsers = cachedAdminUsers;
+
+    // Live schedule time formatter (e.g. "1 час и 15 минут", "25 мин")
+    function formatMinutesHuman(minutes) {
+      if (minutes < 60) {
+        return `${minutes} мин`;
+      }
+      const h = Math.floor(minutes / 60);
+      const m = minutes % 60;
+
+      let hUnit = "часов";
+      const hMod100 = h % 100;
+      const hMod10 = h % 10;
+      if (hMod100 >= 11 && hMod100 <= 14) {
+        hUnit = "часов";
+      } else if (hMod10 === 1) {
+        hUnit = "час";
+      } else if (hMod10 >= 2 && hMod10 <= 4) {
+        hUnit = "часа";
+      }
+
+      if (m === 0) {
+        return `${h} ${hUnit}`;
+      }
+
+      let mUnit = "минут";
+      const mMod100 = m % 100;
+      const mMod10 = m % 10;
+      if (mMod100 >= 11 && mMod100 <= 14) {
+        mUnit = "минут";
+      } else if (mMod10 === 1) {
+        mUnit = "минута";
+      } else if (mMod10 >= 2 && mMod10 <= 4) {
+        mUnit = "минуты";
+      }
+
+      return `${h} ${hUnit} и ${m} ${mUnit}`;
+    }
+    window.formatMinutesHuman = formatMinutesHuman;
 
     // --------------------------------------------------------
     // Telegram WebApp Initialization & Theme Binding
@@ -918,11 +1031,20 @@
       async get(url) {
         try {
           const res = await fetch(url, { headers: this._getHeaders() });
-          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          if (!res.ok) {
+            let errorMsg = `HTTP ${res.status}`;
+            try {
+              const errBody = await res.json();
+              if (errBody && errBody.detail) {
+                errorMsg = typeof errBody.detail === 'string' ? errBody.detail : JSON.stringify(errBody.detail);
+              }
+            } catch (_) {}
+            throw new Error(errorMsg);
+          }
           return await res.json();
         } catch (e) {
           console.error(`API GET ${url} error:`, e);
-          return null;
+          throw e;
         }
       },
       async post(url, data) {
@@ -1024,27 +1146,6 @@
         const appTitleEl = document.getElementById('app-title');
         const headerBtn = document.getElementById('header-action-btn');
 
-        const headerModBtn = document.getElementById('header-moderation-btn');
-        const headerUsersBtn = document.getElementById('header-users-btn');
-        if (headerModBtn) {
-          if (tabId === 'tab-news' && checkIsAdmin()) {
-            headerModBtn.classList.remove('hidden');
-            headerModBtn.classList.add('flex');
-          } else {
-            headerModBtn.classList.add('hidden');
-            headerModBtn.classList.remove('flex');
-          }
-        }
-        if (headerUsersBtn) {
-          if (tabId === 'tab-news' && checkIsAdmin()) {
-            headerUsersBtn.classList.remove('hidden');
-            headerUsersBtn.classList.add('flex');
-          } else {
-            headerUsersBtn.classList.add('hidden');
-            headerUsersBtn.classList.remove('flex');
-          }
-        }
-
         if (tabId === 'tab-schedule') {
           if (appTitleEl) appTitleEl.textContent = 'Расписание';
           if (headerBtn) headerBtn.classList.add('hidden');
@@ -1076,17 +1177,12 @@
         } else if (tabId === 'tab-profile') {
           if (appTitleEl) appTitleEl.textContent = 'Профиль';
           if (headerBtn) headerBtn.classList.add('hidden');
-          const adminUsersBtn = document.getElementById('admin-users-btn');
-          if (adminUsersBtn) {
-            if (checkIsAdmin()) {
-              adminUsersBtn.classList.remove('hidden');
-              adminUsersBtn.classList.add('flex');
-            } else {
-              adminUsersBtn.classList.add('hidden');
-              adminUsersBtn.classList.remove('flex');
-            }
-          }
           updateProfileUI();
+        } else if (tabId === 'tab-admin') {
+          if (appTitleEl) appTitleEl.textContent = 'Админ панель';
+          if (headerBtn) headerBtn.classList.add('hidden');
+          loadAdminPendingNews().catch(() => {});
+          loadAdminUsers().catch(() => {});
         }
       } catch (err) {
         console.error('switchTab error:', err);
@@ -1142,14 +1238,8 @@
               }
 
               if (checkIsAdmin()) {
-                const modBtn = document.getElementById("admin-moderation-btn");
-                if (modBtn) modBtn.classList.remove("hidden");
-                const headerModBtn = document.getElementById("header-moderation-btn");
-                if (headerModBtn) headerModBtn.classList.remove("hidden");
-                const headerUsersBtn = document.getElementById("header-users-btn");
-                if (headerUsersBtn) headerUsersBtn.classList.remove("hidden");
-                const adminUsersBtn = document.getElementById("admin-users-btn");
-                if (adminUsersBtn) adminUsersBtn.classList.remove("hidden");
+                const navTabAdmin = document.getElementById("nav-tab-admin");
+                if (navTabAdmin) navTabAdmin.classList.remove("hidden");
 
                 if (state.news && state.news.length > 0) {
                   const container = document.getElementById("news-posts-list");
@@ -1313,7 +1403,7 @@
       }
     }
 
-    document.getElementById('save-onboarding-btn').addEventListener('click', async () => {
+    document.getElementById('save-onboarding-btn')?.addEventListener('click', async () => {
       const inputFirstName = document.getElementById('onboard-first-name').value.trim();
       const inputLastName = document.getElementById('onboard-last-name').value.trim();
 
@@ -1340,7 +1430,7 @@
       }
     });
 
-    document.getElementById('edit-profile-btn').addEventListener('click', openOnboardingModal);
+    document.getElementById('edit-profile-btn')?.addEventListener('click', openOnboardingModal);
 
     // --------------------------------------------------------
     // View Another Class (Modal & Switching)
@@ -1469,15 +1559,15 @@
     const modeMyProfileBtn = document.getElementById('mode-my-profile-btn');
     const modeAllClassBtn = document.getElementById('mode-all-class-btn');
 
-    modeMyProfileBtn.addEventListener('click', () => {
+    modeMyProfileBtn?.addEventListener('click', () => {
       state.onlyMyProfile = true;
-      modeMyProfileBtn.className = 'px-2.5 py-1 rounded-lg transition-all bg-white dark:bg-zinc-700 text-zinc-900 dark:text-white shadow-xs';
-      modeAllClassBtn.className = 'px-2.5 py-1 rounded-lg transition-all text-ios-secondaryText hover:text-zinc-900 dark:hover:text-white';
+      if (modeMyProfileBtn) modeMyProfileBtn.className = 'px-2.5 py-1 rounded-lg transition-all bg-white dark:bg-zinc-700 text-zinc-900 dark:text-white shadow-xs';
+      if (modeAllClassBtn) modeAllClassBtn.className = 'px-2.5 py-1 rounded-lg transition-all text-ios-secondaryText hover:text-zinc-900 dark:hover:text-white';
       haptic('selection');
       loadSchedule();
     });
 
-    modeAllClassBtn.addEventListener('click', () => {
+    modeAllClassBtn?.addEventListener('click', () => {
       state.onlyMyProfile = false;
       modeAllClassBtn.className = 'px-2.5 py-1 rounded-lg transition-all bg-white dark:bg-zinc-700 text-zinc-900 dark:text-white shadow-xs';
       modeMyProfileBtn.className = 'px-2.5 py-1 rounded-lg transition-all text-ios-secondaryText hover:text-zinc-900 dark:hover:text-white';
@@ -1582,14 +1672,14 @@
         if (day === 6) {
           if (nowMin < 10 * 60) {
             const diff = 10 * 60 - nowMin;
-            if (msgEl) msgEl.textContent = `Консультации с 10:00 (через ${diff} мин)`;
+            if (msgEl) msgEl.textContent = `Консультации с 10:00 (через ${formatMinutesHuman(diff)})`;
             if (titleEl) {
               titleEl.textContent = "Суббота";
               titleEl.className = "text-xs font-semibold text-ios-secondaryText uppercase tracking-wider";
             }
           } else if (nowMin < 14 * 60) {
             const diff = 14 * 60 - nowMin;
-            if (msgEl) msgEl.textContent = `Идут консультации (до конца ${diff} мин)`;
+            if (msgEl) msgEl.textContent = `Идут консультации (до конца ${formatMinutesHuman(diff)})`;
             if (titleEl) {
               titleEl.textContent = "Консультации";
               titleEl.className = "text-xs font-semibold text-ios-blue uppercase tracking-wider";
@@ -1635,7 +1725,7 @@
 
         if (nowMin < firstStart) {
           const diff = firstStart - nowMin;
-          if (msgEl) msgEl.textContent = `До начала (${bells[0].title}): ${diff} мин`;
+          if (msgEl) msgEl.textContent = `До начала (${bells[0].title}): ${formatMinutesHuman(diff)}`;
           if (titleEl) {
             titleEl.textContent = "До уроков";
             titleEl.className = "text-xs font-semibold text-ios-secondaryText uppercase tracking-wider";
@@ -1667,7 +1757,7 @@
                 subjectInfo = ` • ${l.subject}${l.cabinet ? " (каб. " + l.cabinet + ")" : ""}`;
               }
             }
-            if (msgEl) msgEl.textContent = `${b.title}${subjectInfo}: до конца ${diff} мин`;
+            if (msgEl) msgEl.textContent = `${b.title}${subjectInfo}: до конца ${formatMinutesHuman(diff)}`;
             if (titleEl) {
               titleEl.textContent = b.num === 0 ? "Разговоры о важном" : `Идет ${b.num} урок`;
               titleEl.className = "text-xs font-semibold text-ios-blue uppercase tracking-wider";
@@ -1688,7 +1778,7 @@
                   nextInfo = ` • След: ${l.subject}${l.cabinet ? " (каб. " + l.cabinet + ")" : ""}`;
                 }
               }
-              if (msgEl) msgEl.textContent = `Перемена${nextInfo}: до звонка ${diff} мин`;
+              if (msgEl) msgEl.textContent = `Перемена${nextInfo}: до звонка ${formatMinutesHuman(diff)}`;
               if (titleEl) {
                 titleEl.textContent = "Перемена";
                 titleEl.className = "text-xs font-semibold text-ios-green uppercase tracking-wider";
@@ -2471,20 +2561,28 @@
     async function checkPendingNewsCount() {
       if (!checkIsAdmin()) return;
       try {
-        const pending = await API.get(`/api/admin/news/pending?admin_id=${state.user.id}`);
+        const uid = state.user?.id || 0;
+        const pending = await API.get(`/api/admin/news/pending?admin_id=${uid}`);
         const count = (pending && Array.isArray(pending)) ? pending.length : 0;
-        const headerBadge = document.getElementById("header-pending-badge");
-        const headerModBtn = document.getElementById("header-moderation-btn");
+        
+        const navAdminBadge = document.getElementById("nav-admin-badge");
+        const subtabBadge = document.getElementById("admin-subtab-pending-badge");
         const adminBadge = document.getElementById("admin-pending-badge");
-        const adminBtn = document.getElementById("admin-moderation-btn");
 
-        if (headerBadge) headerBadge.textContent = count;
         if (adminBadge) adminBadge.textContent = count;
-        if (headerModBtn) {
-          headerModBtn.classList.remove("hidden");
-          headerModBtn.classList.add("flex");
+        if (count > 0) {
+          if (navAdminBadge) {
+            navAdminBadge.textContent = count;
+            navAdminBadge.classList.remove("hidden");
+          }
+          if (subtabBadge) {
+            subtabBadge.textContent = count;
+            subtabBadge.classList.remove("hidden");
+          }
+        } else {
+          if (navAdminBadge) navAdminBadge.classList.add("hidden");
+          if (subtabBadge) subtabBadge.classList.add("hidden");
         }
-        if (adminBtn) adminBtn.classList.remove("hidden");
       } catch (e) {
         console.error("checkPendingNewsCount error:", e);
       }
@@ -2492,6 +2590,7 @@
 
     function renderPendingNews(posts) {
       const container = document.getElementById("admin-pending-list");
+      if (!container) return;
       if (!posts || posts.length === 0) {
         container.innerHTML = `
           <div class="py-12 text-center text-xs text-ios-secondaryText space-y-1">
@@ -2545,10 +2644,10 @@
             ${imageHtml}
 
             <div class="pt-2 flex items-center justify-end space-x-2 border-t border-zinc-200/60 dark:border-zinc-800/80">
-              <button onclick="handleModeratePost(${p.id}, 'reject')" class="admin-reject-btn px-3 py-1.5 rounded-xl bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300 text-xs font-bold active-press">
+              <button onclick="handleModeratePost(${p.id}, 'reject')" class="admin-reject-btn px-3 py-1.5 rounded-xl bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300 text-xs font-bold active-press cursor-pointer">
                 ❌ Отклонить
               </button>
-              <button onclick="handleModeratePost(${p.id}, 'approve')" class="admin-approve-btn px-3.5 py-1.5 rounded-xl bg-emerald-600 text-white text-xs font-bold shadow-xs active-press">
+              <button onclick="handleModeratePost(${p.id}, 'approve')" class="admin-approve-btn px-3.5 py-1.5 rounded-xl bg-emerald-600 text-white text-xs font-bold shadow-xs active-press cursor-pointer">
                 ✅ Опубликовать
               </button>
             </div>
@@ -2557,23 +2656,68 @@
       }).join("");
     }
 
+    async function loadAdminPendingNews() {
+      if (!checkIsAdmin()) return;
+      const container = document.getElementById("admin-pending-list");
+      if (!container) return;
+      container.innerHTML = `
+        <div class="py-10 text-center text-xs text-ios-secondaryText flex items-center justify-center gap-2">
+          <div class="w-4 h-4 border-2 border-ios-blue border-t-transparent rounded-full animate-spin"></div>
+          <span>Загрузка предложенных новостей...</span>
+        </div>
+      `;
+      try {
+        const uid = state.user?.id || 0;
+        const pending = await API.get(`/api/admin/news/pending?admin_id=${uid}`);
+        renderPendingNews(pending || []);
+        await checkPendingNewsCount();
+      } catch (err) {
+        console.error("loadAdminPendingNews error:", err);
+        container.innerHTML = `
+          <div class="py-10 text-center text-xs text-red-500">
+            Ошибка при загрузке предложки: ${err.message || "попробуйте позже"}
+          </div>
+        `;
+      }
+    }
+    window.loadAdminPendingNews = loadAdminPendingNews;
+
+    function setAdminSubtab(subtab) {
+      haptic('selection');
+      const modBtn = document.getElementById("admin-subtab-moderation-btn");
+      const usersBtn = document.getElementById("admin-subtab-users-btn");
+      const modSec = document.getElementById("admin-section-moderation");
+      const usersSec = document.getElementById("admin-section-users");
+
+      if (subtab === 'moderation') {
+        modBtn?.classList.add("bg-white", "dark:bg-zinc-700", "text-zinc-900", "dark:text-white", "shadow-xs");
+        modBtn?.classList.remove("text-ios-secondaryText");
+        usersBtn?.classList.remove("bg-white", "dark:bg-zinc-700", "text-zinc-900", "dark:text-white", "shadow-xs");
+        usersBtn?.classList.add("text-ios-secondaryText");
+
+        modSec?.classList.remove("hidden");
+        usersSec?.classList.add("hidden");
+        loadAdminPendingNews();
+      } else {
+        usersBtn?.classList.add("bg-white", "dark:bg-zinc-700", "text-zinc-900", "dark:text-white", "shadow-xs");
+        usersBtn?.classList.remove("text-ios-secondaryText");
+        modBtn?.classList.remove("bg-white", "dark:bg-zinc-700", "text-zinc-900", "dark:text-white", "shadow-xs");
+        modBtn?.classList.add("text-ios-secondaryText");
+
+        usersSec?.classList.remove("hidden");
+        modSec?.classList.add("hidden");
+        loadAdminUsers();
+      }
+    }
+    window.setAdminSubtab = setAdminSubtab;
+
     async function openModerationModal() {
-      const modal = document.getElementById("admin-moderation-modal");
-      if (!modal) return;
-      modal.classList.remove("hidden");
-      modal.classList.add("flex");
-      haptic("selection");
-      const uid = state.user?.id || 0;
-      const pending = await API.get(`/api/admin/news/pending?admin_id=${uid}`);
-      renderPendingNews(pending || []);
+      switchTab('tab-admin');
+      setAdminSubtab('moderation');
     }
 
     function closeModerationModal() {
-      const modal = document.getElementById("admin-moderation-modal");
-      if (!modal) return;
-      modal.classList.add("hidden");
-      modal.classList.remove("flex");
-      loadNews();
+      // Compatibility stub
     }
 
     async function handleModeratePost(postId, action) {
@@ -2584,8 +2728,7 @@
           action: action,
           admin_id: parseInt(uid, 10)
         });
-        const pending = await API.get(`/api/admin/news/pending?admin_id=${uid}`);
-        renderPendingNews(pending || []);
+        await loadAdminPendingNews();
         await checkPendingNewsCount();
         await loadNews();
       } catch (err) {
@@ -2596,26 +2739,14 @@
     // --------------------------------------------------------
     // Admin Users Management & Ban System
     // --------------------------------------------------------
-    let cachedAdminUsers = [];
-
     async function openUsersModal() {
-      if (!checkIsAdmin()) return;
-      const modal = document.getElementById("admin-users-modal");
-      if (modal) {
-        modal.classList.remove("hidden");
-        modal.classList.add("flex");
-      }
-      haptic("selection");
-      await loadAdminUsers();
+      switchTab('tab-admin');
+      setAdminSubtab('users');
     }
     window.openUsersModal = openUsersModal;
 
     function closeUsersModal() {
-      const modal = document.getElementById("admin-users-modal");
-      if (modal) {
-        modal.classList.add("hidden");
-        modal.classList.remove("flex");
-      }
+      // Compatibility stub
     }
     window.closeUsersModal = closeUsersModal;
 
@@ -2633,6 +2764,7 @@
         const adminId = state.user?.id || 0;
         const users = await API.get(`/api/admin/users?admin_id=${adminId}`);
         cachedAdminUsers = Array.isArray(users) ? users : [];
+        window.cachedAdminUsers = cachedAdminUsers;
         updateUsersStats(cachedAdminUsers);
         renderAdminUsers(cachedAdminUsers);
       } catch (err) {

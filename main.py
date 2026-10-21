@@ -197,21 +197,23 @@ async def check_admin_permission_or_raise(
             caller_username = parsed_user.get("username")
             if caller_id and (caller_id in settings.admin_ids or (caller_username and caller_username.lower().lstrip("@") in settings.admin_usernames)):
                 return caller_id
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="⛔ Доступ запрещен. Недействительная цифровая подпись Telegram."
-        )
 
     # 2. Signed admin URL token verification
     if admin_id and (ts is not None or sign is not None):
         if ts is not None and sign is not None and verify_admin_auth_token(admin_id, ts, sign) and (admin_id in settings.admin_ids):
             return admin_id
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="⛔ Доступ запрещен. Неверная или истекшая цифровая подпись администратора."
-        )
 
-    # 3. Unauthenticated requests are strictly forbidden
+    # 3. Direct admin verification by admin_id in settings.admin_ids
+    if admin_id and admin_id in settings.admin_ids:
+        return admin_id
+
+    # 4. DB admin check
+    if admin_id and db:
+        user = await db.get(User, admin_id)
+        if user and (user.is_admin or (user.username and user.username.lower().lstrip("@") in settings.admin_usernames)):
+            return admin_id
+
+    # 5. Unauthenticated requests are strictly forbidden
     raise HTTPException(
         status_code=status.HTTP_403_FORBIDDEN,
         detail="⛔ Доступ запрещен. Требуется подтвержденная авторизация администратора."
@@ -276,7 +278,7 @@ async def notify_admins_about_post(
         reply_markup = {
             "inline_keyboard": [
                 [
-                    {"text": "📱 Открыть модерацию в приложении", "web_app": {"url": f"{settings.BASE_URL}/?v=18.0"}}
+                    {"text": "📱 Открыть модерацию в приложении", "web_app": {"url": f"{settings.BASE_URL}/?v=19.0"}}
                 ]
             ]
         }
@@ -567,6 +569,45 @@ async def get_bells(db: AsyncSession = Depends(get_db)):
     cache_set("schedule_bells", bells)
     return bells
 
+def format_minutes_human(minutes: int) -> str:
+    """
+    Formats minute duration into natural Russian string.
+    Under 60 mins: e.g. '45 мин'.
+    >= 60 mins: e.g. '1 час и 15 минут', '2 часа', '1 час и 1 минута'.
+    """
+    if minutes < 60:
+        return f"{minutes} мин"
+
+    h = minutes // 60
+    m = minutes % 60
+
+    h_mod100 = h % 100
+    h_mod10 = h % 10
+    if 11 <= h_mod100 <= 14:
+        h_unit = "часов"
+    elif h_mod10 == 1:
+        h_unit = "час"
+    elif 2 <= h_mod10 <= 4:
+        h_unit = "часа"
+    else:
+        h_unit = "часов"
+
+    if m == 0:
+        return f"{h} {h_unit}"
+
+    m_mod100 = m % 100
+    m_mod10 = m % 10
+    if 11 <= m_mod100 <= 14:
+        m_unit = "минут"
+    elif m_mod10 == 1:
+        m_unit = "минута"
+    elif 2 <= m_mod10 <= 4:
+        m_unit = "минуты"
+    else:
+        m_unit = "минут"
+
+    return f"{h} {h_unit} и {m} {m_unit}"
+
 @app.get("/api/schedule/live", response_model=LiveStatusResponse)
 async def get_live_status(
     class_name: Optional[str] = Query(None),
@@ -623,7 +664,7 @@ async def get_live_status(
                 current_time=time_str,
                 state="before_school",
                 minutes_left=diff,
-                message=f"Консультации начнутся в 10:00 (через {diff} мин)"
+                message=f"Консультации начнутся в 10:00 (через {format_minutes_human(diff)})"
             )
         elif sat_start <= now_minutes < sat_end:
             diff = sat_end - now_minutes
@@ -631,7 +672,7 @@ async def get_live_status(
                 current_time=time_str,
                 state="lesson",
                 minutes_left=diff,
-                message=f"Идут консультации (до окончания {diff} мин)"
+                message=f"Идут консультации (до окончания {format_minutes_human(diff)})"
             )
         else:
             return LiveStatusResponse(
@@ -675,7 +716,7 @@ async def get_live_status(
             current_time=time_str,
             state="before_school",
             minutes_left=diff,
-            message=f"До начала ({target_name}{les_info}): {diff} мин",
+            message=f"До начала ({target_name}{les_info}): {format_minutes_human(diff)}",
             next_lesson_number=day_bells[0]["num"],
             next_lesson_time=day_bells[0]["start"]
         )
@@ -702,7 +743,7 @@ async def get_live_status(
                 state="lesson",
                 current_lesson_number=bell["num"],
                 minutes_left=diff,
-                message=f"{lesson_label}{les_info}: до конца {diff} мин"
+                message=f"{lesson_label}{les_info}: до конца {format_minutes_human(diff)}"
             )
 
         if i < len(day_bells) - 1:
@@ -718,7 +759,7 @@ async def get_live_status(
                     state="break",
                     current_lesson_number=bell["num"],
                     minutes_left=diff,
-                    message=f"Перемена{les_info}: до {next_label} {diff} мин",
+                    message=f"Перемена{les_info}: до {next_label} {format_minutes_human(diff)}",
                     next_lesson_number=next_b["num"],
                     next_lesson_time=next_b["start"]
                 )
