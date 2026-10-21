@@ -1,6 +1,7 @@
 import asyncio
 import logging
 from sqlalchemy import delete, select
+from config import settings
 from database import async_session, init_db
 from models import BellSchedule, Lesson, Profile, SchoolClass, User
 
