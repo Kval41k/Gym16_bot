@@ -682,7 +682,7 @@
         <button type="button" onclick="closeProposeNewsModal()" class="py-3.5 px-5 rounded-2xl bg-zinc-100 dark:bg-ios-cardDark2 text-zinc-700 dark:text-zinc-300 font-semibold text-sm active-press cursor-pointer">
           Отмена
         </button>
-        <button id="submit-news-btn" type="button" onclick="handleSubmitProposeNews()" class="flex-1 py-3.5 rounded-2xl bg-ios-blue text-white font-bold text-sm shadow-md active-press transition-all disabled:opacity-50 cursor-pointer">
+        <button id="submit-news-btn" type="button" class="flex-1 py-3.5 rounded-2xl bg-ios-blue text-white font-bold text-sm shadow-md active-press transition-all disabled:opacity-50 cursor-pointer">
           Отправить на модерацию
         </button>
       </div>
@@ -847,7 +847,7 @@
       <!-- New Comment Input Bar -->
       <div class="p-3 bg-zinc-50 dark:bg-ios-cardDark2 border-t border-zinc-200/60 dark:border-zinc-800/80 bottom-tab-safe flex items-center space-x-2">
         <input id="new-comment-input" type="text" placeholder="Написать комментарий..." class="flex-1 px-4 py-2.5 rounded-full bg-white dark:bg-zinc-800 text-sm border-0 focus:ring-2 focus:ring-ios-blue outline-none text-zinc-900 dark:text-white">
-        <button id="send-comment-btn" type="button" onclick="sendNewComment()" class="w-10 h-10 rounded-full bg-ios-blue text-white flex items-center justify-center font-bold text-sm active-press shadow-sm flex-shrink-0 cursor-pointer">
+        <button id="send-comment-btn" type="button" class="w-10 h-10 rounded-full bg-ios-blue text-white flex items-center justify-center font-bold text-sm active-press shadow-sm flex-shrink-0 cursor-pointer">
           ↑
         </button>
       </div>
@@ -2321,6 +2321,8 @@
     });
 
     async function handleSubmitProposeNews() {
+      const submitBtn = document.getElementById("submit-news-btn");
+      if (submitBtn?.disabled) return;
       const titleInput = document.getElementById("propose-title");
       const contentInput = document.getElementById("propose-content");
       const title = titleInput ? titleInput.value.trim() : "";
@@ -2335,7 +2337,6 @@
         return;
       }
 
-      const submitBtn = document.getElementById("submit-news-btn");
       if (submitBtn) {
         submitBtn.disabled = true;
         submitBtn.textContent = "Отправка...";
@@ -3013,30 +3014,38 @@
     async function sendNewComment() {
       const input = document.getElementById("new-comment-input");
       const btn = document.getElementById("send-comment-btn");
+      if (btn?.disabled) return;
       const text = input ? input.value.trim() : "";
       if (!text || !state.activePostForComments) return;
       if (btn) btn.disabled = true;
       haptic("impact");
 
-      const authorName = `${state.user.first_name || ""} ${state.user.last_name || ""}`.trim() || state.user.first_name || "Гимназист";
-      const newComment = await API.post(`/api/news/${state.activePostForComments}/comments`, {
-        user_id: parseInt(state.user.id || 0, 10),
-        author_name: authorName,
-        author_class: state.user.class_name,
-        text: text
-      });
+      try {
+        const postId = state.activePostForComments;
+        const authorName = `${state.user.first_name || ""} ${state.user.last_name || ""}`.trim() || state.user.first_name || "Гимназист";
+        const newComment = await API.post(`/api/news/${postId}/comments`, {
+          user_id: parseInt(state.user.id || 0, 10),
+          author_name: authorName,
+          author_class: state.user.class_name,
+          text: text
+        });
 
-      if (btn) btn.disabled = false;
-      if (newComment) {
-        if (input) input.value = "";
-        const comments = await API.get(`/api/news/${state.activePostForComments}/comments`);
-        renderCommentsList(comments || []);
-        const post = state.news.find(p => p.id === state.activePostForComments);
-        if (post) {
-          post.comments_count = (post.comments_count || 0) + 1;
-          const countEl = document.getElementById(`comment-count-${post.id}`);
-          if (countEl) countEl.textContent = post.comments_count;
+        if (newComment) {
+          if (input) input.value = "";
+          const comments = await API.get(`/api/news/${postId}/comments`);
+          renderCommentsList(comments || []);
+          const post = state.news.find(item => item.id === postId);
+          if (post) {
+            post.comments_count = (post.comments_count || 0) + 1;
+            const countEl = document.getElementById(`comment-count-${post.id}`);
+            if (countEl) countEl.textContent = post.comments_count;
+          }
         }
+      } catch (err) {
+        console.error("Send comment error:", err);
+        alert("Не удалось отправить комментарий: " + (err.message || "попробуйте позже"));
+      } finally {
+        if (btn) btn.disabled = false;
       }
     }
 
@@ -3197,32 +3206,7 @@
       }
     });
 
-    sendCommentBtn?.addEventListener("click", async () => {
-      const text = newCommentInput.value.trim();
-      if (!text || !state.activePostForComments) return;
-
-      const authorName = `${state.user.first_name || ""} ${state.user.last_name || ""}`.trim() || state.user.first_name || "Гимназист";
-
-      const newComment = await API.post(`/api/news/${state.activePostForComments}/comments`, {
-        user_id: state.user.id,
-        author_name: authorName,
-        author_class: state.user.class_name,
-        text: text
-      });
-
-      if (newComment) {
-        newCommentInput.value = "";
-        haptic("impact");
-        const updatedComments = await API.get(`/api/news/${state.activePostForComments}/comments?limit=50&offset=0`);
-        renderCommentsList(updatedComments || []);
-        const countSpan = document.getElementById(`comment-count-${state.activePostForComments}`);
-        const post = state.news.find(p => p.id === state.activePostForComments);
-        if (post) {
-          post.comments_count = (post.comments_count || 0) + 1;
-          if (countSpan) countSpan.textContent = post.comments_count;
-        }
-      }
-    });
+    sendCommentBtn?.addEventListener("click", sendNewComment);
 
     newCommentInput?.addEventListener("keypress", (e) => {
       if (e.key === "Enter") {
