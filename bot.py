@@ -21,6 +21,7 @@ from aiogram.filters import Command, CommandStart, StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.fsm.storage.memory import MemoryStorage
+from aiogram.fsm.storage.redis import RedisStorage
 from aiogram.types import (
     BufferedInputFile,
     CallbackQuery,
@@ -38,7 +39,7 @@ from aiogram.types import (
 from sqlalchemy import func, select, update
 
 from config import settings
-from database import async_session, init_db
+from database import async_session
 from models import BellSchedule, NewsPost, User
 
 # Configure logging
@@ -1006,9 +1007,6 @@ async def cmd_unban_user(message: Message):
 # Main Polling Function
 # -------------------------------------------------------------
 async def main():
-    logger.info("Initializing database...")
-    await init_db()
-
     proxy = os.getenv("TELEGRAM_PROXY") or os.getenv("HTTPS_PROXY") or os.getenv("HTTP_PROXY")
     if proxy:
         logger.info(f"Using Telegram proxy: {proxy}")
@@ -1021,29 +1019,31 @@ async def main():
         session=session,
         default=DefaultBotProperties(parse_mode=ParseMode.HTML)
     )
-    dp = Dispatcher(storage=MemoryStorage())
+    storage = RedisStorage.from_url(settings.BOT_STORAGE_URL) if settings.BOT_STORAGE_URL else MemoryStorage()
+    if not settings.BOT_STORAGE_URL:
+        logger.warning("BOT_STORAGE_URL is unset; in-progress bot conversations will reset on restart.")
+    dp = Dispatcher(storage=storage)
     dp.include_router(router)
 
     logger.info("Starting Gymnasium 16 aiogram 3 Bot...")
     try:
-        await asyncio.wait_for(bot.delete_webhook(drop_pending_updates=True), timeout=10.0)
+        await asyncio.wait_for(bot.delete_webhook(drop_pending_updates=False), timeout=10.0)
     except Exception as e:
         logger.warning(f"delete_webhook skipped: {e}. Starting polling directly...")
 
-    while True:
-        try:
-            await dp.start_polling(bot, handle_signals=False)
-            break
-        except (TelegramNetworkError, asyncio.TimeoutError) as e:
-            logger.warning(f"Telegram network glitch: {e}. Reconnecting in 3 seconds...")
-            await asyncio.sleep(3)
-        except (KeyboardInterrupt, SystemExit):
-            break
-        finally:
+    try:
+        while True:
             try:
-                await bot.session.close()
-            except Exception:
-                pass
+                await dp.start_polling(bot, handle_signals=False)
+                break
+            except (TelegramNetworkError, asyncio.TimeoutError) as e:
+                logger.warning(f"Telegram network glitch: {e}. Reconnecting in 3 seconds...")
+                await asyncio.sleep(3)
+            except (KeyboardInterrupt, SystemExit):
+                break
+    finally:
+        await dp.storage.close()
+        await bot.session.close()
 
 if __name__ == "__main__":
     asyncio.run(main())

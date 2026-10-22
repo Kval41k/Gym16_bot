@@ -1,10 +1,11 @@
 from typing import AsyncGenerator
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase
+from sqlalchemy import inspect
 from config import BASE_DIR, settings
 
 def get_db_url() -> str:
-    url = settings.DATABASE_URL
+    url = settings.database_url
     if "sqlite" in url and ("./gym16.db" in url or ":///./" in url):
         return f"sqlite+aiosqlite:///{BASE_DIR}/gym16.db"
     if url.startswith("postgres://"):
@@ -65,10 +66,9 @@ async def init_db() -> None:
             await conn.execute(text("PRAGMA cache_size = -64000;"))
             await conn.execute(text("PRAGMA foreign_keys = ON;"))
         await conn.run_sync(Base.metadata.create_all)
-        try:
+        user_columns = await conn.run_sync(lambda sync_conn: inspect(sync_conn).get_columns("users"))
+        if "is_banned" not in {column["name"] for column in user_columns}:
             await conn.execute(text("ALTER TABLE users ADD COLUMN is_banned BOOLEAN DEFAULT 0 NOT NULL"))
-        except Exception:
-            pass
 
     async with async_session() as session:
         # 1. Seed classes if missing

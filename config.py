@@ -1,6 +1,7 @@
 import os
 from pathlib import Path
 from typing import Dict, List
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -11,6 +12,7 @@ class Settings(BaseSettings):
     ADMIN_IDS: str = ""
     ADMIN_IDS_RAW: str = ""
     ADMIN_USERNAME: str = ""
+    BOT_STORAGE_URL: str = ""
     
     # App & Server Configuration
     BASE_URL: str = ""
@@ -19,9 +21,10 @@ class Settings(BaseSettings):
     DEBUG: bool = False
     
     # Database & Storage
-    DATABASE_URL: str = f"sqlite+aiosqlite:///{BASE_DIR}/gym16.db"
-    UPLOAD_DIR_RAW: str = ""
+    DATABASE_URL: str = ""
+    UPLOAD_DIR_RAW: str = Field(default="", validation_alias="UPLOAD_DIR")
     STATIC_DIR_RAW: str = ""
+    CORS_ORIGINS: str = ""
     
     model_config = SettingsConfigDict(
         env_file=BASE_DIR / ".env",
@@ -31,7 +34,26 @@ class Settings(BaseSettings):
 
     @property
     def UPLOAD_DIR(self) -> Path:
-        return (BASE_DIR / "uploads").resolve()
+        configured = self.UPLOAD_DIR_RAW
+        if configured:
+            return Path(configured).expanduser().resolve()
+        disk_path = os.getenv("RENDER_DISK_PATH", "")
+        root = Path(disk_path).expanduser() if disk_path else BASE_DIR
+        return (root / "uploads").resolve()
+
+    @property
+    def database_url(self) -> str:
+        if self.DATABASE_URL:
+            return self.DATABASE_URL
+        disk_path = os.getenv("RENDER_DISK_PATH")
+        if disk_path:
+            return f"sqlite+aiosqlite:///{Path(disk_path).expanduser() / 'gym16.db'}"
+        return f"sqlite+aiosqlite:///{BASE_DIR}/gym16.db"
+
+    @property
+    def cors_origins(self) -> List[str]:
+        raw = self.CORS_ORIGINS or self.BASE_URL
+        return [origin.strip().rstrip("/") for origin in raw.split(",") if origin.strip()]
 
     @property
     def STATIC_DIR(self) -> Path:

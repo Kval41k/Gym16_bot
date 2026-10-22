@@ -1,6 +1,6 @@
 import asyncio
 import logging
-from sqlalchemy import delete, select
+from sqlalchemy import select
 from config import settings
 from database import async_session, init_db
 from models import BellSchedule, Lesson, Profile, SchoolClass, User
@@ -490,46 +490,50 @@ async def seed():
     await init_db()
 
     async with async_session() as session:
-        # 1. Update bell schedule with official timings
-        logger.info("Seeding official Bell Schedule...")
-        await session.execute(delete(BellSchedule))
-        for bell in OFFICIAL_BELLS:
-            session.add(BellSchedule(
-                lesson_number=bell["lesson_number"],
-                start_time=bell["start_time"],
-                end_time=bell["end_time"],
-                is_saturday=False
-            ))
+        # Seed defaults only when absent, so deploys never overwrite edits.
+        bell_res = await session.execute(select(BellSchedule))
+        if not bell_res.scalars().first():
+            for bell in OFFICIAL_BELLS:
+                session.add(BellSchedule(
+                    lesson_number=bell["lesson_number"],
+                    start_time=bell["start_time"],
+                    end_time=bell["end_time"],
+                    is_saturday=False
+                ))
 
         # 2. Seed Classes and Profiles
         logger.info("Seeding Classes (11А..11Ж) and Profiles...")
         from config import DEFAULT_CLASSES, ALL_PROFILES
-        await session.execute(delete(SchoolClass))
+        class_res = await session.execute(select(SchoolClass))
+        existing_classes = {item.name for item in class_res.scalars().all()}
         for c_name in DEFAULT_CLASSES:
-            session.add(SchoolClass(name=c_name))
+            if c_name not in existing_classes:
+                session.add(SchoolClass(name=c_name))
 
-        await session.execute(delete(Profile))
+        profile_res = await session.execute(select(Profile))
+        existing_profiles = {item.name for item in profile_res.scalars().all()}
         for p_name in ALL_PROFILES:
-            session.add(Profile(name=p_name))
+            if p_name not in existing_profiles:
+                session.add(Profile(name=p_name))
 
         # 3. Seed Lessons for 11A, 11В, 11Г, 11Д, 11Ж
         lessons_11d = [{**item, 'class_name': '11Д'} for item in LESSONS_11V]
         all_seeded_lessons = LESSONS_11A + LESSONS_11V + LESSONS_11G + LESSONS_11ZH + lessons_11d
         logger.info(f"Seeding {len(all_seeded_lessons)} lessons across 11А, 11В, 11Г, 11Д, 11Ж...")
-        await session.execute(delete(Lesson))
-
-        for item in all_seeded_lessons:
-            session.add(Lesson(
-                day_of_week=item["day_of_week"],
-                lesson_number=item["lesson_number"],
-                class_name=item["class_name"],
-                subject=item["subject"],
-                teacher_name=item["teacher_name"],
-                cabinet=item["cabinet"],
-                profile_name=item.get("profile_name"),
-                subgroup=item.get("subgroup"),
-                note=item.get("note")
-            ))
+        lesson_res = await session.execute(select(Lesson.id).limit(1))
+        if lesson_res.first() is None:
+            for item in all_seeded_lessons:
+                session.add(Lesson(
+                    day_of_week=item["day_of_week"],
+                    lesson_number=item["lesson_number"],
+                    class_name=item["class_name"],
+                    subject=item["subject"],
+                    teacher_name=item["teacher_name"],
+                    cabinet=item["cabinet"],
+                    profile_name=item.get("profile_name"),
+                    subgroup=item.get("subgroup"),
+                    note=item.get("note")
+                ))
 
         # 4. Pre-seed Admin Profile dynamically from environment variables
         if settings.admin_ids:

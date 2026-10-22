@@ -957,11 +957,9 @@
     // This client-side identity check only controls whether the admin tab is
     // visible. Admin API routes independently validate Telegram initData on
     // the server before allowing any action.
-    const ADMIN_UI_USERNAMES = new Set(['kvalx']);
     function checkIsAdmin() {
       if (!state.user) return false;
-      const username = String(state.user.username || '').toLowerCase().replace(/^@/, '');
-      return Boolean(state.user.is_admin || (username && ADMIN_UI_USERNAMES.has(username)));
+      return Boolean(state.user.is_admin);
     }
 
     function updateAdminNavigation() {
@@ -1029,6 +1027,32 @@
         .replace(/'/g, '&#039;');
     }
     window.escapeHtml = escapeHtml;
+
+    function safeImageUrl(value) {
+      if (!value || typeof value !== 'string') return '';
+      const url = value.trim();
+      if (/^\/uploads\/[A-Za-z0-9_.-]+$/.test(url)) return url;
+      try {
+        const parsed = new URL(url, window.location.origin);
+        if (parsed.protocol === 'https:' && !parsed.username && !parsed.password) return parsed.href;
+      } catch (_) {}
+      return '';
+    }
+
+    function safeHttpsUrl(value) {
+      try {
+        const parsed = new URL(String(value || ''), window.location.origin);
+        if (parsed.protocol === 'https:' && !parsed.username && !parsed.password) return parsed.href;
+      } catch (_) {}
+      return '';
+    }
+
+    document.addEventListener('click', (event) => {
+      const image = event.target.closest('.safe-image-open');
+      if (!image) return;
+      const url = safeImageUrl(image.dataset.imageUrl || '');
+      if (url) window.open(url, '_blank', 'noopener,noreferrer');
+    });
 
     // --------------------------------------------------------
     // Authenticated API Helper (Cryptographic Telegram InitData)
@@ -1878,15 +1902,17 @@
         only_my_profile: filterByProfile,
         profile_name: filterByProfile ? filterVal : ''
       });
+      if (isMyClass && state.user.subgroup) params.append('subgroup', state.user.subgroup);
 
       const scheduleData = await API.get(`/api/schedule/lessons?${params.toString()}`);
 
       if (!scheduleData || !scheduleData.slots || scheduleData.slots.length === 0) {
+        const noScheduleUploaded = scheduleData && scheduleData.schedule_loaded === false;
         container.innerHTML = `
           <div class="py-16 text-center space-y-2">
-            <div class="w-12 h-12 rounded-2xl bg-zinc-100 dark:bg-ios-cardDark2 text-zinc-400 mx-auto flex items-center justify-center text-xl">☕️</div>
-            <h4 class="text-sm font-bold text-zinc-800 dark:text-zinc-200">Уроков нет</h4>
-            <p class="text-xs text-ios-secondaryText">${isMyClass ? 'В этот день в расписании пока нет занятий' : `Для ${targetClass} класса расписание на этот день пока не загружено`}</p>
+            <div class="w-12 h-12 rounded-2xl bg-zinc-100 dark:bg-ios-cardDark2 text-zinc-400 mx-auto flex items-center justify-center text-xl">${noScheduleUploaded ? '📚' : '☕️'}</div>
+            <h4 class="text-sm font-bold text-zinc-800 dark:text-zinc-200">${noScheduleUploaded ? 'Расписание ещё не загружено' : 'Уроков нет'}</h4>
+            <p class="text-xs text-ios-secondaryText">${noScheduleUploaded ? `Для ${escapeHtml(targetClass)} класса расписание ещё не добавлено` : (isMyClass ? 'В этот день в расписании пока нет занятий' : `Для ${escapeHtml(targetClass)} класса расписание на этот день пока не загружено`)}</p>
           </div>
         `;
         return;
@@ -2107,11 +2133,11 @@
       let avatarHtml = "";
       if (isAnon) {
         avatarHtml = `<div class="w-9 h-9 rounded-full bg-zinc-200 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 text-sm font-bold flex items-center justify-center shadow-xs">🎭</div>`;
-      } else if (post.author_photo_url) {
-        avatarHtml = `<img src="${post.author_photo_url}" alt="${post.author_name}" class="w-9 h-9 rounded-full object-cover shadow-xs border border-zinc-200/50 dark:border-zinc-700/50" onerror="this.outerHTML='<div class=\'w-9 h-9 rounded-full bg-gradient-to-tr from-ios-blue to-ios-indigo text-white text-xs font-bold flex items-center justify-center shadow-xs\'>${post.author_name ? post.author_name.charAt(0) : 'Г'}</div>'">`;
+      } else if (safeImageUrl(post.author_photo_url)) {
+        avatarHtml = `<img src="${escapeHtml(safeImageUrl(post.author_photo_url))}" alt="${escapeHtml(post.author_name)}" class="w-9 h-9 rounded-full object-cover shadow-xs border border-zinc-200/50 dark:border-zinc-700/50">`;
       } else {
         const initial = post.author_name ? post.author_name.charAt(0) : "Г";
-        avatarHtml = `<div class="w-9 h-9 rounded-full bg-gradient-to-tr from-ios-blue to-ios-indigo text-white text-xs font-bold flex items-center justify-center shadow-xs">${initial}</div>`;
+        avatarHtml = `<div class="w-9 h-9 rounded-full bg-gradient-to-tr from-ios-blue to-ios-indigo text-white text-xs font-bold flex items-center justify-center shadow-xs">${escapeHtml(initial)}</div>`;
       }
 
       const authorSafe = escapeHtml(post.author_name);
@@ -2134,9 +2160,10 @@
       ` : "";
 
       // Natural uncropped aspect ratio for news media
-      const imageHtml = post.image_url 
+      const imageUrl = safeImageUrl(post.image_url);
+      const imageHtml = imageUrl
         ? `<div class="mt-3 rounded-2xl overflow-hidden border border-zinc-100 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/30">
-             <img src="${post.image_url}" alt="Новость" class="w-full h-auto rounded-2xl cursor-pointer block" loading="lazy" onclick="window.open('${post.image_url}', '_blank')">
+             <img src="${escapeHtml(imageUrl)}" data-image-url="${escapeHtml(imageUrl)}" alt="Новость" class="safe-image-open w-full h-auto rounded-2xl cursor-pointer block" loading="lazy">
            </div>`
         : "";
 
@@ -2631,9 +2658,10 @@
           : "";
 
         // Uncropped photo preview for admin moderation
-        const imageHtml = p.image_url ? `
+        const imageUrl = safeImageUrl(p.image_url);
+        const imageHtml = imageUrl ? `
           <div class="mt-2 rounded-xl overflow-hidden border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-900 flex items-center justify-center">
-            <img src="${p.image_url}" alt="Фото новости" class="w-full h-auto max-h-72 object-contain rounded-xl cursor-pointer" onclick="window.open('${p.image_url}', '_blank')">
+            <img src="${escapeHtml(imageUrl)}" data-image-url="${escapeHtml(imageUrl)}" alt="Фото новости" class="safe-image-open w-full h-auto max-h-72 object-contain rounded-xl cursor-pointer">
           </div>
         ` : '<div class="mt-2 p-2 rounded-xl bg-zinc-100 dark:bg-zinc-800/50 text-[11px] text-ios-secondaryText italic">Без фотографии</div>';
 
@@ -3012,25 +3040,6 @@
       }
     }
 
-    async function handleDeleteComment(commentId) {
-      if (!confirm("Удалить этот комментарий?")) return;
-      haptic("impact");
-      const uid = state.user?.id || 0;
-      await API.delete(`/api/admin/comments/${commentId}?user_id=${uid}`);
-      if (state.activePostForComments) {
-        const comments = await API.get(`/api/news/${state.activePostForComments}/comments`);
-        renderCommentsList(comments || []);
-        const post = state.news.find(p => p.id === state.activePostForComments);
-        if (post && post.comments_count > 0) {
-          post.comments_count -= 1;
-          const countEl = document.getElementById(`comment-count-${post.id}`);
-          if (countEl) countEl.textContent = post.comments_count;
-        }
-      }
-    }
-
-
-
     openModerationBtn?.addEventListener("click", openModerationModal);
     closeModerationBtn?.addEventListener("click", closeModerationModal);
 
@@ -3068,6 +3077,8 @@
       const pid = parseInt(postId, 10);
       if (isNaN(pid)) return;
       state.activePostForComments = pid;
+      state.commentsLoaded = [];
+      state.commentsOffset = 0;
       const sheet = document.getElementById("comments-sheet");
       if (sheet) {
         sheet.classList.remove("hidden");
@@ -3084,8 +3095,10 @@
         `;
       }
 
-      const comments = await API.get(`/api/news/${pid}/comments`);
-      renderCommentsList(comments || []);
+      const comments = await API.get(`/api/news/${pid}/comments?limit=50&offset=0`);
+      state.commentsLoaded = comments || [];
+      state.commentsOffset = state.commentsLoaded.length;
+      renderCommentsList(state.commentsLoaded, state.commentsLoaded.length === 50);
       haptic("selection");
     }
 
@@ -3107,8 +3120,10 @@
       if (e.target.id === "comments-sheet") closeCommentsSheet();
     });
 
-    function renderCommentsList(comments) {
+    function renderCommentsList(comments, hasMore = comments?.length === 50) {
       const container = document.getElementById("comments-sheet-list");
+      state.commentsLoaded = comments || [];
+      state.commentsOffset = state.commentsLoaded.length;
       if (!comments || comments.length === 0) {
         container.innerHTML = `
           <div class="py-12 text-center text-xs text-ios-secondaryText space-y-1">
@@ -3119,10 +3134,11 @@
         return;
       }
 
-      container.innerHTML = comments.map(c => {
+      const olderButton = hasMore ? '<button type="button" class="load-older-comments w-full py-2 text-xs font-semibold text-ios-blue">Показать предыдущие комментарии</button>' : '';
+      container.innerHTML = olderButton + comments.map(c => {
         const canDelete = state.user && (checkIsAdmin() || c.user_id === state.user.id);
         const deleteBtn = canDelete ? `
-          <button onclick="handleDeleteComment(${c.id})" class="delete-comment-btn p-1 text-zinc-400 hover:text-red-500 rounded-md active-press" title="Удалить комментарий">
+          <button data-comment-id="${c.id}" class="delete-comment-btn p-1 text-zinc-400 hover:text-red-500 rounded-md active-press" title="Удалить комментарий">
             <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
           </button>
         ` : "";
@@ -3150,6 +3166,17 @@
 
     // Comment deletion listener (admin or comment author)
     document.getElementById("comments-sheet-list")?.addEventListener("click", async (e) => {
+      const olderBtn = e.target.closest(".load-older-comments");
+      if (olderBtn && state.activePostForComments) {
+        olderBtn.disabled = true;
+        const older = await API.get(`/api/news/${state.activePostForComments}/comments?limit=50&offset=${state.commentsOffset || 0}`);
+        if (older) {
+          state.commentsLoaded = [...older, ...(state.commentsLoaded || [])];
+          state.commentsOffset = (state.commentsOffset || 0) + older.length;
+          renderCommentsList(state.commentsLoaded, older.length === 50);
+        }
+        return;
+      }
       const btn = e.target.closest(".delete-comment-btn");
       if (!btn) return;
       e.stopPropagation();
@@ -3159,15 +3186,13 @@
 
       const res = await API.delete(`/api/admin/comments/${commentId}?user_id=${state.user.id}`);
       if (res) {
-        const updatedComments = await API.get(`/api/news/${state.activePostForComments}/comments`);
+        const updatedComments = await API.get(`/api/news/${state.activePostForComments}/comments?limit=50&offset=0`);
         renderCommentsList(updatedComments || []);
-        const countSpan = document.getElementById(`comment-count-${state.activePostForComments}`);
-        if (countSpan && updatedComments) {
-          countSpan.textContent = updatedComments.length;
-        }
         const post = state.news.find(p => p.id === state.activePostForComments);
-        if (post && updatedComments) {
-          post.comments_count = updatedComments.length;
+        if (post) {
+          post.comments_count = Math.max(0, (post.comments_count || 0) - 1);
+          const countSpan = document.getElementById(`comment-count-${post.id}`);
+          if (countSpan) countSpan.textContent = post.comments_count;
         }
       }
     });
@@ -3188,15 +3213,13 @@
       if (newComment) {
         newCommentInput.value = "";
         haptic("impact");
-        const updatedComments = await API.get(`/api/news/${state.activePostForComments}/comments`);
+        const updatedComments = await API.get(`/api/news/${state.activePostForComments}/comments?limit=50&offset=0`);
         renderCommentsList(updatedComments || []);
         const countSpan = document.getElementById(`comment-count-${state.activePostForComments}`);
-        if (countSpan && updatedComments) {
-          countSpan.textContent = updatedComments.length;
-        }
         const post = state.news.find(p => p.id === state.activePostForComments);
-        if (post && updatedComments) {
-          post.comments_count = updatedComments.length;
+        if (post) {
+          post.comments_count = (post.comments_count || 0) + 1;
+          if (countSpan) countSpan.textContent = post.comments_count;
         }
       }
     });
@@ -3482,15 +3505,17 @@
         </div>
       ` : '';
 
-      const imageHtml = m.image_url ? `
+      const materialImageUrl = safeImageUrl(m.image_url);
+      const linkUrl = safeHttpsUrl(m.link_url);
+      const imageHtml = materialImageUrl ? `
         <div class="mt-3 rounded-2xl overflow-hidden border border-zinc-100 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/30">
-          <img src="${m.image_url}" alt="Схема / таблица" class="w-full h-auto rounded-2xl block object-contain cursor-pointer shadow-xs" loading="lazy" onclick="window.open('${m.image_url}', '_blank')">
+          <img src="${escapeHtml(materialImageUrl)}" data-image-url="${escapeHtml(materialImageUrl)}" alt="Схема / таблица" class="safe-image-open w-full h-auto rounded-2xl block object-contain cursor-pointer shadow-xs" loading="lazy">
         </div>
       ` : '';
 
-      const linkHtml = m.link_url ? `
+      const linkHtml = linkUrl ? `
         <div class="mt-2.5 pt-2 border-t border-zinc-100 dark:border-zinc-800/80">
-          <a href="${m.link_url}" target="_blank" class="inline-flex items-center gap-1.5 text-xs text-ios-blue font-semibold hover:underline">
+          <a href="${escapeHtml(linkUrl)}" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-1.5 text-xs text-ios-blue font-semibold hover:underline">
             <span>🔗 Источник / Разбор</span>
             <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path></svg>
           </a>
@@ -3503,9 +3528,9 @@
           line = line.trim();
           if (!line) return '<div class="h-1.5"></div>';
           if (line.startsWith('📌') || line.startsWith('•') || line.startsWith('-')) {
-            return `<div class="text-xs leading-relaxed font-medium pl-1 text-zinc-800 dark:text-zinc-200">${line}</div>`;
+            return `<div class="text-xs leading-relaxed font-medium pl-1 text-zinc-800 dark:text-zinc-200">${escapeHtml(line)}</div>`;
           }
-          return `<p class="text-xs leading-relaxed text-zinc-700 dark:text-zinc-300">${line}</p>`;
+          return `<p class="text-xs leading-relaxed text-zinc-700 dark:text-zinc-300">${escapeHtml(line)}</p>`;
         })
         .join('');
 
@@ -3516,13 +3541,13 @@
               <span class="px-2.5 py-1 rounded-xl text-xs font-bold bg-blue-50 text-ios-blue dark:bg-blue-950/80 dark:text-blue-300 border border-blue-200/50 dark:border-blue-900/50">
                 Задание №${m.task_number}
               </span>
-              <span class="text-[11px] text-ios-secondaryText">${m.created_at || ''}</span>
+              <span class="text-[11px] text-ios-secondaryText">${escapeHtml(m.created_at || '')}</span>
             </div>
             ${adminControls}
           </div>
 
           <div>
-            <h3 class="text-base font-bold text-zinc-900 dark:text-white leading-snug">${m.title}</h3>
+            <h3 class="text-base font-bold text-zinc-900 dark:text-white leading-snug">${escapeHtml(m.title)}</h3>
             ${topicName ? `<div class="text-[11px] text-ios-secondaryText mt-0.5">${topicName}</div>` : ''}
           </div>
           

@@ -1,6 +1,7 @@
 from datetime import datetime
 from typing import Dict, List, Optional
-from pydantic import BaseModel, ConfigDict, Field
+from urllib.parse import urlparse
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 # -------------------------------------------------------------
 # Metadata / Structure Schemas
@@ -93,11 +94,29 @@ class DayScheduleResponse(BaseModel):
     day_of_week: int
     day_name: str
     class_name: str
+    schedule_loaded: bool = True
     slots: List[LessonSlot]
 
 # -------------------------------------------------------------
 # News Feed & Social Schemas
 # -------------------------------------------------------------
+def _validate_news_image_url(value: Optional[str]) -> Optional[str]:
+    if value is None or not value.strip():
+        return None
+    value = value.strip()
+    if len(value) > 2048 or any(char in value for char in "\"'<>\\\n\r"):
+        raise ValueError("Некорректный адрес изображения")
+    if value.startswith("/uploads/"):
+        filename = value.removeprefix("/uploads/")
+        if filename and "/" not in filename and filename not in {".", ".."}:
+            return value
+        raise ValueError("Некорректный адрес загруженного изображения")
+    parsed = urlparse(value)
+    if parsed.scheme == "https" and parsed.netloc and not parsed.username and not parsed.password:
+        return value
+    raise ValueError("Изображение должно быть загружено в приложение или иметь HTTPS адрес")
+
+
 class NewsCreateRequest(BaseModel):
     title: str = Field(..., min_length=3, max_length=255)
     content: str = Field(..., min_length=5)
@@ -108,12 +127,22 @@ class NewsCreateRequest(BaseModel):
     author_username: Optional[str] = None
     is_anonymous: bool = False
 
+    @field_validator("image_url")
+    @classmethod
+    def validate_image_url(cls, value: Optional[str]) -> Optional[str]:
+        return _validate_news_image_url(value)
+
 class NewsEditRequest(BaseModel):
     title: str = Field(..., min_length=3, max_length=255)
     content: str = Field(..., min_length=5)
     image_url: Optional[str] = None
     admin_id: Optional[int] = None
     user_id: Optional[int] = None
+
+    @field_validator("image_url")
+    @classmethod
+    def validate_image_url(cls, value: Optional[str]) -> Optional[str]:
+        return _validate_news_image_url(value)
 
 class ReactionCount(BaseModel):
     emoji: str

@@ -6,6 +6,7 @@ import sys
 import uvicorn
 from bot import main as start_bot
 from config import settings
+from database import init_db
 from main import app
 
 logging.basicConfig(level=logging.INFO)
@@ -39,7 +40,10 @@ if __name__ == "__main__":
         if args.api_only:
             asyncio.run(run_api())
         elif args.bot_only:
-            asyncio.run(start_bot())
+            async def run_bot_with_db():
+                await init_db()
+                await start_bot()
+            asyncio.run(run_bot_with_db())
         else:
             asyncio.run(run_both())
     except (KeyboardInterrupt, SystemExit):

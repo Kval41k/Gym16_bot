@@ -54,6 +54,19 @@ EMOJI_PALETTE = ["❤️", "🔥", "👍", "👎", "🤡", "😢"]
 # High-Performance In-Memory Cache (Sub-millisecond responses)
 # -------------------------------------------------------------
 _CACHE: Dict[str, Any] = {}
+_RATE_LIMITS: Dict[str, List[float]] = {}
+
+def enforce_rate_limit(key: str, limit: int, window_seconds: int) -> None:
+    now = time.monotonic()
+    recent = [stamp for stamp in _RATE_LIMITS.get(key, []) if now - stamp < window_seconds]
+    if len(recent) >= limit:
+        raise HTTPException(status_code=429, detail="Слишком много запросов. Попробуйте позже.")
+    recent.append(now)
+    _RATE_LIMITS[key] = recent
+    if len(_RATE_LIMITS) > 10000:
+        for old_key, stamps in list(_RATE_LIMITS.items()):
+            if not stamps or now - stamps[-1] >= window_seconds:
+                _RATE_LIMITS.pop(old_key, None)
 
 def cache_get(key: str, ttl: float) -> Optional[Any]:
     entry = _CACHE.get(key)
@@ -100,10 +113,10 @@ app.add_middleware(GZipMiddleware, minimum_size=1000)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_origins=settings.cors_origins,
+    allow_credentials=False,
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers=["Content-Type", "X-Telegram-Init-Data"],
 )
 
 # Ensure directories exist before mounting
@@ -191,11 +204,11 @@ def generate_admin_auth_token(admin_id: int, timestamp: int) -> str:
     return hmac.new(key, msg, hashlib.sha256).hexdigest()
 
 def verify_admin_auth_token(admin_id: int, timestamp: int, signature: str) -> bool:
-    """Verifies HMAC signature and 24-hour expiration window."""
+    """Verifies HMAC signature and a 15-minute expiration window."""
     if not signature or not timestamp:
         return False
     now = int(time.time())
-    if abs(now - timestamp) > 86400:
+    if abs(now - timestamp) > 900:
         return False
     expected = generate_admin_auth_token(admin_id, timestamp)
     return hmac.compare_digest(expected, signature)
@@ -247,11 +260,11 @@ async def check_admin_permission_or_raise(
     )
 
 async def check_is_admin(admin_id: int, db: AsyncSession) -> bool:
-    """Checks if user has admin privileges by ID, username or DB flag."""
+    """Checks configured admin identity; persisted role flags are not authority."""
     if admin_id in settings.admin_ids:
         return True
     user = await db.get(User, admin_id)
-    if user and (user.is_admin or (user.username and user.username.lower().lstrip("@") in settings.admin_usernames)):
+    if user and user.username and user.username.lower().lstrip("@") in settings.admin_usernames:
         return True
     return False
 
@@ -467,6 +480,11 @@ async def sync_user(
     user = await db.get(User, payload.id)
     telegram_username = telegram_user.get("username")
 
+    if payload.class_name and payload.class_name not in CLASS_PROFILES_MAP:
+        raise HTTPException(status_code=422, detail="Выберите существующий класс.")
+    if payload.profile_name and payload.class_name and payload.profile_name not in CLASS_PROFILES_MAP[payload.class_name]:
+        raise HTTPException(status_code=422, detail="Профиль не соответствует выбранному классу.")
+
     is_admin = (
         payload.id in settings.admin_ids 
         or (telegram_username and telegram_username.lower().lstrip("@") in settings.admin_usernames)
@@ -496,8 +514,8 @@ async def sync_user(
             user.class_name = payload.class_name
         if payload.profile_name:
             user.profile_name = payload.profile_name
+        user.is_admin = is_admin
         if is_admin:
-            user.is_admin = True
             if not user.class_name:
                 user.class_name = "11А"
             if not user.profile_name:
@@ -516,7 +534,7 @@ async def sync_user(
         class_name=user.class_name,
         profile_name=user.profile_name,
         subgroup=user.subgroup,
-        is_admin=user.is_admin,
+        is_admin=is_admin,
         is_banned=user.is_banned,
         is_onboarded=is_onboarded
     )
@@ -533,6 +551,9 @@ async def get_user_profile(
         raise HTTPException(status_code=404, detail="User not found")
     
     is_onboarded = bool(user.class_name and user.profile_name and user.first_name and user.last_name)
+    configured_admin = user.id in settings.admin_ids or bool(
+        user.username and user.username.lower().lstrip("@") in settings.admin_usernames
+    )
     return UserResponse(
         id=user.id,
         first_name=user.first_name,
@@ -542,7 +563,7 @@ async def get_user_profile(
         class_name=user.class_name,
         profile_name=user.profile_name,
         subgroup=user.subgroup,
-        is_admin=user.is_admin,
+        is_admin=configured_admin,
         is_banned=user.is_banned,
         is_onboarded=is_onboarded
     )
@@ -575,8 +596,15 @@ async def update_user_profile(
     if user.is_banned:
         raise HTTPException(status_code=403, detail="Ваш аккаунт заблокирован администратором.")
 
-    user.class_name = payload.class_name.strip()
-    user.profile_name = payload.profile_name.strip()
+    class_name = payload.class_name.strip()
+    profile_name = payload.profile_name.strip()
+    if class_name not in CLASS_PROFILES_MAP or profile_name not in CLASS_PROFILES_MAP[class_name]:
+        raise HTTPException(status_code=422, detail="Выберите существующий класс и профиль.")
+    if payload.subgroup not in (None, 1, 2):
+        raise HTTPException(status_code=422, detail="Номер подгруппы должен быть 1 или 2.")
+
+    user.class_name = class_name
+    user.profile_name = profile_name
     user.first_name = first_name
     user.last_name = last_name
     user.subgroup = payload.subgroup
@@ -593,7 +621,7 @@ async def update_user_profile(
         class_name=user.class_name,
         profile_name=user.profile_name,
         subgroup=user.subgroup,
-        is_admin=user.is_admin,
+        is_admin=(user.id in settings.admin_ids or bool(user.username and user.username.lower().lstrip("@") in settings.admin_usernames)),
         is_banned=user.is_banned,
         is_onboarded=True
     )
@@ -680,6 +708,17 @@ async def get_live_status(
         h, m = map(int, t_str.split(":"))
         return h * 60 + m
 
+    if class_name:
+        class_has_schedule = await db.scalar(
+            select(Lesson.id).where(Lesson.class_name == class_name).limit(1)
+        )
+        if class_has_schedule is None:
+            return LiveStatusResponse(
+                current_time=time_str,
+                state="no_schedule",
+                message=f"Расписание для {class_name} ещё не загружено"
+            )
+
     async def get_lesson_for_num(num: int) -> Optional[Lesson]:
         if not class_name or day_of_week > 5:
             return None
@@ -746,17 +785,17 @@ async def get_live_status(
             {"num": 7, "title": "7 урок", "start": "14:00", "end": "14:40"},
         ]
     else:
-        # Tuesday - Friday standard bell schedule
+        bell_res = await db.execute(select(BellSchedule).order_by(BellSchedule.lesson_number))
         day_bells = [
-            {"num": 1, "title": "1 урок", "start": "08:15", "end": "08:55"},
-            {"num": 2, "title": "2 урок", "start": "09:10", "end": "09:50"},
-            {"num": 3, "title": "3 урок", "start": "10:10", "end": "10:50"},
-            {"num": 4, "title": "4 урок", "start": "11:10", "end": "11:50"},
-            {"num": 5, "title": "5 урок", "start": "12:10", "end": "12:50"},
-            {"num": 6, "title": "6 урок", "start": "13:00", "end": "13:40"},
-            {"num": 7, "title": "7 урок", "start": "13:50", "end": "14:30"},
-            {"num": 8, "title": "8 урок", "start": "14:40", "end": "15:20"},
+            {"num": bell.lesson_number, "title": f"{bell.lesson_number} урок", "start": bell.start_time, "end": bell.end_time}
+            for bell in bell_res.scalars().all()
         ]
+        if not day_bells:
+            return LiveStatusResponse(
+                current_time=time_str,
+                state="no_schedule",
+                message="Расписание звонков ещё не настроено"
+            )
 
     first_start = parse_minutes(day_bells[0]["start"])
     if now_minutes < first_start:
@@ -841,7 +880,7 @@ async def get_lessons(
     If only_my_profile=True, filters to common lessons + matching profile.
     If only_my_profile=False, returns all class lessons grouped into slots with split indicators.
     """
-    cache_key = f"sched:{class_name}:{day_of_week}:{only_my_profile}:{profile_name}"
+    cache_key = f"sched:{class_name}:{day_of_week}:{only_my_profile}:{profile_name}:{subgroup}"
     cached = cache_get(cache_key, 180.0)
     if cached:
         return cached
@@ -856,13 +895,21 @@ async def get_lessons(
 
     res = await db.execute(query)
     raw_lessons = res.scalars().all()
+    class_schedule_id = await db.scalar(
+        select(Lesson.id).where(Lesson.class_name == class_name).limit(1)
+    )
+    schedule_loaded = class_schedule_id is not None
 
     # Apply profile filter if requested
     filtered_lessons: List[Lesson] = []
     for l in raw_lessons:
         if only_my_profile and profile_name:
             profile_matches = (l.profile_name is None) or (l.profile_name.strip().lower() == profile_name.strip().lower())
-            if profile_matches:
+            subgroup_matches = l.subgroup is None or subgroup is None or l.subgroup == subgroup
+            if profile_matches and subgroup_matches:
+                filtered_lessons.append(l)
+        elif subgroup is not None:
+            if l.subgroup is None or l.subgroup == subgroup:
                 filtered_lessons.append(l)
         else:
             filtered_lessons.append(l)
@@ -907,6 +954,7 @@ async def get_lessons(
         day_of_week=day_of_week,
         day_name=DAY_NAMES[day_of_week],
         class_name=class_name,
+        schedule_loaded=schedule_loaded,
         slots=slots
     )
     cache_set(cache_key, resp)
@@ -939,13 +987,40 @@ async def get_news(
     query = (
         select(NewsPost)
         .where(NewsPost.status == "approved")
-        .options(selectinload(NewsPost.reactions), selectinload(NewsPost.comments), selectinload(NewsPost.author))
+        .options(selectinload(NewsPost.author))
         .order_by(NewsPost.created_at.desc())
         .offset(offset)
         .limit(limit)
     )
     res = await db.execute(query)
     posts = res.scalars().all()
+    post_ids = [post.id for post in posts]
+    if not post_ids:
+        return []
+
+    reaction_counts: Dict[int, Dict[str, int]] = {}
+    reaction_rows = await db.execute(
+        select(Reaction.post_id, Reaction.emoji, func.count(Reaction.id))
+        .where(Reaction.post_id.in_(post_ids))
+        .group_by(Reaction.post_id, Reaction.emoji)
+    )
+    for post_id, emoji, count in reaction_rows.all():
+        reaction_counts.setdefault(post_id, {})[emoji] = count
+
+    reacted_by_user = set()
+    if parsed_user_id:
+        user_reaction_rows = await db.execute(
+            select(Reaction.post_id, Reaction.emoji)
+            .where(Reaction.post_id.in_(post_ids), Reaction.user_id == parsed_user_id)
+        )
+        reacted_by_user = set(user_reaction_rows.all())
+
+    comment_count_rows = await db.execute(
+        select(Comment.post_id, func.count(Comment.id))
+        .where(Comment.post_id.in_(post_ids))
+        .group_by(Comment.post_id)
+    )
+    comment_counts = dict(comment_count_rows.all())
 
     response: List[NewsResponse] = []
 
@@ -954,10 +1029,10 @@ async def get_news(
         reaction_counts_dict: Dict[str, int] = {e: 0 for e in EMOJI_PALETTE}
         user_reacted_dict: Dict[str, bool] = {e: False for e in EMOJI_PALETTE}
 
-        for r in p.reactions:
-            reaction_counts_dict[r.emoji] = reaction_counts_dict.get(r.emoji, 0) + 1
-            if parsed_user_id and r.user_id == parsed_user_id:
-                user_reacted_dict[r.emoji] = True
+        for emoji, count in reaction_counts.get(p.id, {}).items():
+            reaction_counts_dict[emoji] = count
+        for emoji in EMOJI_PALETTE:
+            user_reacted_dict[emoji] = (p.id, emoji) in reacted_by_user
 
         reactions_list = [
             ReactionCount(
@@ -1003,7 +1078,7 @@ async def get_news(
             status=p.status,
             created_at=formatted_date,
             reactions=reactions_list,
-            comments_count=len(p.comments)
+            comments_count=comment_counts.get(p.id, 0)
         ))
 
     return response
@@ -1021,6 +1096,7 @@ async def suggest_news(
     """
     telegram_user = require_telegram_user(x_telegram_init_data)
     author_id = int(telegram_user["id"])
+    enforce_rate_limit(f"news:{author_id}", 5, 3600)
     if payload.author_id is not None and payload.author_id != author_id:
         raise HTTPException(status_code=403, detail="Нельзя отправлять новость от имени другого пользователя.")
     user = await db.get(User, author_id)
@@ -1095,6 +1171,7 @@ async def toggle_reaction(
     - If user taps a DIFFERENT emoji -> replaces previous reaction with the new one.
     """
     require_matching_telegram_user(x_telegram_init_data, payload.user_id)
+    enforce_rate_limit(f"reaction:{payload.user_id}", 60, 60)
     post = await db.get(NewsPost, post_id)
     if not post or post.status != "approved":
         raise HTTPException(status_code=404, detail="News post not found or not approved")
@@ -1155,7 +1232,12 @@ async def toggle_reaction(
     ]
 
 @app.get("/api/news/{post_id}/comments", response_model=List[CommentResponse])
-async def get_comments(post_id: int, db: AsyncSession = Depends(get_db)):
+async def get_comments(
+    post_id: int,
+    limit: int = Query(50, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+    db: AsyncSession = Depends(get_db)
+):
     """
     Retrieves all comments for a news post (Bottom Sheet).
     Timestamps formatted in Tyumen timezone.
@@ -1167,7 +1249,9 @@ async def get_comments(post_id: int, db: AsyncSession = Depends(get_db)):
     res = await db.execute(
         select(Comment)
         .where(Comment.post_id == post_id)
-        .order_by(Comment.created_at.asc())
+        .order_by(Comment.created_at.desc(), Comment.id.desc())
+        .offset(offset)
+        .limit(limit)
     )
     comments = res.scalars().all()
 
@@ -1193,6 +1277,7 @@ async def get_comments(post_id: int, db: AsyncSession = Depends(get_db)):
             created_at=c_date
         ))
 
+    result.reverse()
     return result
 
 @app.post("/api/news/{post_id}/comments", response_model=CommentResponse, status_code=status.HTTP_201_CREATED)
@@ -1206,6 +1291,7 @@ async def add_comment(
     Adds a new comment to a news post.
     """
     require_matching_telegram_user(x_telegram_init_data, payload.user_id)
+    enforce_rate_limit(f"comment:{payload.user_id}", 30, 60)
     post = await db.get(NewsPost, post_id)
     if not post or post.status != "approved":
         raise HTTPException(status_code=404, detail="News post not found")
@@ -1486,6 +1572,7 @@ async def upload_image(
     Validates file extension, disallows SVG/scripts, and checks image magic bytes.
     """
     telegram_user = require_telegram_user(x_telegram_init_data)
+    enforce_rate_limit(f"upload:{telegram_user['id']}", 10, 3600)
     user = await db.get(User, int(telegram_user["id"]))
     if not user:
         raise HTTPException(status_code=409, detail="Сначала заполните профиль Telegram.")
@@ -1500,10 +1587,13 @@ async def upload_image(
     if file.content_type and "svg" in file.content_type.lower():
         raise HTTPException(status_code=400, detail="Формат SVG запрещен в целях безопасности.")
 
-    content = await file.read()
-    # Enforce maximum size 10MB
-    if len(content) > 10 * 1024 * 1024:
-        raise HTTPException(status_code=400, detail="Размер файла превышает лимит 10 МБ.")
+    # Read in bounded chunks so oversized files do not allocate unbounded memory.
+    content = bytearray()
+    while chunk := await file.read(1024 * 1024):
+        content.extend(chunk)
+        if len(content) > 10 * 1024 * 1024:
+            raise HTTPException(status_code=413, detail="Размер файла превышает лимит 10 МБ.")
+    content = bytes(content)
     if len(content) < 16:
         raise HTTPException(status_code=400, detail="Некорректный файл изображения.")
 
@@ -1737,7 +1827,7 @@ async def get_all_users_for_admin(
             username=u.username,
             class_name=u.class_name,
             profile_name=u.profile_name,
-            is_admin=u.is_admin,
+            is_admin=(u.id in settings.admin_ids or bool(u.username and u.username.lower().lstrip("@") in settings.admin_usernames)),
             is_banned=u.is_banned,
             is_onboarded=is_onboarded,
             created_at=c_str
@@ -1757,10 +1847,12 @@ async def toggle_user_ban(
         x_telegram_init_data=x_telegram_init_data, db=db
     )
 
-    if user_id in settings.admin_ids:
+    target_user = await db.get(User, user_id)
+    target_username = (target_user.username or "").lower().lstrip("@") if target_user else ""
+    if user_id in settings.admin_ids or target_username in settings.admin_usernames:
         raise HTTPException(status_code=400, detail="Нельзя заблокировать администратора")
 
-    user = await db.get(User, user_id)
+    user = target_user
     if not user:
         raise HTTPException(status_code=404, detail="Пользователь не найден")
 
