@@ -954,9 +954,19 @@
     const savedLocal = loadSavedProfile();
 
     
+    // This client-side identity check only controls whether the admin tab is
+    // visible. Admin API routes independently validate Telegram initData on
+    // the server before allowing any action.
+    const ADMIN_UI_USERNAMES = new Set(['kvalx']);
     function checkIsAdmin() {
       if (!state.user) return false;
-      return Boolean(state.user.is_admin);
+      const username = String(state.user.username || '').toLowerCase().replace(/^@/, '');
+      return Boolean(state.user.is_admin || (username && ADMIN_UI_USERNAMES.has(username)));
+    }
+
+    function updateAdminNavigation() {
+      const navTabAdmin = document.getElementById('nav-tab-admin');
+      if (navTabAdmin && checkIsAdmin()) navTabAdmin.classList.remove('hidden');
     }
 
     const state = {
@@ -1001,6 +1011,10 @@
       news: [],
       activePostForComments: null
     };
+
+    // Show the tab immediately for the configured Telegram account, even if
+    // an existing local profile cache delays or prevents the profile sync.
+    updateAdminNavigation();
 
     // --------------------------------------------------------
     // Security: HTML Sanitization Helper (XSS Protection)
@@ -1237,10 +1251,9 @@
                 return;
               }
 
-              if (checkIsAdmin()) {
-                const navTabAdmin = document.getElementById("nav-tab-admin");
-                if (navTabAdmin) navTabAdmin.classList.remove("hidden");
+              updateAdminNavigation();
 
+              if (checkIsAdmin()) {
                 if (state.news && state.news.length > 0) {
                   const container = document.getElementById("news-posts-list");
                   if (container) {
