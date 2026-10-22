@@ -146,11 +146,38 @@ def verify_telegram_init_data(init_data_str: str) -> Optional[Dict[str, Any]]:
             return None
 
         user_raw = parsed_data.get("user")
-        if user_raw:
-            return json.loads(user_raw)
-        return parsed_data
+        user = json.loads(user_raw) if user_raw else parsed_data
+        # Telegram keeps auth_date alongside `user` in initData, not inside it.
+        user["auth_date"] = parsed_data.get("auth_date")
+        return user
     except Exception:
         return None
+
+
+def require_telegram_user(init_data_str: Optional[str]) -> Dict[str, Any]:
+    """Validate a fresh Telegram WebApp identity or reject the request."""
+    user = verify_telegram_init_data(init_data_str or "")
+    if not user or not isinstance(user, dict):
+        raise HTTPException(status_code=401, detail="Требуется подтверждённая авторизация Telegram.")
+
+    try:
+        auth_date = int(user.get("auth_date", 0))
+        user_id = int(user.get("id", 0))
+    except (TypeError, ValueError):
+        auth_date = 0
+        user_id = 0
+
+    now = int(time.time())
+    if not user_id or not auth_date or auth_date > now + 300 or now - auth_date > 86400:
+        raise HTTPException(status_code=401, detail="Срок авторизации Telegram истёк. Перезапустите приложение.")
+    return user
+
+
+def require_matching_telegram_user(init_data_str: Optional[str], expected_user_id: Optional[int] = None) -> Dict[str, Any]:
+    user = require_telegram_user(init_data_str)
+    if expected_user_id is not None and int(user["id"]) != int(expected_user_id):
+        raise HTTPException(status_code=403, detail="Нельзя выполнять действия от имени другого пользователя.")
+    return user
 
 # -------------------------------------------------------------
 
@@ -186,16 +213,18 @@ async def check_admin_permission_or_raise(
        Checks if authenticated user is in settings.admin_ids.
     2. If signed link (admin_id + ts + sign) is provided, verifies HMAC signature and timestamp validity.
        Checks if admin_id is in settings.admin_ids.
-    3. If running in local debug mode, permits admin_id in settings.admin_ids as fallback.
+    3. A client-supplied admin ID alone is never accepted as proof of identity.
     4. Otherwise, raises HTTP 403 Forbidden.
     """
     # 1. Telegram WebApp HMAC verification
     if x_telegram_init_data:
-        parsed_user = verify_telegram_init_data(x_telegram_init_data)
-        if parsed_user and isinstance(parsed_user, dict):
-            caller_id = parsed_user.get("id")
+        parsed_user = require_telegram_user(x_telegram_init_data)
+        if parsed_user:
+            caller_id = int(parsed_user["id"])
             caller_username = parsed_user.get("username")
             if caller_id and (caller_id in settings.admin_ids or (caller_username and caller_username.lower().lstrip("@") in settings.admin_usernames)):
+                if admin_id is not None and int(admin_id) != caller_id:
+                    raise HTTPException(status_code=403, detail="ID администратора не совпадает с авторизованным Telegram-пользователем.")
                 return caller_id
 
     # 2. Signed admin URL token verification
@@ -203,17 +232,7 @@ async def check_admin_permission_or_raise(
         if ts is not None and sign is not None and verify_admin_auth_token(admin_id, ts, sign) and (admin_id in settings.admin_ids):
             return admin_id
 
-    # 3. Direct admin verification by admin_id in settings.admin_ids
-    if admin_id and admin_id in settings.admin_ids:
-        return admin_id
-
-    # 4. DB admin check
-    if admin_id and db:
-        user = await db.get(User, admin_id)
-        if user and (user.is_admin or (user.username and user.username.lower().lstrip("@") in settings.admin_usernames)):
-            return admin_id
-
-    # 5. Unauthenticated requests are strictly forbidden
+    # A client-supplied admin ID or a database role alone is not proof of identity.
     raise HTTPException(
         status_code=status.HTTP_403_FORBIDDEN,
         detail="⛔ Доступ запрещен. Требуется подтвержденная авторизация администратора."
@@ -418,16 +437,22 @@ async def get_structure(db: AsyncSession = Depends(get_db)):
 # User Profile & Onboarding Endpoints
 # -------------------------------------------------------------
 @app.post("/api/user/sync", response_model=UserResponse)
-async def sync_user(payload: UserSyncRequest, db: AsyncSession = Depends(get_db)):
+async def sync_user(
+    payload: UserSyncRequest,
+    x_telegram_init_data: Optional[str] = Header(None, alias="X-Telegram-Init-Data"),
+    db: AsyncSession = Depends(get_db)
+):
     """
     Syncs or creates a student account upon opening the TMA.
     Preserves and updates class_name and profile_name so bot and webapp remain synchronized.
     """
+    telegram_user = require_matching_telegram_user(x_telegram_init_data, payload.id)
     user = await db.get(User, payload.id)
+    telegram_username = telegram_user.get("username")
 
     is_admin = (
         payload.id in settings.admin_ids 
-        or (payload.username and payload.username.lower().lstrip("@") in settings.admin_usernames)
+        or (telegram_username and telegram_username.lower().lstrip("@") in settings.admin_usernames)
     )
 
     if not user:
@@ -435,7 +460,7 @@ async def sync_user(payload: UserSyncRequest, db: AsyncSession = Depends(get_db)
             id=payload.id,
             first_name=payload.first_name,
             last_name=payload.last_name or "",
-            username=payload.username,
+            username=telegram_username,
             photo_url=payload.photo_url,
             class_name=payload.class_name or ("11А" if is_admin else None),
             profile_name=payload.profile_name or ("Соц-гум" if is_admin else None),
@@ -447,8 +472,7 @@ async def sync_user(payload: UserSyncRequest, db: AsyncSession = Depends(get_db)
             user.first_name = payload.first_name
         if payload.last_name is not None:
             user.last_name = payload.last_name
-        if payload.username:
-            user.username = payload.username
+        user.username = telegram_username
         if payload.photo_url:
             user.photo_url = payload.photo_url
         if payload.class_name:
@@ -481,7 +505,12 @@ async def sync_user(payload: UserSyncRequest, db: AsyncSession = Depends(get_db)
     )
 
 @app.get("/api/user/{user_id}", response_model=UserResponse)
-async def get_user_profile(user_id: int, db: AsyncSession = Depends(get_db)):
+async def get_user_profile(
+    user_id: int,
+    x_telegram_init_data: Optional[str] = Header(None, alias="X-Telegram-Init-Data"),
+    db: AsyncSession = Depends(get_db)
+):
+    require_matching_telegram_user(x_telegram_init_data, user_id)
     user = await db.get(User, user_id)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
@@ -502,11 +531,17 @@ async def get_user_profile(user_id: int, db: AsyncSession = Depends(get_db)):
     )
 
 @app.put("/api/user/{user_id}/profile", response_model=UserResponse)
-async def update_user_profile(user_id: int, payload: UserProfileUpdate, db: AsyncSession = Depends(get_db)):
+async def update_user_profile(
+    user_id: int,
+    payload: UserProfileUpdate,
+    x_telegram_init_data: Optional[str] = Header(None, alias="X-Telegram-Init-Data"),
+    db: AsyncSession = Depends(get_db)
+):
     """
     Saves student onboarding selection.
     Both first_name and last_name are MANDATORY (one cannot be left empty).
     """
+    require_matching_telegram_user(x_telegram_init_data, user_id)
     first_name = payload.first_name.strip() if payload.first_name else ""
     last_name = payload.last_name.strip() if payload.last_name else ""
 
@@ -868,13 +903,16 @@ async def get_news(
     user_id: Optional[str] = Query(None),
     limit: int = Query(20, ge=1, le=100),
     offset: int = Query(0, ge=0),
+    x_telegram_init_data: Optional[str] = Header(None, alias="X-Telegram-Init-Data"),
     db: AsyncSession = Depends(get_db)
 ):
     parsed_user_id: Optional[int] = None
     if user_id:
         cleaned_uid = str(user_id).strip()
-        if cleaned_uid.isdigit():
-            parsed_user_id = int(cleaned_uid)
+        if not cleaned_uid.isdigit():
+            raise HTTPException(status_code=400, detail="Некорректный Telegram ID.")
+        parsed_user_id = int(cleaned_uid)
+        require_matching_telegram_user(x_telegram_init_data, parsed_user_id)
     """
     Returns approved news feed posts with reaction tallies and comments count.
     If post is anonymous, author_name is masked as 'Анонимно' and author_class is omitted.
@@ -957,42 +995,26 @@ async def get_news(
 async def suggest_news(
     payload: NewsCreateRequest, 
     background_tasks: BackgroundTasks,
+    x_telegram_init_data: Optional[str] = Header(None, alias="X-Telegram-Init-Data"),
     db: AsyncSession = Depends(get_db)
 ):
     """
     Students propose a news post.
     Guarantees user exists in DB to prevent foreign key errors and accurately captures author and class.
     """
-    author_id = payload.author_id or (settings.admin_ids[0] if settings.admin_ids else 0)
+    telegram_user = require_telegram_user(x_telegram_init_data)
+    author_id = int(telegram_user["id"])
+    if payload.author_id is not None and payload.author_id != author_id:
+        raise HTTPException(status_code=403, detail="Нельзя отправлять новость от имени другого пользователя.")
     user = await db.get(User, author_id)
     if not user:
-        user = User(
-            id=author_id,
-            first_name=payload.author_name or "Гимназист",
-            last_name="",
-            username=payload.author_username.lstrip("@") if payload.author_username else None,
-            class_name=payload.author_class or "11А",
-            is_admin=(author_id in settings.admin_ids)
-        )
-        db.add(user)
-        await db.commit()
-        await db.refresh(user)
+        raise HTTPException(status_code=409, detail="Сначала заполните профиль Telegram.")
 
     if user.is_banned:
         raise HTTPException(status_code=403, detail="Ваш аккаунт заблокирован администратором.")
 
-    if payload.author_username and not user.username:
-        user.username = payload.author_username.lstrip("@")
-        await db.commit()
-        await db.refresh(user)
-
-    author_class = payload.author_class or user.class_name or "11А"
-    author_name = payload.author_name
-    if not author_name or author_name.strip() in ("", "Гимназист"):
-        u_first = user.first_name or ""
-        u_last = user.last_name or ""
-        full_name = f"{u_first} {u_last}".strip()
-        author_name = full_name or user.username or "Гимназист"
+    author_class = user.class_name
+    author_name = f"{user.first_name or ''} {user.last_name or ''}".strip() or "Гимназист"
 
     new_post = NewsPost(
         title=payload.title.strip(),
@@ -1047,6 +1069,7 @@ async def suggest_news(
 async def toggle_reaction(
     post_id: int, 
     payload: ReactionToggleRequest, 
+    x_telegram_init_data: Optional[str] = Header(None, alias="X-Telegram-Init-Data"),
     db: AsyncSession = Depends(get_db)
 ):
     """
@@ -1054,6 +1077,7 @@ async def toggle_reaction(
     - If user taps the SAME emoji they already reacted with -> removes it (un-react).
     - If user taps a DIFFERENT emoji -> replaces previous reaction with the new one.
     """
+    require_matching_telegram_user(x_telegram_init_data, payload.user_id)
     post = await db.get(NewsPost, post_id)
     if not post or post.status != "approved":
         raise HTTPException(status_code=404, detail="News post not found or not approved")
@@ -1119,6 +1143,10 @@ async def get_comments(post_id: int, db: AsyncSession = Depends(get_db)):
     Retrieves all comments for a news post (Bottom Sheet).
     Timestamps formatted in Tyumen timezone.
     """
+    post = await db.get(NewsPost, post_id)
+    if not post or post.status != "approved":
+        raise HTTPException(status_code=404, detail="News post not found")
+
     res = await db.execute(
         select(Comment)
         .where(Comment.post_id == post_id)
@@ -1154,11 +1182,13 @@ async def get_comments(post_id: int, db: AsyncSession = Depends(get_db)):
 async def add_comment(
     post_id: int, 
     payload: CommentCreateRequest, 
+    x_telegram_init_data: Optional[str] = Header(None, alias="X-Telegram-Init-Data"),
     db: AsyncSession = Depends(get_db)
 ):
     """
     Adds a new comment to a news post.
     """
+    require_matching_telegram_user(x_telegram_init_data, payload.user_id)
     post = await db.get(NewsPost, post_id)
     if not post or post.status != "approved":
         raise HTTPException(status_code=404, detail="News post not found")
@@ -1167,11 +1197,14 @@ async def add_comment(
     if user and user.is_banned:
         raise HTTPException(status_code=403, detail="Ваш аккаунт заблокирован администратором.")
 
+    if not user:
+        raise HTTPException(status_code=409, detail="Сначала заполните профиль Telegram.")
+
     new_comment = Comment(
         post_id=post_id,
         user_id=payload.user_id,
-        author_name=payload.author_name,
-        author_class=payload.author_class,
+        author_name=f"{user.first_name or ''} {user.last_name or ''}".strip() or "Гимназист",
+        author_class=user.class_name,
         text=payload.text
     )
     db.add(new_comment)
@@ -1391,15 +1424,20 @@ async def edit_news_post(
 async def delete_comment(
     comment_id: int, 
     user_id: int = Query(...), 
+    x_telegram_init_data: Optional[str] = Header(None, alias="X-Telegram-Init-Data"),
     db: AsyncSession = Depends(get_db)
 ):
     """
     Deletes a comment. Allowed for admins, or the author of the comment.
     """
+    require_matching_telegram_user(x_telegram_init_data, user_id)
     comment = await db.get(Comment, comment_id)
     if not comment:
         raise HTTPException(status_code=404, detail="Comment not found")
 
+    user = await db.get(User, user_id)
+    if user and user.is_banned:
+        raise HTTPException(status_code=403, detail="Ваш аккаунт заблокирован администратором.")
     is_admin = await check_is_admin(user_id, db)
 
     if not is_admin and comment.user_id != user_id:
@@ -1420,12 +1458,23 @@ ALLOWED_IMAGE_TYPES = {
 ALLOWED_EXTENSIONS = {"jpg", "jpeg", "png", "webp", "gif", "heic", "heif", "bmp"}
 
 @app.post("/api/upload")
-async def upload_image(file: UploadFile = File(...)):
+async def upload_image(
+    file: UploadFile = File(...),
+    x_telegram_init_data: Optional[str] = Header(None, alias="X-Telegram-Init-Data"),
+    db: AsyncSession = Depends(get_db)
+):
     """
     Saves an uploaded image locally to /uploads without paid cloud services.
     Supports all mobile image formats (including iPhone HEIC / JPEG / PNG).
     Validates file extension, disallows SVG/scripts, and checks image magic bytes.
     """
+    telegram_user = require_telegram_user(x_telegram_init_data)
+    user = await db.get(User, int(telegram_user["id"]))
+    if not user:
+        raise HTTPException(status_code=409, detail="Сначала заполните профиль Telegram.")
+    if user.is_banned:
+        raise HTTPException(status_code=403, detail="Ваш аккаунт заблокирован администратором.")
+
     ext = file.filename.split(".")[-1].lower() if file.filename and "." in file.filename else "jpg"
     if ext not in ALLOWED_EXTENSIONS:
         ext = "jpg"
@@ -1541,11 +1590,13 @@ async def get_ege_materials(
 @app.post("/api/ege/materials", response_model=EgeMaterialResponse, status_code=status.HTTP_201_CREATED)
 async def create_ege_material(
     payload: EgeMaterialCreateRequest,
+    x_telegram_init_data: Optional[str] = Header(None, alias="X-Telegram-Init-Data"),
     db: AsyncSession = Depends(get_db)
 ):
     """Allows administrator to publish new reference theory/cheat-sheet for EGE tasks."""
-    if not await check_is_admin(payload.admin_id, db):
-        raise HTTPException(status_code=403, detail="Admin privileges required")
+    await check_admin_permission_or_raise(
+        admin_id=payload.admin_id, x_telegram_init_data=x_telegram_init_data, db=db
+    )
 
     new_mat = EgeMaterial(
         subject_code=payload.subject_code,
@@ -1575,11 +1626,13 @@ async def create_ege_material(
 async def update_ege_material(
     material_id: int,
     payload: EgeMaterialCreateRequest,
+    x_telegram_init_data: Optional[str] = Header(None, alias="X-Telegram-Init-Data"),
     db: AsyncSession = Depends(get_db)
 ):
     """Allows administrator to update an existing EGE material."""
-    if not await check_is_admin(payload.admin_id, db):
-        raise HTTPException(status_code=403, detail="Admin privileges required")
+    await check_admin_permission_or_raise(
+        admin_id=payload.admin_id, x_telegram_init_data=x_telegram_init_data, db=db
+    )
 
     mat = await db.get(EgeMaterial, material_id)
     if not mat:
@@ -1610,11 +1663,13 @@ async def update_ege_material(
 async def delete_ege_material(
     material_id: int,
     admin_id: int = Query(...),
+    x_telegram_init_data: Optional[str] = Header(None, alias="X-Telegram-Init-Data"),
     db: AsyncSession = Depends(get_db)
 ):
     """Allows administrator to delete an EGE material."""
-    if not await check_is_admin(admin_id, db):
-        raise HTTPException(status_code=403, detail="Admin privileges required")
+    await check_admin_permission_or_raise(
+        admin_id=admin_id, x_telegram_init_data=x_telegram_init_data, db=db
+    )
 
     mat = await db.get(EgeMaterial, material_id)
     if not mat:
