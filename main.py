@@ -28,7 +28,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from config import DEFAULT_CLASSES, CLASS_PROFILES_MAP, ALL_PROFILES, settings
-from database import get_db, init_db
+from database import async_session, get_db, init_db
 from models import BellSchedule, Comment, EgeMaterial, EgeSubject, Lesson, NewsPost, Profile, Reaction, SchoolClass, User
 from schemas import (
     BellItem, CommentCreateRequest, CommentResponse, DayScheduleResponse,
@@ -228,8 +228,16 @@ async def check_admin_permission_or_raise(
                 return caller_id
 
     # 2. Signed admin URL token verification
-    if admin_id and (ts is not None or sign is not None):
-        if ts is not None and sign is not None and verify_admin_auth_token(admin_id, ts, sign) and (admin_id in settings.admin_ids):
+    if admin_id and ts is not None and sign is not None and verify_admin_auth_token(admin_id, ts, sign):
+        is_configured_admin = admin_id in settings.admin_ids
+        if not is_configured_admin and db:
+            user = await db.get(User, admin_id)
+            is_configured_admin = bool(
+                user
+                and user.username
+                and user.username.lower().lstrip("@") in settings.admin_usernames
+            )
+        if is_configured_admin:
             return admin_id
 
     # A client-supplied admin ID or a database role alone is not proof of identity.
@@ -265,7 +273,7 @@ async def notify_admins_about_post(
     Always reveals author identity, class, and Telegram username to admins for moderation safety.
     Guarantees photo is attached and delivered via multipart sendPhoto to admins.
     """
-    if not settings.BOT_TOKEN or not settings.admin_ids or "ABCdefGHI" in settings.BOT_TOKEN:
+    if not settings.BOT_TOKEN or (not settings.admin_ids and not settings.admin_usernames) or "ABCdefGHI" in settings.BOT_TOKEN:
         return
 
     bot_url = f"https://api.telegram.org/bot{settings.BOT_TOKEN}"
@@ -315,8 +323,17 @@ async def notify_admins_about_post(
                 local_image_path = c
                 break
 
+    admin_recipients = set(settings.admin_ids)
+    if settings.admin_usernames:
+        normalized_admin_usernames = [username.lower().lstrip("@") for username in settings.admin_usernames]
+        async with async_session() as session:
+            result = await session.execute(
+                select(User.id).where(func.lower(User.username).in_(normalized_admin_usernames))
+            )
+            admin_recipients.update(result.scalars().all())
+
     async with httpx.AsyncClient(timeout=20.0) as client:
-        for admin_id in settings.admin_ids:
+        for admin_id in admin_recipients:
             sent_photo = False
             # 1. Try sending local file via multipart/form-data
             if local_image_path and local_image_path.exists():
