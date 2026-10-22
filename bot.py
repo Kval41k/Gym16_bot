@@ -191,7 +191,7 @@ async def cmd_start(message: Message, bot: Bot):
     first_name = message.from_user.first_name or "Гимназист"
     last_name = message.from_user.last_name
     username = message.from_user.username
-    is_admin = user_id in settings.admin_ids
+    is_admin = is_admin_user(user_id, username)
 
     # Upsert user in database
     async with async_session() as session:
@@ -260,7 +260,7 @@ async def cmd_help(message: Message):
         "/help — Справка по командам\n\n"
         "💬 <b>Связь с разработчиком:</b> @untiltedvoid (сообщить о баге или предложить идею)\n"
     )
-    if message.from_user.id in settings.admin_ids:
+    if is_admin_user(message.from_user.id, message.from_user.username):
         help_text += (
             "\n👑 <b>Команды администратора:</b>\n"
             "/admin — Панель администратора и статистика\n"
@@ -548,7 +548,7 @@ async def finalize_news_post(user, title: str, content: str, image_url: Optional
 @router.callback_query(F.data.startswith("approve_news_"))
 async def cb_approve_news(callback: CallbackQuery, bot: Bot):
     admin_id = callback.from_user.id
-    if admin_id not in settings.admin_ids:
+    if not is_admin_user(admin_id, callback.from_user.username):
         await callback.answer("⛔ У вас нет прав администратора.", show_alert=True)
         return
 
@@ -604,7 +604,7 @@ async def cb_approve_news(callback: CallbackQuery, bot: Bot):
 @router.callback_query(F.data.startswith("reject_news_"))
 async def cb_reject_news(callback: CallbackQuery, bot: Bot):
     admin_id = callback.from_user.id
-    if admin_id not in settings.admin_ids:
+    if not is_admin_user(admin_id, callback.from_user.username):
         await callback.answer("⛔ У вас нет прав администратора.", show_alert=True)
         return
 
@@ -740,7 +740,7 @@ async def cb_admin_export_users(callback: CallbackQuery):
 @router.message(Command("pending"))
 async def show_pending_news(event: Union[Message, CallbackQuery], bot: Bot):
     admin_id = event.from_user.id
-    if admin_id not in settings.admin_ids:
+    if not is_admin_user(admin_id, event.from_user.username):
         if isinstance(event, CallbackQuery):
             await event.answer("⛔ Доступ запрещен.", show_alert=True)
         else:
@@ -786,7 +786,7 @@ async def show_pending_news(event: Union[Message, CallbackQuery], bot: Bot):
 
 @router.message(Command("delete_post"))
 async def cmd_delete_post(message: Message):
-    if message.from_user.id not in settings.admin_ids:
+    if not is_admin_user(message.from_user.id, message.from_user.username):
         await message.answer("⛔ Доступ запрещен.")
         return
 
@@ -817,7 +817,7 @@ async def cmd_delete_post(message: Message):
 
 @router.message(Command("delete_comment"))
 async def cmd_delete_comment(message: Message):
-    if message.from_user.id not in settings.admin_ids:
+    if not is_admin_user(message.from_user.id, message.from_user.username):
         await message.answer("⛔ Доступ запрещен.")
         return
 
