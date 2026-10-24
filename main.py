@@ -1,4 +1,5 @@
 import html
+import asyncio
 import mimetypes
 import logging
 import hashlib
@@ -29,6 +30,7 @@ from sqlalchemy.orm import selectinload
 
 from config import DEFAULT_CLASSES, CLASS_PROFILES_MAP, ALL_PROFILES, settings
 from database import async_session, get_db, init_db
+from timetable import day_bells
 from models import BellSchedule, Comment, EgeMaterial, EgeSubject, Lesson, NewsPost, Profile, Reaction, SchoolClass, User
 from schemas import (
     BellItem, CommentCreateRequest, CommentResponse, DayScheduleResponse,
@@ -94,7 +96,16 @@ async def lifespan(app: FastAPI):
     
     # Initialize DB schema and base seeds
     await init_db()
-    yield
+    from features import maintenance_loop
+    worker = asyncio.create_task(maintenance_loop())
+    try:
+        yield
+    finally:
+        worker.cancel()
+        try:
+            await worker
+        except asyncio.CancelledError:
+            pass
 
 # -------------------------------------------------------------
 # FastAPI Application
@@ -107,6 +118,22 @@ app = FastAPI(
     docs_url="/docs" if settings.DEBUG else None,
     redoc_url="/redoc" if settings.DEBUG else None,
 )
+
+@app.middleware("http")
+async def audit_identity(request: Request, call_next):
+    from audit import audit_actor
+    actor = None
+    signed_data = request.headers.get("X-Telegram-Init-Data")
+    if signed_data:
+        try:
+            actor = dict(require_telegram_user(signed_data), source="app")
+        except HTTPException:
+            pass
+    token = audit_actor.set(actor)
+    try:
+        return await call_next(request)
+    finally:
+        audit_actor.reset(token)
 
 # Enable CORS for Telegram Web App webview
 app.add_middleware(GZipMiddleware, minimum_size=1000)
@@ -251,6 +278,11 @@ async def check_admin_permission_or_raise(
                 and user.username.lower().lstrip("@") in settings.admin_usernames
             )
         if is_configured_admin:
+            from audit import audit_actor
+            admin_user = await db.get(User, admin_id) if db else None
+            audit_actor.set({"id": admin_id, "first_name": admin_user.first_name if admin_user else "Администратор",
+                             "last_name": admin_user.last_name if admin_user else None,
+                             "username": admin_user.username if admin_user else None, "source": "app"})
             return admin_id
 
     # A client-supplied admin ID or a database role alone is not proof of identity.
@@ -885,8 +917,8 @@ async def get_lessons(
     if cached:
         return cached
 
-    bells = await get_bells(db)
-    bells_map = {b.lesson_number: b for b in bells}
+    times = await day_bells(db, day_of_week)
+    bells_map = {number: BellItem(lesson_number=number, start_time=value[0], end_time=value[1]) for number, value in times.items()}
 
     query = select(Lesson).where(
         Lesson.class_name == class_name,
@@ -1195,12 +1227,14 @@ async def toggle_reaction(
         await db.delete(existing_same)
     else:
         # User clicked different emoji or new reaction -> Remove any previous reaction on this post
-        await db.execute(
-            delete(Reaction).where(
+        previous_reactions = (await db.scalars(
+            select(Reaction).where(
                 Reaction.post_id == post_id,
                 Reaction.user_id == payload.user_id
             )
-        )
+        )).all()
+        for reaction in previous_reactions:
+            await db.delete(reaction)
         # Add new reaction
         new_reaction = Reaction(
             post_id=post_id,
@@ -1397,6 +1431,13 @@ async def moderate_news(
     else:
         post.status = "rejected"
 
+    from models import NewsReview
+    review = await db.get(NewsReview, post_id)
+    if not review:
+        review = NewsReview(post_id=post_id)
+        db.add(review)
+    review.reason = payload.reason.strip() if payload.action == "reject" and payload.reason else None
+
     await db.commit()
     return {"status": "success", "post_id": post_id, "action": payload.action}
 
@@ -1433,8 +1474,6 @@ async def delete_news_post(
             except Exception:
                 pass
 
-    await db.execute(delete(Comment).where(Comment.post_id == post_id))
-    await db.execute(delete(Reaction).where(Reaction.post_id == post_id))
     await db.delete(post)
     await db.commit()
     return {"status": "success", "post_id": post_id, "action": "deleted"}
@@ -2247,3 +2286,7 @@ async def admin_users_dashboard_page(
 """
     return HTMLResponse(content=html_content)
 
+
+# Register tools after the authentication and cache helpers have been defined.
+from features import install_features
+install_features(app, require_telegram_user, check_admin_permission_or_raise, cache_clear_prefix)

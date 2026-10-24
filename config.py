@@ -23,6 +23,7 @@ class Settings(BaseSettings):
     # Database & Storage
     DATABASE_URL: str = ""
     UPLOAD_DIR_RAW: str = Field(default="", validation_alias="UPLOAD_DIR")
+    BACKUP_DIR_RAW: str = Field(default="", validation_alias="BACKUP_DIR")
     STATIC_DIR_RAW: str = ""
     CORS_ORIGINS: str = ""
     
@@ -40,6 +41,10 @@ class Settings(BaseSettings):
         disk_path = os.getenv("RENDER_DISK_PATH", "")
         root = Path(disk_path).expanduser() if disk_path else BASE_DIR
         return (root / "uploads").resolve()
+
+    @property
+    def BACKUP_DIR(self) -> Path:
+        return Path(self.BACKUP_DIR_RAW).expanduser().resolve() if self.BACKUP_DIR_RAW else self.UPLOAD_DIR.parent / "backups"
 
     @property
     def database_url(self) -> str:

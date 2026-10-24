@@ -260,3 +260,51 @@ class EgeMaterial(Base):
 
     def __repr__(self) -> str:
         return f"<EgeMaterial #{self.task_number} {self.title}>"
+
+
+class AuditLog(Base):
+    __tablename__ = "audit_logs"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    actor_id: Mapped[int] = mapped_column(BigInteger, index=True)
+    actor_name: Mapped[str] = mapped_column(String(255))
+    actor_username: Mapped[Optional[str]] = mapped_column(String(100))
+    source: Mapped[str] = mapped_column(String(20))
+    section: Mapped[str] = mapped_column(String(40), index=True)
+    action: Mapped[str] = mapped_column(String(30), index=True)
+    entity: Mapped[str] = mapped_column(String(60))
+    entity_id: Mapped[str] = mapped_column(String(60))
+    details: Mapped[str] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), index=True)
+
+
+class UserPreferences(Base):
+    __tablename__ = "user_preferences"
+    user_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
+    lesson_reminders: Mapped[bool] = mapped_column(Boolean, default=False)
+    reminder_minutes: Mapped[int] = mapped_column(Integer, default=10)
+    schedule_changes: Mapped[bool] = mapped_column(Boolean, default=False)
+
+
+class MaterialProgress(Base):
+    __tablename__ = "material_progress"
+    user_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
+    material_id: Mapped[int] = mapped_column(Integer, ForeignKey("ege_materials.id", ondelete="CASCADE"), primary_key=True)
+    bookmarked: Mapped[bool] = mapped_column(Boolean, default=False)
+    studied: Mapped[bool] = mapped_column(Boolean, default=False)
+
+
+class NewsReview(Base):
+    __tablename__ = "news_reviews"
+    post_id: Mapped[int] = mapped_column(Integer, ForeignKey("news_posts.id", ondelete="CASCADE"), primary_key=True)
+    reason: Mapped[Optional[str]] = mapped_column(String(1000))
+
+
+class Notification(Base):
+    __tablename__ = "notifications"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    dedup_key: Mapped[str] = mapped_column(String(255), unique=True)
+    text: Mapped[str] = mapped_column(Text)
+    status: Mapped[str] = mapped_column(String(20), default="pending", index=True)
+    error: Mapped[Optional[str]] = mapped_column(String(255))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

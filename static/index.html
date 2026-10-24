@@ -6,6 +6,7 @@
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
+  <link rel="stylesheet" href="/static/features.css?v=2">
   <title>Гимназия №16 — 11 Классы</title>
 
   <!-- Telegram Web App Script -->
@@ -746,70 +747,6 @@
   </div>
 
   <!-- ======================================================== -->
-  <!-- MODAL: ADMIN MODERATION (МОДЕРАЦИЯ НОВОСТЕЙ)             -->
-  <!-- ======================================================== -->
-  <div id="admin-moderation-modal" class="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm hidden items-end sm:items-center justify-center transition-opacity">
-    <div class="bg-white dark:bg-ios-cardDark w-full max-w-lg rounded-t-3xl sm:rounded-3xl p-6 shadow-ios-sheet max-h-[92vh] flex flex-col space-y-4">
-      <div class="flex items-center justify-between pb-2 border-b border-zinc-100 dark:border-zinc-800">
-        <div>
-          <h3 class="text-lg font-bold text-zinc-900 dark:text-white">📬 Модерация предложки</h3>
-          <p class="text-xs text-ios-secondaryText">Проверьте прикрепленные фото и текст перед публикацией</p>
-        </div>
-        <button id="close-moderation-modal-btn" onclick="closeModerationModal()" class="w-8 h-8 rounded-full bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center text-zinc-500 font-bold text-sm active-press">✕</button>
-      </div>
-
-      <div id="admin-pending-list" class="flex-1 overflow-y-auto space-y-4 pr-1">
-        <!-- Rendered dynamically -->
-      </div>
-    </div>
-  </div>
-
-  <!-- ======================================================== -->
-  <!-- MODAL: ADMIN USERS MANAGEMENT (УПРАВЛЕНИЕ ПОЛЬЗОВАТЕЛЯМИ) -->
-  <!-- ======================================================== -->
-  <div id="admin-users-modal" class="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm hidden items-end sm:items-center justify-center transition-opacity">
-    <div class="bg-white dark:bg-ios-cardDark w-full max-w-xl rounded-t-3xl sm:rounded-3xl p-5 shadow-ios-sheet max-h-[92vh] flex flex-col space-y-3.5 animate-slide-up">
-      <div class="flex items-center justify-between pb-2 border-b border-zinc-200/60 dark:border-zinc-800">
-        <div>
-          <h3 class="text-lg font-bold text-zinc-900 dark:text-white flex items-center gap-2">
-            <span>👥</span> Управление пользователями
-          </h3>
-          <p class="text-xs text-ios-secondaryText">Список зарегистрированных учеников и блокировки</p>
-        </div>
-        <button onclick="closeUsersModal()" class="w-8 h-8 rounded-full bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center text-zinc-500 font-bold text-sm active-press cursor-pointer">✕</button>
-      </div>
-
-      <!-- Stats Bar & Export Button -->
-      <div class="flex items-center justify-between gap-2 flex-wrap">
-        <div class="flex items-center gap-2 text-xs">
-          <span class="px-2.5 py-1 rounded-xl bg-zinc-100 dark:bg-zinc-800 font-semibold text-zinc-700 dark:text-zinc-300">
-            Всего: <b id="users-stat-total">0</b>
-          </span>
-          <span class="px-2.5 py-1 rounded-xl bg-green-50 text-green-700 dark:bg-green-950 dark:text-green-300 font-semibold border border-green-200/50 dark:border-green-900/50">
-            Активны: <b id="users-stat-active">0</b>
-          </span>
-          <span class="px-2.5 py-1 rounded-xl bg-red-50 text-red-700 dark:bg-red-950 dark:text-red-300 font-semibold border border-red-200/50 dark:border-red-900/50">
-            В бане: <b id="users-stat-banned">0</b>
-          </span>
-        </div>
-        <button onclick="downloadUsersCsv()" class="px-3 py-1.5 rounded-xl bg-ios-blue text-white text-xs font-semibold shadow-xs active-press flex items-center gap-1.5 cursor-pointer">
-          <span>📥</span> Скачать CSV
-        </button>
-      </div>
-
-      <!-- Search Box -->
-      <div>
-        <input id="users-search-input" type="text" placeholder="🔍 Поиск по имени, классу или @username..." oninput="filterUsersList()" class="w-full px-3.5 py-2 rounded-xl bg-zinc-100 dark:bg-ios-cardDark2 border-0 text-xs focus:ring-2 focus:ring-ios-blue outline-none text-zinc-900 dark:text-white">
-      </div>
-
-      <!-- Users List -->
-      <div id="admin-users-list" class="flex-1 overflow-y-auto space-y-2.5 pr-1 max-h-[60vh]">
-        <!-- Populated dynamically -->
-      </div>
-    </div>
-  </div>
-
-  <!-- ======================================================== -->
   <!-- BANNED USER FULLSCREEN OVERLAY                           -->
   <!-- ======================================================== -->
   <div id="banned-overlay" class="fixed inset-0 z-50 bg-white dark:bg-black hidden flex-col items-center justify-center p-6 text-center space-y-4">
@@ -1276,6 +1213,7 @@
               }
 
               updateAdminNavigation();
+              window.loadPersonalTools?.();
 
               if (checkIsAdmin()) {
                 if (state.news && state.news.length > 0) {
@@ -2046,74 +1984,7 @@
       }
     }
 
-    // Event delegation on news feed for reactions, comments, editing, and deleting
-    const newsContainer = document.getElementById("news-posts-list");
-    if (newsContainer) {
-      newsContainer.addEventListener("click", async (e) => {
-        // 1. Reaction toggle / un-react
-        const reactBtn = e.target.closest(".reaction-btn");
-        if (reactBtn) {
-          e.stopPropagation();
-          const postId = parseInt(reactBtn.getAttribute("data-post-id"));
-          const emoji = reactBtn.getAttribute("data-emoji");
-          haptic("impact");
-
-          const updatedReactions = await API.post(`/api/news/${postId}/react`, {
-            user_id: state.user.id,
-            emoji: emoji
-          });
-
-          if (updatedReactions) {
-            const post = state.news.find(item => item.id === postId);
-            if (post) {
-              post.reactions = updatedReactions;
-              const bar = document.getElementById(`reaction-bar-${postId}`);
-              if (bar) bar.innerHTML = renderReactionBar(postId, updatedReactions);
-            }
-          }
-          return;
-        }
-
-        // 2. Open comments
-        const commentsBtn = e.target.closest(".open-comments-btn");
-        if (commentsBtn) {
-          e.stopPropagation();
-          const rawId = commentsBtn.getAttribute("data-post-id") || commentsBtn.dataset?.postId;
-          const postId = parseInt(rawId, 10);
-          if (!isNaN(postId)) {
-            openCommentsSheet(postId);
-          }
-          return;
-        }
-
-        // 3. Edit post (admin)
-        const editBtn = e.target.closest(".edit-news-btn");
-        if (editBtn) {
-          e.stopPropagation();
-          const postId = parseInt(editBtn.getAttribute("data-post-id"));
-          openEditModal(postId);
-          haptic("selection");
-          return;
-        }
-
-        // 4. Delete post (admin)
-        const deleteBtn = e.target.closest(".delete-news-btn");
-        if (deleteBtn) {
-          e.stopPropagation();
-          const postId = parseInt(deleteBtn.getAttribute("data-post-id"));
-          if (confirm("Вы действительно хотите удалить этот пост из ленты новостей?")) {
-            haptic("impact");
-            const res = await API.delete(`/api/admin/news/${postId}?admin_id=${state.user.id}`);
-            if (res) {
-              state.news = state.news.filter(p => p.id !== postId);
-              await loadNews();
-            }
-          }
-          return;
-        }
-      });
-    }
-
+    // Each news action uses a single inline handler.
     function renderReactionBar(postId, reactions) {
       if (!reactions || !Array.isArray(reactions)) return "";
       return reactions.map(r => `
@@ -2245,8 +2116,6 @@
       if (fileInput) fileInput.value = "";
     }
 
-    document.getElementById("open-propose-modal-btn")?.addEventListener("click", openProposeNewsModal);
-    document.getElementById("close-propose-modal-btn")?.addEventListener("click", closeProposeNewsModal);
 
     // Backdrop click to close propose modal
     document.getElementById("propose-news-modal")?.addEventListener("click", (e) => {
@@ -2343,7 +2212,7 @@
       }
 
       try {
-        let imageUrl = null;
+        let imageUrl = document.getElementById("propose-image-url-input")?.value.trim() || null;
         if (window.selectedImageFile) {
           try {
             const uploadRes = await API.upload(window.selectedImageFile);
@@ -2449,7 +2318,6 @@
       window.editSelectedImageFile = null;
     }
 
-    closeEditModalBtn?.addEventListener("click", closeEditModal);
 
     function handleEditFileChange(input) {
       if (!input || !input.files || input.files.length === 0) return;
@@ -2533,6 +2401,7 @@
     window.removeEditPhoto = removeEditPhoto;
 
     async function saveEditPost() {
+      if (document.getElementById("save-edit-post-btn")?.disabled) return;
       const postId = parseInt(document.getElementById("edit-post-id").value, 10);
       const title = document.getElementById("edit-post-title").value.trim();
       const content = document.getElementById("edit-post-content").value.trim();
@@ -3031,9 +2900,11 @@
         });
 
         if (newComment) {
-          if (input) input.value = "";
-          const comments = await API.get(`/api/news/${postId}/comments`);
-          renderCommentsList(comments || []);
+          if (state.activePostForComments === postId) {
+            if (input && input.value.trim() === text) input.value = "";
+            const comments = await API.get(`/api/news/${postId}/comments`);
+            if (state.activePostForComments === postId && comments) renderCommentsList(comments);
+          }
           const post = state.news.find(item => item.id === postId);
           if (post) {
             post.comments_count = (post.comments_count || 0) + 1;
@@ -3050,29 +2921,6 @@
     }
 
     openModerationBtn?.addEventListener("click", openModerationModal);
-    closeModerationBtn?.addEventListener("click", closeModerationModal);
-
-    const pendingListContainer = document.getElementById("admin-pending-list");
-    pendingListContainer?.addEventListener("click", async (e) => {
-      const approveBtn = e.target.closest(".admin-approve-btn");
-      const rejectBtn = e.target.closest(".admin-reject-btn");
-      if (!approveBtn && !rejectBtn) return;
-      const btn = approveBtn || rejectBtn;
-      const action = approveBtn ? "approve" : "reject";
-      const postId = parseInt(btn.getAttribute("data-post-id"));
-
-      btn.disabled = true;
-      haptic("impact");
-
-      await API.post(`/api/admin/news/${postId}/moderate`, {
-        action: action,
-        admin_id: state.user.id
-      });
-
-      const pending = await API.get(`/api/admin/news/pending?admin_id=${state.user.id}`);
-      renderPendingNews(pending || []);
-      checkPendingNewsCount();
-    });
 
     // --------------------------------------------------------
     // Bottom Sheet: Comments Handling
@@ -3122,7 +2970,6 @@
       if (input) input.value = "";
     }
 
-    closeCommentsBtn?.addEventListener("click", closeCommentsSheet);
 
     // Backdrop click to close comments sheet
     document.getElementById("comments-sheet")?.addEventListener("click", (e) => {
@@ -3674,7 +3521,6 @@
     window.openCommentsSheet = openCommentsSheet;
     window.closeCommentsSheet = closeCommentsSheet;
     window.sendNewComment = sendNewComment;
-    window.handleDeleteComment = handleDeleteComment;
     window.openEditModal = openEditModal;
     window.closeEditModal = closeEditModal;
     window.saveEditPost = saveEditPost;
@@ -3683,5 +3529,6 @@
     
 </script>
 
+<script src="/static/features.js?v=2"></script>
 </body>
 </html>

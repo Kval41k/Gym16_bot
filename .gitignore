@@ -1,5 +1,7 @@
 # Python environment & cache
 venv/
+backups/
+.test-data/
 ENV/
 env/
 __pycache__/

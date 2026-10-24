@@ -1,7 +1,7 @@
 from typing import AsyncGenerator
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase
-from sqlalchemy import inspect
+from sqlalchemy import inspect, event
 from config import BASE_DIR, settings
 
 def get_db_url() -> str:
@@ -31,6 +31,13 @@ else:
     engine_kwargs["pool_recycle"] = 300
 
 engine = create_async_engine(DB_URL, **engine_kwargs)
+
+if is_sqlite:
+    @event.listens_for(engine.sync_engine, "connect")
+    def sqlite_foreign_keys(connection, record):
+        cursor = connection.cursor()
+        cursor.execute("PRAGMA foreign_keys=ON")
+        cursor.close()
 
 # Async session factory
 async_session = async_sessionmaker(
@@ -68,7 +75,7 @@ async def init_db() -> None:
         await conn.run_sync(Base.metadata.create_all)
         user_columns = await conn.run_sync(lambda sync_conn: inspect(sync_conn).get_columns("users"))
         if "is_banned" not in {column["name"] for column in user_columns}:
-            await conn.execute(text("ALTER TABLE users ADD COLUMN is_banned BOOLEAN DEFAULT 0 NOT NULL"))
+            await conn.execute(text("ALTER TABLE users ADD COLUMN is_banned BOOLEAN DEFAULT FALSE NOT NULL"))
 
     async with async_session() as session:
         # 1. Seed classes if missing

@@ -186,6 +186,7 @@ class CommentResponse(BaseModel):
 class ModerationActionRequest(BaseModel):
     action: str = Field(..., pattern=r"^(approve|reject)$")
     admin_id: int
+    reason: Optional[str] = Field(None, max_length=1000)
     ts: Optional[int] = None
     sign: Optional[str] = None
 

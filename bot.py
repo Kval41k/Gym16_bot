@@ -20,7 +20,7 @@ from aiogram.enums import ParseMode
 from aiogram.filters import Command, CommandStart, StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
-from aiogram.fsm.storage.memory import MemoryStorage
+from aiogram.fsm.storage.memory import MemoryStorage, SimpleEventIsolation
 from aiogram.fsm.storage.redis import RedisStorage
 from aiogram.types import (
     BufferedInputFile,
@@ -41,6 +41,7 @@ from sqlalchemy import func, select, update
 from config import settings
 from database import async_session
 from models import BellSchedule, NewsPost, User
+from audit import audit_actor
 
 # Configure logging
 logging.basicConfig(
@@ -81,7 +82,11 @@ async def ban_check_middleware(handler, event: Message, data: dict):
             if db_user and db_user.is_banned:
                 await event.answer("⛔ <b>Доступ ограничен.</b>\nВаш аккаунт заблокирован администратором.")
                 return
-    return await handler(event, data)
+    token = audit_actor.set(dict(event.from_user.model_dump(), source="bot") if event.from_user else None)
+    try:
+        return await handler(event, data)
+    finally:
+        audit_actor.reset(token)
 
 @router.callback_query.outer_middleware()
 async def ban_check_callback_middleware(handler, event: CallbackQuery, data: dict):
@@ -92,7 +97,11 @@ async def ban_check_callback_middleware(handler, event: CallbackQuery, data: dic
             if db_user and db_user.is_banned:
                 await event.answer("⛔ Ваш аккаунт заблокирован администратором.", show_alert=True)
                 return
-    return await handler(event, data)
+    token = audit_actor.set(dict(event.from_user.model_dump(), source="bot") if event.from_user else None)
+    try:
+        return await handler(event, data)
+    finally:
+        audit_actor.reset(token)
 
 # -------------------------------------------------------------
 # Keyboards & Helpers
@@ -561,6 +570,10 @@ async def cb_approve_news(callback: CallbackQuery, bot: Bot):
             await callback.answer("Новость не найдена.", show_alert=True)
             return
 
+        if post.status != "pending":
+            await callback.answer("Эта новость уже обработана.", show_alert=True)
+            return
+
         post.status = "approved"
         post.published_at = datetime.now(timezone.utc)
         await session.commit()
@@ -615,6 +628,10 @@ async def cb_reject_news(callback: CallbackQuery, bot: Bot):
         post = await session.get(NewsPost, post_id)
         if not post:
             await callback.answer("Новость не найдена.", show_alert=True)
+            return
+
+        if post.status != "pending":
+            await callback.answer("Эта новость уже обработана.", show_alert=True)
             return
 
         post.status = "rejected"
@@ -1022,7 +1039,8 @@ async def main():
     storage = RedisStorage.from_url(settings.BOT_STORAGE_URL) if settings.BOT_STORAGE_URL else MemoryStorage()
     if not settings.BOT_STORAGE_URL:
         logger.warning("BOT_STORAGE_URL is unset; in-progress bot conversations will reset on restart.")
-    dp = Dispatcher(storage=storage)
+    isolation = storage.create_isolation() if isinstance(storage, RedisStorage) else SimpleEventIsolation()
+    dp = Dispatcher(storage=storage, events_isolation=isolation)
     dp.include_router(router)
 
     logger.info("Starting Gymnasium 16 aiogram 3 Bot...")
