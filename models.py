@@ -112,6 +112,8 @@ class Lesson(Base):
     profile_name: Mapped[Optional[str]] = mapped_column(String(100), nullable=True, index=True)
     subgroup: Mapped[Optional[int]] = mapped_column(Integer, nullable=True) # 1, 2, or NULL
     note: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    start_time: Mapped[Optional[str]] = mapped_column(String(5), nullable=True)
+    end_time: Mapped[Optional[str]] = mapped_column(String(5), nullable=True)
 
     __table_args__ = (
         Index("ix_lessons_lookup", "class_name", "day_of_week", "lesson_number"),
@@ -275,6 +277,12 @@ class AuditLog(Base):
     entity_id: Mapped[str] = mapped_column(String(60))
     details: Mapped[str] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), index=True)
+
+
+class AppliedDataUpdate(Base):
+    __tablename__ = "applied_data_updates"
+    revision: Mapped[str] = mapped_column(String(150), primary_key=True)
+    applied_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
 class UserPreferences(Base):

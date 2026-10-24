@@ -32,6 +32,8 @@ The current Render process runs the web API and Telegram long-polling bot togeth
 ## Student tools and administration
 
 - Schedule supports day/week views, current/next lesson emphasis, notes and profile filters. 11Б remains empty until an administrator publishes its real timetable. Monday times are shared by the lesson cards and reminders. Saturday reminders require explicit Saturday bells in `bell_schedules`; unknown times are never invented.
+- Each lesson may have its own `start_time`/`end_time` in Tyumen time; those values take precedence over the bell defaults in cards, live status and reminders. The reviewed 11А Soc-gum timetable is in `data/11a_socgum_schedule.json`, checked against two matching weeks and the recurring school events in Google Calendar on 2026-10-24. It contains 38 weekly school activities, including optional IT Lab and consultations. Other personal calendar events and account identifiers are excluded. Live status uses actual class/profile lessons, including Saturday's 10:00–12:00 consultation.
+- `data_updates.py` applies that reviewed snapshot once per revision during seeding/startup. Before applying, it saves the previous 11А rows in the private backup directory. Former common 11А rows are retained for the philology profile; the Soc-gum rows receive the calendar's exact subjects, teachers, rooms and times. An `applied_data_updates` marker prevents subsequent restarts from overwriting later admin edits. This is a reviewed snapshot, not a background connection to a personal Google account.
 - Profile settings opt into Telegram reminders (5, 10 or 15 minutes) and notifications about published schedule changes. A user must start the bot first. Reminders run every 30 seconds while the API process is awake. Missed reminders are not sent after the service wakes up. Sending is reserved atomically: uncertain deliveries are not retried automatically, to avoid duplicates.
 - EGE materials have text/topic/task search, bookmarks and studied marks, stored per Telegram account in the database.
 - News authors can see their last 100 submissions and moderation status. An administrator can optionally supply a rejection reason visible to the author. Telegram moderation continues to work; reasons are entered through the app.
@@ -65,6 +67,7 @@ The first command only inspects the archive. Restore refuses to overwrite an exi
 
 ```sh
 python tests/check_features.py
+python tests/check_calendar_sync.py
 ```
 
 The check uses a temporary SQLite database, fake signed Telegram identities and no real Telegram sends. It covers admin authorization, isolation of personal data, atomic audit history (including bot actions), news status, reactions and comments, EGE progress, CSV validation, schedule revision conflicts, reminder/send deduplication and backup export/restore. An uncertain Telegram response is simulated to verify that it cannot cause a duplicate send. Recovery is also checked against an already populated database and must be refused.

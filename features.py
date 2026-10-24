@@ -16,7 +16,7 @@ from zoneinfo import ZoneInfo
 import httpx
 from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from fastapi.responses import Response
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 from sqlalchemy import func, or_, select, update
 from sqlalchemy.exc import IntegrityError
 
@@ -28,7 +28,7 @@ from models import (AuditLog, BellSchedule, EgeMaterial, Lesson, MaterialProgres
 
 TZ = ZoneInfo("Asia/Yekaterinburg")
 logger = logging.getLogger(__name__)
-LESSON_FIELDS = ("day_of_week", "lesson_number", "subject", "teacher_name", "cabinet", "profile_name", "subgroup", "note")
+LESSON_FIELDS = ("day_of_week", "lesson_number", "subject", "teacher_name", "cabinet", "profile_name", "subgroup", "note", "start_time", "end_time")
 
 
 class PreferencesRequest(BaseModel):
@@ -51,6 +51,16 @@ class LessonRow(BaseModel):
     profile_name: Optional[str] = Field(None, max_length=100)
     subgroup: Optional[int] = Field(None, ge=1, le=2)
     note: Optional[str] = Field(None, max_length=255)
+    start_time: Optional[str] = Field(None, pattern=r"^(?:[01][0-9]|2[0-3]):[0-5][0-9]$")
+    end_time: Optional[str] = Field(None, pattern=r"^(?:[01][0-9]|2[0-3]):[0-5][0-9]$")
+
+    @model_validator(mode="after")
+    def valid_times(self):
+        if bool(self.start_time) != bool(self.end_time):
+            raise ValueError("Укажите и начало, и конец занятия")
+        if self.start_time and self.end_time <= self.start_time:
+            raise ValueError("Конец занятия должен быть позже начала")
+        return self
 
     @field_validator("subject", "teacher_name", "cabinet", "profile_name", "note", mode="before")
     @classmethod
@@ -80,7 +90,8 @@ def parse_schedule(payload):
     rows = payload.rows
     if payload.csv_text is not None:
         aliases = {"день": "day_of_week", "урок": "lesson_number", "предмет": "subject", "учитель": "teacher_name",
-                   "кабинет": "cabinet", "профиль": "profile_name", "группа": "subgroup", "примечание": "note"}
+                   "кабинет": "cabinet", "профиль": "profile_name", "группа": "subgroup", "примечание": "note",
+                   "начало": "start_time", "конец": "end_time"}
         text = payload.csv_text.lstrip("\ufeff").strip()
         delimiter = ";" if ";" in text.partition("\n")[0] else ","
         reader = csv.DictReader(io.StringIO(text), delimiter=delimiter)
@@ -101,7 +112,7 @@ def parse_schedule(payload):
                 if not any(item.values()):
                     continue
                 item["day_of_week"] = days.get(item.get("day_of_week", "").lower(), item.get("day_of_week"))
-                for key in ("profile_name", "subgroup", "note"):
+                for key in ("profile_name", "subgroup", "note", "start_time", "end_time"):
                     item[key] = item.get(key) or None
                 rows.append(LessonRow.model_validate(item))
         except (ValueError, TypeError, csv.Error) as exc:
@@ -335,8 +346,8 @@ async def enqueue_reminders(now=None):
         users = (await db.execute(select(User, UserPreferences).join(UserPreferences).where(
             UserPreferences.lesson_reminders.is_(True), User.is_banned.is_(False)))).all()
         lessons = (await db.scalars(select(Lesson).where(Lesson.day_of_week == now.weekday()))).all()
-        from timetable import day_bells
-        times = {number: value[0] for number, value in (await day_bells(db, now.weekday())).items()}
+        from timetable import day_bells, lesson_times
+        times = await day_bells(db, now.weekday())
         for user, pref in users:
             grouped = {}
             for lesson in lessons:
@@ -344,9 +355,9 @@ async def enqueue_reminders(now=None):
                     continue
                 if lesson.subgroup and user.subgroup and lesson.subgroup != user.subgroup:
                     continue
-                grouped.setdefault(lesson.lesson_number, []).append(lesson)
-            for number, items in grouped.items():
-                start = times.get(number)
+                start, end = lesson_times(lesson, times)
+                grouped.setdefault((lesson.lesson_number, start, end), []).append(lesson)
+            for (number, start, end), items in grouped.items():
                 if not start:
                     continue
                 hour, minute = map(int, start.split(":"))
@@ -355,7 +366,7 @@ async def enqueue_reminders(now=None):
                 # Never send stale reminders after a free service wakes up.
                 if not due <= now < due + timedelta(seconds=65):
                     continue
-                key = f"lesson:{now.date()}:{user.id}:{number}"
+                key = f"lesson:{now.date()}:{user.id}:{number}:{start}"
                 if await db.scalar(select(Notification.id).where(Notification.dedup_key == key)):
                     continue
                 text = f"🔔 В {start}, через {pref.reminder_minutes} мин.: " + "; ".join(f"{item.subject}, каб. {item.cabinet}" for item in items)

@@ -25,7 +25,7 @@ PROFILES_11A = [
     {"name": "Филологический", "description": "Филологический профиль (углубленные литература, иностранные языки)"}
 ]
 
-# Lessons for 11A fully synchronized with Google Calendar schedule
+# Legacy class sheet. The reviewed 11А Soc-gum calendar snapshot is applied below.
 LESSONS_11A = [
     # =========================================================
     # ПОНЕДЕЛЬНИК (day_of_week = 0) 1–8 УРОКИ
@@ -557,6 +557,8 @@ async def seed():
                     admin_user.is_admin = True
 
         await session.commit()
+        from data_updates import apply_calendar_schedule
+        await apply_calendar_schedule()
         logger.info("✅ Database successfully populated with synchronized 11А schedule, bells, and profiles!")
 
 if __name__ == "__main__":

@@ -45,7 +45,7 @@ function toolsToday() {
 }
 function toolsLessonPhase(slot, day) {
   const now = getTyumenDate();
-  if (now.getDay() - 1 !== day) return '';
+  if (!slot.start_time || !slot.end_time || now.getDay() - 1 !== day) return '';
   const minute = now.getHours() * 60 + now.getMinutes();
   const parse = value => { const [h, m] = (value || '00:00').split(':').map(Number); return h * 60 + m; };
   if (minute >= parse(slot.start_time) && minute < parse(slot.end_time)) return 'current';
@@ -56,10 +56,10 @@ renderLessonSlot = function(slot, day = state.selectedDay, nextNumber = null) {
   let phase = toolsLessonPhase(slot, day);
   if (phase === 'future') phase = slot.lesson_number === nextNumber ? 'next' : '';
   return `<article class="g-card g-lesson ${phase}"><div class="g-lesson-head"><div class="g-row">
-    <span class="g-lesson-number">${slot.lesson_number}</span><b>${slot.start_time ? `${toolsEsc(slot.start_time)} – ${toolsEsc(slot.end_time)}` : "Время уточняется"}</b></div>
+    <span class="g-lesson-number">${slot.lesson_number}</span><b>${slot.start_time ? `${toolsEsc(slot.start_time)} – ${toolsEsc(slot.end_time)}` : slot.lessons.some(item => item.start_time) ? "Время указано у каждого профиля" : "Время уточняется"}</b></div>
     ${phase === 'current' ? '<span class="g-badge approved">Сейчас</span>' : phase === 'next' ? '<span class="g-badge">Следующий</span>' : ''}</div>
     ${slot.lessons.map(lesson => `<div class="g-sublesson"><div class="g-row g-between"><h3 class="g-title">${toolsEsc(lesson.subject)}</h3><span class="g-badge">Каб. ${toolsEsc(lesson.cabinet || '—')}</span></div>
-      <div class="g-muted" style="margin-top:7px">${toolsEsc(lesson.teacher_name || 'Учитель не указан')}</div>
+      <div class="g-muted" style="margin-top:7px">${lesson.start_time && (!slot.start_time || lesson.start_time !== slot.start_time || lesson.end_time !== slot.end_time) ? `${toolsEsc(lesson.start_time)}–${toolsEsc(lesson.end_time)} · ` : ""}${toolsEsc(lesson.teacher_name || 'Учитель не указан')}</div>
       ${lesson.profile_name ? `<span class="g-badge">${toolsEsc(lesson.profile_name)}</span>` : ''}
       ${lesson.subgroup ? `<span class="g-badge">Группа ${lesson.subgroup}</span>` : ''}
       ${lesson.note ? `<div class="g-note">${toolsEsc(lesson.note)}</div>` : ''}</div>`).join('')}</article>`;
@@ -68,6 +68,10 @@ loadSchedule = async function(quiet = false) {
   const requestId = ++toolsState.scheduleRequest;
   const container = document.getElementById('schedule-cards-list');
   const targetClass = state.viewingClass || state.user?.class_name || '11А';
+  if (!toolsState.initialProfile && targetClass === state.user?.class_name && state.structure.class_profiles?.[targetClass]?.includes(state.user?.profile_name)) {
+    state.selectedProfileFilter = state.user.profile_name;
+    toolsState.initialProfile = true;
+  }
   renderScheduleProfileFilters();
   document.getElementById('tools-day').classList.toggle('primary', toolsState.mode === 'day');
   document.getElementById('tools-week').classList.toggle('primary', toolsState.mode === 'week');
@@ -91,11 +95,15 @@ loadSchedule = async function(quiet = false) {
       const day = days[index];
       if (getTyumenDate().getDay() - 1 === day) state.todayLessons = data.slots;
       const next = data.slots.find(slot => toolsLessonPhase(slot, day) === 'future');
+      const lessonTimes = data.slots.flatMap(slot => slot.lessons).filter(item => item.start_time && item.end_time);
+      const firstTime = lessonTimes.map(item => item.start_time).sort()[0] || '';
+      const lastTime = lessonTimes.map(item => item.end_time).sort().at(-1) || '';
       const cards = data.slots.map(slot => renderLessonSlot(slot, day, next?.lesson_number)).join('') || '<div class="g-card g-muted">Уроков в расписании нет.</div>';
       if (toolsState.mode === 'day') return cards;
-      return `<details class="g-week-day" ${getTyumenDate().getDay() - 1 === day ? 'open' : ''}><summary>${toolsDays[day]} <span class="g-muted">· ${data.slots.length} ур. ${data.slots.length ? `· ${toolsEsc(data.slots[0].start_time)}–${toolsEsc(data.slots.at(-1).end_time)}` : ''}</span></summary><div>${cards}</div></details>`;
+      return `<details class="g-week-day" ${getTyumenDate().getDay() - 1 === day ? 'open' : ''}><summary>${toolsDays[day]} <span class="g-muted">· ${data.slots.length} ур. ${data.slots.length ? `· ${toolsEsc(firstTime)}–${toolsEsc(lastTime)}` : ''}</span></summary><div>${cards}</div></details>`;
     }).join('');
     calculateLiveStatusLocally();
+    updateLiveScheduleStatus().catch(() => {});
   } catch (error) {
     if (requestId === toolsState.scheduleRequest) container.innerHTML = `<div class="g-card g-muted">${toolsEsc(error.message)} <button class="g-btn" onclick="loadSchedule()">Повторить</button></div>`;
   }
@@ -258,8 +266,8 @@ document.getElementById('tab-admin').insertAdjacentHTML('beforeend', `
     <select class="g-input" id="tools-schedule-class" onchange="toolsAdminSchedule()"></select><div class="g-row" id="tools-class-status"></div>
     <div class="g-row"><button class="g-btn" onclick="toolsAddLesson()">+ Урок</button><button class="g-btn" onclick="toolsScheduleCSV()">Вставить CSV</button><button class="g-btn" onclick="toolsDownloadSchedule()">Скачать CSV</button></div>
     <div id="tools-csv-import" hidden><label class="g-label">CSV из таблицы (UTF-8)</label><input class="g-input" type="file" accept=".csv,text/csv" onchange="toolsReadCSV(this)">
-      <textarea class="g-input" id="tools-csv-text" rows="6" placeholder="день;урок;предмет;учитель;кабинет;профиль;группа;примечание"></textarea>
-      <p class="g-muted">День: Пн–Сб или 0–5. Пустой профиль — весь класс. Поля с разделителем заключайте в кавычки.</p>
+      <textarea class="g-input" id="tools-csv-text" rows="6" placeholder="день;урок;предмет;учитель;кабинет;профиль;группа;начало;конец;примечание"></textarea>
+      <p class="g-muted">День: Пн–Сб или 0–5. Пустой профиль — весь класс. Начало и конец можно указать в формате ЧЧ:ММ. Поля с разделителем заключайте в кавычки.</p>
       <button class="g-btn" data-busy="schedule-preview" onclick="toolsPreviewSchedule(true)">Проверить CSV</button></div>
     <div id="tools-schedule-grid"></div><button class="g-btn primary" data-busy="schedule-preview" onclick="toolsPreviewSchedule(false)">Предпросмотр изменений</button>
     <div id="tools-schedule-preview" hidden></div></div></section>
@@ -318,18 +326,18 @@ async function toolsAdminSchedule() {
 }
 function toolsInvalidatePreview() { toolsState.preview = null; document.getElementById('tools-schedule-preview').hidden = true; }
 function toolsRenderScheduleGrid() {
-  const columns = [['day_of_week','День'],['lesson_number','Урок'],['subject','Предмет'],['teacher_name','Учитель'],['cabinet','Кабинет'],['profile_name','Профиль'],['subgroup','Группа'],['note','Примечание']];
+  const columns = [['day_of_week','День'],['lesson_number','Урок'],['subject','Предмет'],['teacher_name','Учитель'],['cabinet','Кабинет'],['profile_name','Профиль'],['subgroup','Группа'],['start_time','Начало'],['end_time','Конец'],['note','Примечание']];
   const profiles = state.structure.class_profiles?.[toolsChosenClass()] || [];
   document.getElementById('tools-schedule-grid').innerHTML = `<div class="g-table-wrap"><table class="g-table"><thead><tr>${columns.map(([,title])=>`<th>${title}</th>`).join('')}<th></th></tr></thead><tbody>${toolsState.rows.map((row,index)=>`<tr>${columns.map(([field,title])=>{
     const attrs = `class="g-input ${field === 'subject' ? 'g-subject' : ''}" aria-label="${title}, строка ${index+1}" onchange="toolsEditLesson(${index},'${field}',this.value)"`;
     if (field === 'day_of_week') return `<td><select ${attrs}>${toolsDays.map((day,i)=>`<option value="${i}" ${row[field]===i?'selected':''}>${['Пн','Вт','Ср','Чт','Пт','Сб'][i]}</option>`).join('')}</select></td>`;
     if (field === 'profile_name') return `<td><select ${attrs}><option value="">Весь класс</option>${profiles.map(profile=>`<option ${row[field]===profile?'selected':''}>${toolsEsc(profile)}</option>`).join('')}</select></td>`;
-    return `<td><input ${attrs} value="${toolsEsc(row[field]??'')}" ${['lesson_number','subgroup'].includes(field)?'type="number" min="0" max="12"':''}></td>`;
+    return `<td><input ${attrs} value="${toolsEsc(row[field]??'')}" ${['lesson_number','subgroup'].includes(field)?'type="number" min="0" max="12"':['start_time','end_time'].includes(field)?'type="time"':''}></td>`;
   }).join('')}<td><button class="g-btn danger" onclick="toolsRemoveLesson(${index})" aria-label="Удалить строку ${index+1}">×</button></td></tr>`).join('')}</tbody></table></div><p class="g-muted">${toolsState.rows.length} строк · таблицу можно прокручивать по горизонтали. Примечания отображаются ученикам в карточках.</p>`;
 }
 function toolsEditLesson(index, field, value) {
   if (['day_of_week','lesson_number','subgroup'].includes(field)) value = value === '' ? null : Number(value);
-  if (['profile_name','note'].includes(field) && value === '') value = null;
+  if (['profile_name','note','start_time','end_time'].includes(field) && value === '') value = null;
   toolsState.rows[index][field] = value; toolsInvalidatePreview();
 }
 function toolsAddLesson() {
@@ -373,7 +381,7 @@ function toolsSaveBlob(blob, name) {
   const url=URL.createObjectURL(blob);const link=document.createElement('a');link.href=url;link.download=name;link.click();setTimeout(()=>URL.revokeObjectURL(url),30000);
 }
 function toolsDownloadSchedule() {
-  const fields=['day_of_week','lesson_number','subject','teacher_name','cabinet','profile_name','subgroup','note'];
+  const fields=['day_of_week','lesson_number','subject','teacher_name','cabinet','profile_name','subgroup','note','start_time','end_time'];
   const quote = value => '"'+String(value??'').replaceAll('"','""')+'"';
   const content='\uFEFF'+fields.join(';')+'\n'+toolsState.rows.map(row=>fields.map(field=>quote(row[field])).join(';')).join('\n');
   toolsSaveBlob(new Blob([content],{type:'text/csv;charset=utf-8'}),`schedule-${toolsChosenClass()}.csv`);
@@ -382,7 +390,7 @@ function toolsDownloadSchedule() {
 // Audit history: filters and cursor pagination keep the page responsive.
 const toolsLogSections={profile:'Профиль',schedule:'Расписание',news:'Новости',comments:'Комментарии',reactions:'Реакции',ege:'ЕГЭ'};
 const toolsEntities={users:'Пользователь',user_preferences:'Настройки уведомлений',lessons:'Урок',bell_schedules:'Звонки',news_posts:'Новость',news_reviews:'Решение модератора',comments:'Комментарий',reactions:'Реакция',ege_materials:'Материал',material_progress:'Закладки и прогресс'};
-const toolsLogFields={id:'ID',user_id:'Пользователь',post_id:'Новость',first_name:'Имя',last_name:'Фамилия',username:'Telegram',class_name:'Класс',profile_name:'Профиль',subgroup:'Группа',is_admin:'Администратор',is_banned:'Блокировка',title:'Заголовок',content:'Текст',text:'Текст',emoji:'Реакция',status:'Статус',reason:'Причина',subject:'Предмет',teacher_name:'Учитель',cabinet:'Кабинет',day_of_week:'День недели',lesson_number:'Номер урока',note:'Примечание',bookmarked:'В закладках',studied:'Изучено',lesson_reminders:'Напоминания об уроках',schedule_changes:'Изменения расписания',reminder_minutes:'За сколько минут',theory:'Теория',task_number:'Номер задания',subject_code:'Предмет ЕГЭ',material_id:'Материал',author_name:'Автор',author_id:'ID автора',author_class:'Класс автора',is_anonymous:'Анонимность',image_url:'Изображение',link_url:'Ссылка',published_at:'Дата публикации'};
+const toolsLogFields={id:'ID',user_id:'Пользователь',post_id:'Новость',first_name:'Имя',last_name:'Фамилия',username:'Telegram',class_name:'Класс',profile_name:'Профиль',subgroup:'Группа',is_admin:'Администратор',is_banned:'Блокировка',title:'Заголовок',content:'Текст',text:'Текст',emoji:'Реакция',status:'Статус',reason:'Причина',subject:'Предмет',teacher_name:'Учитель',cabinet:'Кабинет',day_of_week:'День недели',lesson_number:'Номер урока',note:'Примечание',start_time:'Начало занятия',end_time:'Конец занятия',bookmarked:'В закладках',studied:'Изучено',lesson_reminders:'Напоминания об уроках',schedule_changes:'Изменения расписания',reminder_minutes:'За сколько минут',theory:'Теория',task_number:'Номер задания',subject_code:'Предмет ЕГЭ',material_id:'Материал',author_name:'Автор',author_id:'ID автора',author_class:'Класс автора',is_anonymous:'Анонимность',image_url:'Изображение',link_url:'Ссылка',published_at:'Дата публикации'};
 let toolsLogTimer, toolsLogRequest=0;
 function toolsLogSearch() { clearTimeout(toolsLogTimer);toolsLogTimer=setTimeout(()=>toolsLoadLogs(),350); }
 async function toolsLoadLogs(more=false) {
@@ -401,7 +409,7 @@ async function toolsLoadLogs(more=false) {
     const labels={create:'Добавлено',update:'Изменено',delete:'Удалено'};
     const value = item => item===null||item===undefined?'—':item===true?'Да':item===false?'Нет':toolsEsc(String(item));
     const html=data.items.map(log=>`<article class="g-card"><div class="g-row g-between"><span class="g-badge">${toolsLogSections[log.section]||toolsEsc(log.section)}</span><time class="g-muted">${toolsDate(log.created_at)}</time></div>
-      <h4 class="g-title" style="margin-top:10px">${toolsEsc(log.actor_name)}</h4><div class="g-muted">${log.actor_username?'@'+toolsEsc(log.actor_username)+' · ':''}ID ${log.actor_id} · ${log.source==='bot'?'Telegram-бот':'Приложение'}</div>
+      <h4 class="g-title" style="margin-top:10px">${toolsEsc(log.actor_name)}</h4><div class="g-muted">${log.actor_username?'@'+toolsEsc(log.actor_username)+' · ':''}ID ${log.actor_id} · ${log.source==='bot'?'Telegram-бот':log.source==='calendar'?'Синхронизация календаря':'Приложение'}</div>
       <p style="font-size:13px;margin-top:8px">${labels[log.action]||toolsEsc(log.action)} · ${toolsEntities[log.entity]||toolsEsc(log.entity)} #${toolsEsc(log.entity_id)}</p>
       <details class="g-detail"><summary>Подробности изменения</summary>${Object.entries(log.details).map(([field,change])=>`<div class="g-change"><b>${toolsLogFields[field]||toolsEsc(field)}</b><br>${log.action==='update'&&change&&typeof change==='object'?`<del>${value(change.before)}</del> → <ins>${value(change.after)}</ins>`:value(change)}</div>`).join('')}</details></article>`).join('');
     if(more)list.insertAdjacentHTML('beforeend',html);else list.innerHTML=html||'<div class="g-card g-muted">Действий по этим фильтрам пока нет.</div>';

@@ -30,7 +30,7 @@ from sqlalchemy.orm import selectinload
 
 from config import DEFAULT_CLASSES, CLASS_PROFILES_MAP, ALL_PROFILES, settings
 from database import async_session, get_db, init_db
-from timetable import day_bells
+from timetable import day_bells, lesson_times, lesson_timeline
 from models import BellSchedule, Comment, EgeMaterial, EgeSubject, Lesson, NewsPost, Profile, Reaction, SchoolClass, User
 from schemas import (
     BellItem, CommentCreateRequest, CommentResponse, DayScheduleResponse,
@@ -96,6 +96,8 @@ async def lifespan(app: FastAPI):
     
     # Initialize DB schema and base seeds
     await init_db()
+    from data_updates import apply_calendar_schedule
+    await apply_calendar_schedule()
     from features import maintenance_loop
     worker = asyncio.create_task(maintenance_loop())
     try:
@@ -724,174 +726,39 @@ def format_minutes_human(minutes: int) -> str:
 async def get_live_status(
     class_name: Optional[str] = Query(None),
     profile_name: Optional[str] = Query(None),
+    subgroup: Optional[int] = Query(None, ge=1, le=2),
     db: AsyncSession = Depends(get_db)
 ):
-    """
-    Real-time progress calculation synchronized with Tyumen timezone (Asia/Yekaterinburg, UTC+5).
-    Differentiates Monday schedule (08:00 «Разговоры о важном») vs Tuesday-Friday standard bells.
-    Enriches status with active/next lesson subject & cabinet if class_name is provided.
-    """
     now = datetime.now(TYUMEN_TZ)
-    day_of_week = now.weekday() # 0=Mon..6=Sun
-    now_minutes = now.hour * 60 + now.minute
-    time_str = now.strftime("%H:%M")
-
-    def parse_minutes(t_str: str) -> int:
-        h, m = map(int, t_str.split(":"))
-        return h * 60 + m
-
-    if class_name:
-        class_has_schedule = await db.scalar(
-            select(Lesson.id).where(Lesson.class_name == class_name).limit(1)
-        )
-        if class_has_schedule is None:
-            return LiveStatusResponse(
-                current_time=time_str,
-                state="no_schedule",
-                message=f"Расписание для {class_name} ещё не загружено"
-            )
-
-    async def get_lesson_for_num(num: int) -> Optional[Lesson]:
-        if not class_name or day_of_week > 5:
-            return None
-        q = select(Lesson).where(
-            Lesson.class_name == class_name,
-            Lesson.day_of_week == day_of_week,
-            Lesson.lesson_number == num
-        )
-        res = await db.execute(q)
-        lessons = res.scalars().all()
-        if not lessons:
-            return None
-        if profile_name:
-            for l in lessons:
-                if l.profile_name and l.profile_name.strip().lower() == profile_name.strip().lower():
-                    return l
-        return lessons[0]
-
-    # Sunday check
-    if day_of_week == 6:
-        return LiveStatusResponse(
-            current_time=time_str,
-            state="weekend",
-            message="Сегодня воскресенье — уроков нет"
-        )
-
-    # Saturday check
-    if day_of_week == 5:
-        sat_start = parse_minutes("10:00")
-        sat_end = parse_minutes("14:00")
-        if now_minutes < sat_start:
-            diff = sat_start - now_minutes
-            return LiveStatusResponse(
-                current_time=time_str,
-                state="before_school",
-                minutes_left=diff,
-                message=f"Консультации начнутся в 10:00 (через {format_minutes_human(diff)})"
-            )
-        elif sat_start <= now_minutes < sat_end:
-            diff = sat_end - now_minutes
-            return LiveStatusResponse(
-                current_time=time_str,
-                state="lesson",
-                minutes_left=diff,
-                message=f"Идут консультации (до окончания {format_minutes_human(diff)})"
-            )
-        else:
-            return LiveStatusResponse(
-                current_time=time_str,
-                state="after_school",
-                message="Консультации завершены 🎉"
-            )
-
-    # Monday bell schedule (with Разговоры о важном)
-    if day_of_week == 0:
-        day_bells = [
-            {"num": 0, "title": "Разговоры о важном", "start": "08:00", "end": "08:30"},
-            {"num": 1, "title": "1 урок", "start": "08:35", "end": "09:15"},
-            {"num": 2, "title": "2 урок", "start": "09:30", "end": "10:10"},
-            {"num": 3, "title": "3 урок", "start": "10:25", "end": "11:05"},
-            {"num": 4, "title": "4 урок", "start": "11:25", "end": "12:05"},
-            {"num": 5, "title": "5 урок", "start": "12:25", "end": "13:05"},
-            {"num": 6, "title": "6 урок", "start": "13:10", "end": "13:50"},
-            {"num": 7, "title": "7 урок", "start": "14:00", "end": "14:40"},
-        ]
-    else:
-        bell_res = await db.execute(select(BellSchedule).order_by(BellSchedule.lesson_number))
-        day_bells = [
-            {"num": bell.lesson_number, "title": f"{bell.lesson_number} урок", "start": bell.start_time, "end": bell.end_time}
-            for bell in bell_res.scalars().all()
-        ]
-        if not day_bells:
-            return LiveStatusResponse(
-                current_time=time_str,
-                state="no_schedule",
-                message="Расписание звонков ещё не настроено"
-            )
-
-    first_start = parse_minutes(day_bells[0]["start"])
-    if now_minutes < first_start:
-        diff = first_start - now_minutes
-        target_name = day_bells[0]["title"]
-        next_les = await get_lesson_for_num(day_bells[0]["num"])
-        les_info = f" • {next_les.subject} (каб. {next_les.cabinet})" if next_les else ""
-        return LiveStatusResponse(
-            current_time=time_str,
-            state="before_school",
-            minutes_left=diff,
-            message=f"До начала ({target_name}{les_info}): {format_minutes_human(diff)}",
-            next_lesson_number=day_bells[0]["num"],
-            next_lesson_time=day_bells[0]["start"]
-        )
-
-    last_end = parse_minutes(day_bells[-1]["end"])
-    if now_minutes >= last_end:
-        return LiveStatusResponse(
-            current_time=time_str,
-            state="after_school",
-            message="Учебный день завершен 🎉"
-        )
-
-    for i, bell in enumerate(day_bells):
-        b_start = parse_minutes(bell["start"])
-        b_end = parse_minutes(bell["end"])
-
-        if b_start <= now_minutes < b_end:
-            diff = b_end - now_minutes
-            lesson_label = bell["title"]
-            active_les = await get_lesson_for_num(bell["num"])
-            les_info = f" • {active_les.subject} (каб. {active_les.cabinet})" if active_les else ""
-            return LiveStatusResponse(
-                current_time=time_str,
-                state="lesson",
-                current_lesson_number=bell["num"],
-                minutes_left=diff,
-                message=f"{lesson_label}{les_info}: до конца {format_minutes_human(diff)}"
-            )
-
-        if i < len(day_bells) - 1:
-            next_b = day_bells[i + 1]
-            next_start = parse_minutes(next_b["start"])
-            if b_end <= now_minutes < next_start:
-                diff = next_start - now_minutes
-                next_label = next_b["title"]
-                next_les = await get_lesson_for_num(next_b["num"])
-                les_info = f" • След: {next_les.subject} (каб. {next_les.cabinet})" if next_les else ""
-                return LiveStatusResponse(
-                    current_time=time_str,
-                    state="break",
-                    current_lesson_number=bell["num"],
-                    minutes_left=diff,
-                    message=f"Перемена{les_info}: до {next_label} {format_minutes_human(diff)}",
-                    next_lesson_number=next_b["num"],
-                    next_lesson_time=next_b["start"]
-                )
-
-    return LiveStatusResponse(
-        current_time=time_str,
-        state="after_school",
-        message="Уроки закончились"
-    )
+    base = {"current_time": now.strftime("%H:%M")}
+    if class_name and not await db.scalar(select(Lesson.id).where(Lesson.class_name == class_name).limit(1)):
+        return LiveStatusResponse(**base, state="no_schedule", message=f"Расписание для {class_name} ещё не загружено")
+    if now.weekday() == 6:
+        return LiveStatusResponse(**base, state="weekend", message="Сегодня воскресенье — уроков нет")
+    timeline = await lesson_timeline(db, now.weekday(), class_name, profile_name, subgroup)
+    if not timeline:
+        return LiveStatusResponse(**base, state="after_school", message="Сегодня в расписании нет занятий")
+    current = now.strftime("%H:%M")
+    def minute(value):
+        hour, minute_value = map(int, value.split(":"))
+        return hour * 60 + minute_value
+    def describe(item):
+        names = list(dict.fromkeys(lesson.subject + (f" (каб. {lesson.cabinet})" if lesson.cabinet else "") for lesson in item["lessons"]))
+        return " / ".join(names) or ("Разговоры о важном" if item["number"] == 0 else f'{item["number"]} урок')
+    active = [item for item in timeline if item["start"] <= current < item["end"]]
+    if active:
+        finish = min(item["end"] for item in active)
+        return LiveStatusResponse(**base, state="lesson", current_lesson_number=active[0]["number"],
+            minutes_left=minute(finish) - minute(current),
+            message=" / ".join(dict.fromkeys(describe(item) for item in active)) + f": до конца {format_minutes_human(minute(finish) - minute(current))}")
+    upcoming = next((item for item in timeline if item["start"] > current), None)
+    if upcoming:
+        left = minute(upcoming["start"]) - minute(current)
+        before = current < timeline[0]["start"]
+        return LiveStatusResponse(**base, state="before_school" if before else "break", minutes_left=left,
+            next_lesson_number=upcoming["number"], next_lesson_time=upcoming["start"],
+            message=("Первое занятие" if before else "Следующее занятие") + f': {describe(upcoming)} в {upcoming["start"]} (через {format_minutes_human(left)})')
+    return LiveStatusResponse(**base, state="after_school", message="Занятия на сегодня закончились")
 
 # -------------------------------------------------------------
 # Schedule Endpoints
@@ -918,7 +785,6 @@ async def get_lessons(
         return cached
 
     times = await day_bells(db, day_of_week)
-    bells_map = {number: BellItem(lesson_number=number, start_time=value[0], end_time=value[1]) for number, value in times.items()}
 
     query = select(Lesson).where(
         Lesson.class_name == class_name,
@@ -949,7 +815,6 @@ async def get_lessons(
     # Group into LessonSlots by lesson_number
     slots_map: Dict[int, List[LessonItem]] = {}
     for l in filtered_lessons:
-        b = bells_map.get(l.lesson_number)
         item = LessonItem(
             id=l.id,
             day_of_week=l.day_of_week,
@@ -961,17 +826,16 @@ async def get_lessons(
             profile_name=l.profile_name,
             subgroup=l.subgroup,
             note=l.note,
-            start_time=b.start_time if b else "",
-            end_time=b.end_time if b else ""
+            start_time=lesson_times(l, times)[0],
+            end_time=lesson_times(l, times)[1]
         )
         slots_map.setdefault(l.lesson_number, []).append(item)
 
     slots: List[LessonSlot] = []
     for num in sorted(slots_map.keys()):
         items = slots_map[num]
-        b = bells_map.get(num)
-        start_t = b.start_time if b else ""
-        end_t = b.end_time if b else ""
+        slot_times = {(item.start_time, item.end_time) for item in items}
+        start_t, end_t = next(iter(slot_times)) if len(slot_times) == 1 else ("", "")
         is_split = len(items) > 1
 
         slots.append(LessonSlot(

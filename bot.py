@@ -283,29 +283,31 @@ async def cmd_help(message: Message):
 @router.callback_query(F.data == "view_bells")
 @router.message(Command("bells"))
 async def show_bells(event: Union[Message, CallbackQuery]):
-    text = (
-        "🔔 <b>Расписание звонков МАОУ гимназии №16:</b>\n\n"
-        "📌 <b>ПОНЕДЕЛЬНИК (с «Разговорами о важном»):</b>\n"
-        "• <b>08:00 — 08:30</b> — 🇷🇺 Разговоры о важном\n"
-        "• <b>1 урок:</b> 08:35 — 09:15\n"
-        "• <b>2 урок:</b> 09:30 — 10:10\n"
-        "• <b>3 урок:</b> 10:25 — 11:05\n"
-        "• <b>4 урок:</b> 11:25 — 12:05\n"
-        "• <b>5 урок:</b> 12:25 — 13:05\n"
-        "• <b>6 урок:</b> 13:10 — 13:50\n"
-        "• <b>7 урок:</b> 14:00 — 14:40\n\n"
-        "📌 <b>ВТОРНИК — ПЯТНИЦА:</b>\n"
-        "• <b>1 урок:</b> 08:15 — 08:55\n"
-        "• <b>2 урок:</b> 09:10 — 09:50\n"
-        "• <b>3 урок:</b> 10:10 — 10:50\n"
-        "• <b>4 урок:</b> 11:10 — 11:50\n"
-        "• <b>5 урок:</b> 12:10 — 12:50\n"
-        "• <b>6 урок:</b> 13:00 — 13:40\n"
-        "• <b>7 урок:</b> 13:50 — 14:30\n"
-        "• <b>8 урок:</b> 14:40 — 15:20\n\n"
-        "📌 <b>СУББОТА (консультации):</b>\n"
-        "• Консультации и спецкурсы с 10:00"
-    )
+    from timetable import day_bells, lesson_timeline
+    days = ["Понедельник", "Вторник", "Среда", "Четверг", "Пятница", "Суббота"]
+    async with async_session() as session:
+        user = await session.get(User, event.from_user.id)
+        if user and user.class_name and user.profile_name:
+            blocks = [f"🔔 <b>Время занятий · {html.quote(user.class_name)} · {html.quote(user.profile_name)}</b>\nТюмень (UTC+5)"]
+            for day, name in enumerate(days):
+                timeline = await lesson_timeline(session, day, user.class_name, user.profile_name, user.subgroup)
+                if not timeline:
+                    continue
+                lines = [f"📌 <b>{name}</b>"]
+                for item in timeline:
+                    titles = " / ".join(dict.fromkeys(lesson.subject for lesson in item["lessons"]))
+                    lines.append(f'• <b>{item["start"]} — {item["end"]}</b> · {html.quote(titles)}')
+                blocks.append("\n".join(lines))
+            text = "\n\n".join(blocks) if len(blocks) > 1 else "Расписание для вашего класса и профиля ещё не загружено."
+        else:
+            blocks = ["🔔 <b>Общее расписание звонков · Тюмень (UTC+5)</b>"]
+            for day, name in ((0, "Понедельник"), (1, "Вторник — пятница")):
+                times = await day_bells(session, day)
+                blocks.append(f"<b>{name}</b>\n" + "\n".join(f"• {number} урок: {start} — {end}" for number, (start, end) in sorted(times.items())))
+            blocks.append("Заполните профиль в приложении, чтобы видеть точное время своих занятий.")
+            text = "\n\n".join(blocks)
+    if len(text) > 4000:
+        text = text[:3900].rsplit("\n", 1)[0] + "\n\nПолное расписание — в приложении."
 
     if isinstance(event, CallbackQuery):
         await event.answer()

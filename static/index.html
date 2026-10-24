@@ -1575,24 +1575,6 @@
     window.selectDay = selectDay;
 
     const dayButtons = document.querySelectorAll('.day-btn');
-    dayButtons.forEach(btn => {
-      btn.addEventListener('click', () => {
-        const d = parseInt(btn.getAttribute('data-day'));
-        state.selectedDay = d;
-
-        dayButtons.forEach(b => {
-          if (parseInt(b.getAttribute('data-day')) === d) {
-            b.className = 'day-btn flex-1 py-1.5 text-xs font-semibold rounded-xl text-center transition-all bg-white dark:bg-zinc-700 text-zinc-900 dark:text-white shadow-sm active-press';
-          } else {
-            b.className = 'day-btn flex-1 py-1.5 text-xs font-semibold rounded-xl text-center transition-all text-ios-secondaryText active-press';
-          }
-        });
-
-        haptic('selection');
-        loadSchedule();
-      });
-    });
-
     // Set initial active day button
     dayButtons.forEach(b => {
       if (parseInt(b.getAttribute('data-day')) === state.selectedDay) {
@@ -1619,157 +1601,26 @@
       return `${h}:${m}`;
     }
 
+    function liveScheduleParams() {
+      const targetClass = state.viewingClass || state.user?.class_name || '11А';
+      const selected = state.selectedProfileFilter;
+      const profile = selected && selected !== 'all' ? selected : (targetClass === state.user?.class_name ? state.user?.profile_name : '');
+      const params = new URLSearchParams({class_name: targetClass});
+      if (profile) params.set('profile_name', profile);
+      if (targetClass === state.user?.class_name && state.user?.subgroup) params.set('subgroup', state.user.subgroup);
+      return params;
+    }
+
     function calculateLiveStatusLocally() {
-      try {
-        const timeEl = document.getElementById("live-status-time");
-        const msgEl = document.getElementById("live-status-message");
-        const titleEl = document.getElementById("live-status-title");
-
-        const d = getTyumenDate();
-        const hours = d.getHours();
-        const minutes = d.getMinutes();
-        const nowMin = hours * 60 + minutes;
-        const timeStr = `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}`;
-
-        if (timeEl) timeEl.textContent = timeStr;
-
-        const day = d.getDay(); // 0=Sun, 1=Mon...6=Sat
-
-        if (day === 0) {
-          if (msgEl) msgEl.textContent = "Сегодня воскресенье — уроков нет";
-          if (titleEl) {
-            titleEl.textContent = "Выходной";
-            titleEl.className = "text-xs font-semibold text-ios-secondaryText uppercase tracking-wider";
-          }
-          return;
-        }
-
-        if (day === 6) {
-          if (nowMin < 10 * 60) {
-            const diff = 10 * 60 - nowMin;
-            if (msgEl) msgEl.textContent = `Консультации с 10:00 (через ${formatMinutesHuman(diff)})`;
-            if (titleEl) {
-              titleEl.textContent = "Суббота";
-              titleEl.className = "text-xs font-semibold text-ios-secondaryText uppercase tracking-wider";
-            }
-          } else if (nowMin < 14 * 60) {
-            const diff = 14 * 60 - nowMin;
-            if (msgEl) msgEl.textContent = `Идут консультации (до конца ${formatMinutesHuman(diff)})`;
-            if (titleEl) {
-              titleEl.textContent = "Консультации";
-              titleEl.className = "text-xs font-semibold text-ios-blue uppercase tracking-wider";
-            }
-          } else {
-            if (msgEl) msgEl.textContent = "Консультации завершены 🎉";
-            if (titleEl) {
-              titleEl.textContent = "Суббота";
-              titleEl.className = "text-xs font-semibold text-ios-secondaryText uppercase tracking-wider";
-            }
-          }
-          return;
-        }
-
-        // Monday (day 1) vs Tue-Fri (days 2..5)
-        const bells = (day === 1) ? [
-          { num: 0, title: "Разговоры о важном", start: "08:00", end: "08:30" },
-          { num: 1, title: "1 урок", start: "08:35", end: "09:15" },
-          { num: 2, title: "2 урок", start: "09:30", end: "10:10" },
-          { num: 3, title: "3 урок", start: "10:25", end: "11:05" },
-          { num: 4, title: "4 урок", start: "11:25", end: "12:05" },
-          { num: 5, title: "5 урок", start: "12:25", end: "13:05" },
-          { num: 6, title: "6 урок", start: "13:10", end: "13:50" },
-          { num: 7, title: "7 урок", start: "14:00", end: "14:40" }
-        ] : [
-          { num: 1, title: "1 урок", start: "08:15", end: "08:55" },
-          { num: 2, title: "2 урок", start: "09:10", end: "09:50" },
-          { num: 3, title: "3 урок", start: "10:10", end: "10:50" },
-          { num: 4, title: "4 урок", start: "11:10", end: "11:50" },
-          { num: 5, title: "5 урок", start: "12:10", end: "12:50" },
-          { num: 6, title: "6 урок", start: "13:00", end: "13:40" },
-          { num: 7, title: "7 урок", start: "13:50", end: "14:30" },
-          { num: 8, title: "8 урок", start: "14:40", end: "15:20" }
-        ];
-
-        function toMin(t) {
-          const [h, m] = t.split(":").map(Number);
-          return h * 60 + m;
-        }
-
-        const firstStart = toMin(bells[0].start);
-        const lastEnd = toMin(bells[bells.length - 1].end);
-
-        if (nowMin < firstStart) {
-          const diff = firstStart - nowMin;
-          if (msgEl) msgEl.textContent = `До начала (${bells[0].title}): ${formatMinutesHuman(diff)}`;
-          if (titleEl) {
-            titleEl.textContent = "До уроков";
-            titleEl.className = "text-xs font-semibold text-ios-secondaryText uppercase tracking-wider";
-          }
-          return;
-        }
-
-        if (nowMin >= lastEnd) {
-          if (msgEl) msgEl.textContent = "Учебный день завершен 🎉";
-          if (titleEl) {
-            titleEl.textContent = "Уроки окончены";
-            titleEl.className = "text-xs font-semibold text-ios-secondaryText uppercase tracking-wider";
-          }
-          return;
-        }
-
-        for (let i = 0; i < bells.length; i++) {
-          const b = bells[i];
-          const sMin = toMin(b.start);
-          const eMin = toMin(b.end);
-
-          if (nowMin >= sMin && nowMin < eMin) {
-            const diff = eMin - nowMin;
-            let subjectInfo = "";
-            if (state.todayLessons) {
-              const curSlot = state.todayLessons.find(s => s.lesson_number === b.num);
-              if (curSlot && curSlot.lessons && curSlot.lessons.length > 0) {
-                const l = curSlot.lessons[0];
-                subjectInfo = ` • ${l.subject}${l.cabinet ? " (каб. " + l.cabinet + ")" : ""}`;
-              }
-            }
-            if (msgEl) msgEl.textContent = `${b.title}${subjectInfo}: до конца ${formatMinutesHuman(diff)}`;
-            if (titleEl) {
-              titleEl.textContent = b.num === 0 ? "Разговоры о важном" : `Идет ${b.num} урок`;
-              titleEl.className = "text-xs font-semibold text-ios-blue uppercase tracking-wider";
-            }
-            return;
-          }
-
-          if (i < bells.length - 1) {
-            const nextB = bells[i + 1];
-            const nextSMin = toMin(nextB.start);
-            if (nowMin >= eMin && nowMin < nextSMin) {
-              const diff = nextSMin - nowMin;
-              let nextInfo = "";
-              if (state.todayLessons) {
-                const nextSlot = state.todayLessons.find(s => s.lesson_number === nextB.num);
-                if (nextSlot && nextSlot.lessons && nextSlot.lessons.length > 0) {
-                  const l = nextSlot.lessons[0];
-                  nextInfo = ` • След: ${l.subject}${l.cabinet ? " (каб. " + l.cabinet + ")" : ""}`;
-                }
-              }
-              if (msgEl) msgEl.textContent = `Перемена${nextInfo}: до звонка ${formatMinutesHuman(diff)}`;
-              if (titleEl) {
-                titleEl.textContent = "Перемена";
-                titleEl.className = "text-xs font-semibold text-ios-green uppercase tracking-wider";
-              }
-              return;
-            }
-          }
-        }
-
-        if (msgEl) msgEl.textContent = "Учебный день завершен 🎉";
-        if (titleEl) {
-          titleEl.textContent = "Статус занятий";
-          titleEl.className = "text-xs font-semibold text-ios-secondaryText uppercase tracking-wider";
-        }
-      } catch (err) {
-        console.error("Error in calculateLiveStatusLocally:", err);
+      const timeEl = document.getElementById('live-status-time');
+      const message = document.getElementById('live-status-message');
+      const title = document.getElementById('live-status-title');
+      const data = state.liveStatusScope === liveScheduleParams().toString() && Date.now() - (state.liveStatusReceivedAt || 0) < 60000 ? state.liveStatus : null;
+      if (timeEl) timeEl.textContent = data?.current_time || getTyumenTime();
+      if (message) message.textContent = data?.message || 'Уточняем время занятий…';
+      if (title) {
+        title.textContent = data?.state === 'lesson' ? 'Идёт занятие' : data?.state === 'break' ? 'Перемена' : 'Статус занятий';
+        title.className = 'text-xs font-semibold text-ios-blue uppercase tracking-wider';
       }
     }
 
@@ -1779,38 +1630,16 @@
     }
 
     async function updateLiveScheduleStatus() {
-      calculateLiveStatusLocally();
-
+      const params = liveScheduleParams();
       try {
-        const targetClass = state.viewingClass || state.user?.class_name || "11А";
-        const profile = state.user?.profile_name || "";
-        const params = new URLSearchParams();
-        if (targetClass) params.append("class_name", targetClass);
-        if (profile) params.append("profile_name", profile);
-
-        const data = await API.get(`/api/schedule/live?${params.toString()}`);
-        if (data && data.message) {
-          const timeEl = document.getElementById("live-status-time");
-          const msgEl = document.getElementById("live-status-message");
-          const titleEl = document.getElementById("live-status-title");
-
-          if (timeEl) timeEl.textContent = data.current_time || getTyumenTime();
-          if (msgEl) msgEl.textContent = data.message;
-          if (titleEl) {
-            if (data.state === "lesson") {
-              titleEl.textContent = data.current_lesson_number === 0 ? "Разговоры о важном" : `Идет урок ${data.current_lesson_number}`;
-              titleEl.className = "text-xs font-semibold text-ios-blue uppercase tracking-wider";
-            } else if (data.state === "break") {
-              titleEl.textContent = "Перемена";
-              titleEl.className = "text-xs font-semibold text-ios-green uppercase tracking-wider";
-            } else {
-              titleEl.textContent = "Статус занятий";
-              titleEl.className = "text-xs font-semibold text-ios-secondaryText uppercase tracking-wider";
-            }
-          }
+        const data = await API.get(`/api/schedule/live?${params}`);
+        if (data && params.toString() === liveScheduleParams().toString()) {
+          state.liveStatus = data;
+          state.liveStatusScope = params.toString();
+          state.liveStatusReceivedAt = Date.now();
         }
-      } catch (e) {
-        // Fallback already calculated above
+      } finally {
+        calculateLiveStatusLocally();
       }
     }
 

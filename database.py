@@ -76,6 +76,10 @@ async def init_db() -> None:
         user_columns = await conn.run_sync(lambda sync_conn: inspect(sync_conn).get_columns("users"))
         if "is_banned" not in {column["name"] for column in user_columns}:
             await conn.execute(text("ALTER TABLE users ADD COLUMN is_banned BOOLEAN DEFAULT FALSE NOT NULL"))
+        lesson_columns = await conn.run_sync(lambda sync_conn: inspect(sync_conn).get_columns("lessons"))
+        for name in ("start_time", "end_time"):
+            if name not in {column["name"] for column in lesson_columns}:
+                await conn.execute(text(f"ALTER TABLE lessons ADD COLUMN {name} VARCHAR(5)"))
 
     async with async_session() as session:
         # 1. Seed classes if missing
