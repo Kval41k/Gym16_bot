@@ -18,7 +18,7 @@ function communityDateLabel() {
   const node=document.getElementById('tools-schedule-date');
   if(node)node.textContent=(toolsState.mode==='week'?'Учебная неделя':communityParseDate(communityScheduleDate(state.selectedDay)).toLocaleDateString('ru-RU',{weekday:'long',day:'numeric',month:'long'}))+' · '+(state.viewingClass||state.user.class_name||'11А');
 }
-// Students browse weekdays, today and tomorrow; arbitrary date selection belongs to administration.
+// Students browse weekdays and today; arbitrary date selection belongs to administration.
 toolsToday=function(){community.week=communityMonday(getTyumenDate());const day=getTyumenDate().getDay();state.selectedDay=day===0?6:day-1;toolsState.mode='day';if(state.selectedDay<6)selectDay(state.selectedDay);else loadSchedule();};
 
 document.getElementById('live-status-card').insertAdjacentHTML('afterend',`<section class="g-card g-next-card" id="community-next-card" hidden aria-live="polite"></section>`);

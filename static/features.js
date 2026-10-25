@@ -53,16 +53,46 @@ function toolsLessonPhase(slot, day) {
   if (slot.start_time && minute < parse(slot.start_time)) return 'future';
   return slot.end_time ? 'past' : '';
 }
+function toolsMergeSharedLessons(lessons) {
+  const compact=value=>String(value||'').toLocaleLowerCase('ru').replace(/\s+/g,'');
+  const identity=lesson=>JSON.stringify([lesson.class_name,lesson.day_of_week,lesson.lesson_number,
+    compact(lesson.subject),compact(lesson.teacher_name),compact(lesson.cabinet),
+    lesson.start_time||'',lesson.end_time||'',String(lesson.note||'').trim()]);
+  let rows=lessons.map(lesson=>({...lesson}));
+  // Merge one audience dimension at a time, never imply a missing profile/group attends.
+  for(const dimension of ['profile_name','subgroup']) {
+    const buckets=new Map();
+    rows.forEach((lesson,index)=>{
+      const other=dimension==='profile_name'?lesson.subgroup:lesson.profile_name;
+      const key=lesson.teacher_name?.trim()&&lesson.cabinet?.trim()
+        ? JSON.stringify([identity(lesson),other||null]) : `unknown:${index}`;
+      if(!buckets.has(key))buckets.set(key,[]);
+      buckets.get(key).push(lesson);
+    });
+    rows=[...buckets.values()].map(group=>{
+      if(group.length===1)return group[0];
+      const first=group[0],values=[...new Set(group.map(row=>row[dimension]||null))];
+      const required=dimension==='profile_name'?(state.structure.class_profiles[first.class_name]||[]):[1,2];
+      const common=values.includes(null)||(required.length>0&&required.every(value=>values.includes(value)));
+      // An incomplete audience is kept explicit rather than broadened to the whole class.
+      if(!common&&values.length>1)return group;
+      return {...first,[dimension]:common?null:values[0],shared_lesson:true};
+    }).flat();
+  }
+  return rows;
+}
 renderLessonSlot = function(slot, day = state.selectedDay, nextNumber = null) {
+  const lessons=toolsMergeSharedLessons(slot.lessons);
   let phase = toolsLessonPhase(slot, day);
   if (phase === 'future') phase = slot.lesson_number === nextNumber ? 'next' : '';
   return `<article class="g-card g-lesson ${phase}"><div class="g-lesson-head"><div class="g-row">
     <span class="g-lesson-number">${slot.lesson_number}</span><b>${slot.start_time ? `${toolsEsc(slot.start_time)} – ${toolsEsc(slot.end_time)}` : slot.lessons.some(item => item.start_time) ? "Время указано у каждого профиля" : "Время уточняется"}</b></div>
     ${phase === 'current' ? '<span class="g-badge approved">Сейчас</span>' : phase === 'next' ? '<span class="g-badge">Следующий</span>' : ''}</div>
-    ${slot.lessons.map(lesson => `<div class="g-sublesson"><div class="g-row g-between"><h3 class="g-title">${toolsEsc(lesson.subject)}</h3><span class="g-badge">Каб. ${toolsEsc(lesson.cabinet || '—')}</span></div>
+    ${lessons.map(lesson => `<div class="g-sublesson"><div class="g-row g-between"><h3 class="g-title">${toolsEsc(lesson.subject)}</h3><span class="g-badge">Каб. ${toolsEsc(lesson.cabinet || '—')}</span></div>
       <div class="g-muted" style="margin-top:7px">${lesson.start_time && (!slot.start_time || lesson.start_time !== slot.start_time || lesson.end_time !== slot.end_time) ? `${toolsEsc(lesson.start_time)}–${toolsEsc(lesson.end_time)} · ` : ""}${toolsEsc(lesson.teacher_name || 'Учитель не указан')}</div>
       ${lesson.profile_name ? `<span class="g-badge">${toolsEsc(lesson.profile_name)}</span>` : ''}
       ${lesson.subgroup ? `<span class="g-badge">Группа ${lesson.subgroup}</span>` : ''}
+      ${lesson.shared_lesson && !lesson.profile_name && !lesson.subgroup ? '<span class="g-badge">Общий урок</span>' : ''}
       ${lesson.note ? `<div class="g-note">${toolsEsc(lesson.note)}</div>` : ''}</div>`).join('')}</article>`;
 };
 loadSchedule = async function(quiet = false) {
