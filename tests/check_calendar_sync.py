@@ -21,9 +21,9 @@ with sqlite3.connect(DIRECTORY/'check.db') as conn:
     conn.execute('CREATE TABLE lessons (id INTEGER PRIMARY KEY, day_of_week INTEGER NOT NULL, lesson_number INTEGER NOT NULL, class_name VARCHAR(20) NOT NULL, subject VARCHAR(150) NOT NULL, teacher_name VARCHAR(150) NOT NULL, cabinet VARCHAR(50) NOT NULL, profile_name VARCHAR(100), subgroup INTEGER, note VARCHAR(255))')
 
 import httpx
-from sqlalchemy import select
+from sqlalchemy import select, delete
 from database import init_db, async_session, engine
-from models import Lesson, User, UserPreferences, Notification, AuditLog
+from models import Lesson, User, UserPreferences, Notification, AuditLog, AppliedDataUpdate
 from seed_data import LESSONS_11A, LESSONS_11V, LESSONS_11G, LESSONS_11ZH
 from data_updates import apply_calendar_schedule, SNAPSHOT
 from features import enqueue_reminders, parse_schedule, ScheduleRequest
@@ -60,7 +60,7 @@ async def run():
         assert await apply_calendar_schedule() is True
         main.cache_clear_prefix('sched:')
         snapshot=json.loads(SNAPSHOT.read_text())['rows']
-        assert len(snapshot)==38
+        assert len(snapshot)==36
         for day in range(6):
             actual=await schedule(day)
             expected=[row for row in snapshot if row['day_of_week']==day]
@@ -68,12 +68,16 @@ async def run():
             assert len(flattened)==len(expected),(day,len(flattened),len(expected))
             for lesson,row in zip(flattened,expected):
                 for key,value in row.items(): assert lesson[key]==value,(day,key,lesson[key],value)
-        assert philology_before==[public_signature(await schedule(day,'Филологический')) for day in range(6)],'Other profile must retain its classes and times'
+        assert philology_before[:5]==[public_signature(await schedule(day,'Филологический')) for day in range(5)],'Other profile must retain its classes and times'
         async with async_session() as db:
             after_other=sorted(signature(row) for row in (await db.scalars(select(Lesson).where(Lesson.class_name!='11А'))).all())
             assert before_other==after_other,'Other classes must be unchanged'
             assert len((await db.scalars(select(Notification))).all())==1
             assert await db.scalar(select(AuditLog.id).where(AuditLog.source=='calendar'))
+        saturday = await schedule(5, 'Филологический')
+        consultation = saturday['slots'][0]['lessons'][0]
+        assert consultation['profile_name'] is None and consultation['teacher_name'] == 'Ермакова М.В.' and consultation['cabinet'] == '3/306'
+        assert not any(item['subject'] in ('IT Lab', 'Консультация по информатике') for item in snapshot)
         assert (await schedule(0,cls='11Б'))['schedule_loaded'] is False
         from types import SimpleNamespace
         from bot import show_bells
@@ -93,7 +97,7 @@ async def run():
                 return r.json()
         cases=[(8,0,'lesson',0,None),(8,30,'break',None,'08:35'),(13,10,'break',None,'13:25'),
                (13,25,'lesson',6,None),(14,6,'break',None,'14:10'),(14,10,'lesson',7,None),
-               (14,50,'break',None,'15:00'),(15,1,'lesson',8,None),(16,0,'after_school',None,None)]
+               (14,50,'after_school',None,None),(15,1,'after_school',None,None),(16,0,'after_school',None,None)]
         for hour,minute,state,number,next_time in cases:
             result=await live(datetime(2026,10,26,hour,minute,tzinfo=TZ))
             assert result['state']==state,(hour,minute,result)
@@ -125,8 +129,28 @@ async def run():
         async with async_session() as db:
             assert (await db.get(Lesson,changed_id)).subject=='Ручное изменение'
         assert list((DIRECTORY/'backups').glob('schedule-before-*.json'))
+        # Installed v1 receives only the requested correction, preserving admin changes.
+        metadata=json.loads(SNAPSHOT.read_text())
+        async with async_session() as db:
+            await db.delete(await db.get(AppliedDataUpdate,metadata['revision']))
+            await db.execute(delete(Notification).where(Notification.dedup_key.like('schedule:'+metadata['revision']+':%')))
+            db.add(AppliedDataUpdate(revision=metadata['previous_revision']))
+            db.add(Lesson(day_of_week=0,lesson_number=8,class_name='11А',subject='IT Lab',teacher_name='',cabinet='',profile_name='Соц-гум'))
+            db.add(Lesson(day_of_week=1,lesson_number=8,class_name='11А',subject='Консультация по информатике',teacher_name='',cabinet='',profile_name='Соц-гум'))
+            sat=await db.scalar(select(Lesson).where(Lesson.class_name=='11А',Lesson.day_of_week==5))
+            sat.profile_name='Соц-гум';sat.teacher_name='';sat.cabinet=''
+            await db.commit()
+        assert await apply_calendar_schedule() is True
+        async with async_session() as db:
+            assert (await db.get(Lesson,changed_id)).subject=='Ручное изменение'
+            lessons=(await db.scalars(select(Lesson).where(Lesson.class_name=='11А'))).all()
+            assert not any(row.profile_name=='Соц-гум' and row.subject in metadata['removed_subjects'] for row in lessons)
+            sat=[row for row in lessons if row.subject=='Консультация по профильной математике']
+            assert len(sat)==1 and sat[0].profile_name is None and sat[0].teacher_name=='Ермакова М.В.' and sat[0].cabinet=='3/306'
+        assert await apply_calendar_schedule() is False
+
     await engine.dispose()
-    print('PASS: legacy migration, 38 calendar lessons, exact times, live countdown, reminders, CSV times, other classes/profiles preserved, idempotence')
+    print('PASS: legacy migration, 36 lessons, shared Saturday maths, exact times, live countdown, reminders, CSV times, other classes/profiles preserved, idempotence')
 
 try:
     asyncio.run(run())

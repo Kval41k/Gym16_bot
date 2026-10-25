@@ -6,47 +6,15 @@
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
-  <link rel="stylesheet" href="/static/features.css?v=2">
+  <link rel="stylesheet" href="/static/features.css?v=3">
   <title>Гимназия №16 — 11 Классы</title>
 
   <!-- Telegram Web App Script -->
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <script src="/static/theme.js?v=3"></script>
+  <script src="/static/media.js?v=3"></script>
 
-  <!-- Tailwind CSS CDN -->
-  <script src="https://cdn.tailwindcss.com"></script>
-  <script>
-    tailwind.config = {
-      darkMode: 'class',
-      theme: {
-        extend: {
-          colors: {
-            ios: {
-              blue: '#007AFF',
-              green: '#34C759',
-              red: '#FF3B30',
-              orange: '#FF9500',
-              yellow: '#FFCC00',
-              teal: '#5AC8FA',
-              indigo: '#5856D6',
-              bgLight: '#F2F2F7',
-              cardLight: '#FFFFFF',
-              bgDark: '#000000',
-              cardDark: '#1C1C1E',
-              cardDark2: '#2C2C2E',
-              separatorLight: '#C6C6C8',
-              separatorDark: '#38383A',
-              secondaryText: '#8E8E93'
-            }
-          },
-          boxShadow: {
-            'ios-sm': '0 2px 8px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.02)',
-            'ios-card': '0 4px 16px rgba(0, 0, 0, 0.05), 0 1px 3px rgba(0, 0, 0, 0.02)',
-            'ios-sheet': '0 -4px 24px rgba(0, 0, 0, 0.12)'
-          }
-        }
-      }
-    };
-  </script>
+  <link rel="stylesheet" href="/static/ui.css?v=3">
 
   <style>
     /* Apple Human Interface Typography & Smooth Scroll */
@@ -846,12 +814,7 @@
     if (tg) {
       tg.ready();
       tg.expand();
-      // Apply theme
-      if (tg.colorScheme === 'dark') {
-        document.documentElement.classList.add('dark');
-      } else {
-        document.documentElement.classList.remove('dark');
-      }
+      window.GymTheme?.apply();
     }
 
     // Haptic feedback helper
@@ -873,7 +836,9 @@
     function loadSavedProfile() {
       try {
         const raw = localStorage.getItem(STORAGE_KEY);
-        return raw ? JSON.parse(raw) : null;
+        const profile = raw ? JSON.parse(raw) : null;
+        const telegramId = tg?.initDataUnsafe?.user?.id;
+        return profile && (!telegramId || Number(profile.id) === Number(telegramId)) ? profile : null;
       } catch (e) {
         return null;
       }
@@ -969,6 +934,7 @@
       if (!value || typeof value !== 'string') return '';
       const url = value.trim();
       if (/^\/uploads\/[A-Za-z0-9_.-]+$/.test(url)) return url;
+      if (/^\/api\/media\/[A-Za-z0-9_-]{10,250}$/.test(url)) return url;
       try {
         const parsed = new URL(url, window.location.origin);
         if (parsed.protocol === 'https:' && !parsed.username && !parsed.password) return parsed.href;
@@ -1106,6 +1072,7 @@
         pages.forEach(p => p.classList.add('hidden'));
         const targetPage = document.getElementById(tabId);
         if (targetPage) targetPage.classList.remove('hidden');
+        window.scrollTo({top: 0, behavior: 'instant'});
 
         const buttons = document.querySelectorAll('.nav-tab-btn');
         buttons.forEach(b => {
@@ -1179,7 +1146,6 @@
         Promise.allSettled([
           API.get('/api/meta/structure').then(struct => { if (struct) state.structure = struct; }),
           loadBells(),
-          loadNews(),
           checkPendingNewsCount(),
           API.post('/api/user/sync', {
             id: state.user.id,
@@ -1214,6 +1180,7 @@
 
               updateAdminNavigation();
               window.loadPersonalTools?.();
+              loadNews().catch(() => {});
 
               if (checkIsAdmin()) {
                 if (state.news && state.news.length > 0) {
@@ -1261,7 +1228,7 @@
 
       if (state.user.photo_url) {
         const avatarEl = document.getElementById('profile-avatar');
-        avatarEl.innerHTML = `<img src="${state.user.photo_url}" class="w-full h-full object-cover">`;
+        avatarEl.innerHTML = `<img src="${escapeHtml(safeImageUrl(state.user.photo_url))}" alt="Фото профиля" class="w-full h-full object-cover">`;
       } else {
         const initials = (state.user.first_name ? state.user.first_name.charAt(0) : 'Г') + (state.user.last_name ? state.user.last_name.charAt(0) : '');
         document.getElementById('profile-avatar').textContent = initials || 'Г16';
@@ -1863,7 +1830,7 @@
       const imageUrl = safeImageUrl(post.image_url);
       const imageHtml = imageUrl
         ? `<div class="mt-3 rounded-2xl overflow-hidden border border-zinc-100 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/30">
-             <img src="${escapeHtml(imageUrl)}" data-image-url="${escapeHtml(imageUrl)}" alt="Новость" class="safe-image-open w-full h-auto rounded-2xl cursor-pointer block" loading="lazy">
+             <img ${window.protectedImageAttrs(imageUrl)} data-image-url="${escapeHtml(imageUrl)}" alt="Новость" class="safe-image-open w-full h-auto rounded-2xl cursor-pointer block" loading="lazy">
            </div>`
         : "";
 
@@ -1957,7 +1924,7 @@
       const imgTag = document.getElementById("propose-img-tag");
       const fn = document.getElementById("propose-file-name");
       if (url && (url.startsWith("http://") || url.startsWith("https://"))) {
-        if (imgTag) imgTag.src = url;
+        if (imgTag) window.setProtectedImage(imgTag, url);
         if (pr) {
           pr.classList.remove("hidden");
           pr.style.display = "flex";
@@ -1971,7 +1938,7 @@
           pr.classList.add("hidden");
           pr.style.display = "none";
         }
-        if (imgTag) imgTag.src = "";
+        if (imgTag) window.setProtectedImage(imgTag, "");
         if (fn) {
           fn.textContent = "Файл не выбран";
           fn.className = "text-xs text-ios-secondaryText truncate max-w-[180px]";
@@ -1991,7 +1958,7 @@
       const reader = new FileReader();
       reader.onload = function(re) {
         const imgTag = document.getElementById("propose-img-tag");
-        if (imgTag) imgTag.src = re.target.result;
+        if (imgTag) window.setProtectedImage(imgTag, re.target.result);
         const pr = document.getElementById("propose-image-preview");
         if (pr) pr.classList.remove("hidden");
       };
@@ -2009,7 +1976,7 @@
       const pr = document.getElementById("propose-image-preview");
       if (pr) pr.classList.add("hidden");
       const imgTag = document.getElementById("propose-img-tag");
-      if (imgTag) imgTag.src = "";
+      if (imgTag) window.setProtectedImage(imgTag, "");
       haptic("impact");
     }
     window.removeSelectedPhoto = removeSelectedPhoto;
@@ -2123,13 +2090,13 @@
       const previewContainer = document.getElementById("edit-post-image-preview");
       const imgTag = document.getElementById("edit-post-img-tag");
       if (post.image_url && imgTag && previewContainer) {
-        imgTag.src = post.image_url;
+        window.setProtectedImage(imgTag, post.image_url);
         previewContainer.classList.remove("hidden");
         previewContainer.classList.add("flex");
       } else if (previewContainer) {
         previewContainer.classList.add("hidden");
         previewContainer.classList.remove("flex");
-        if (imgTag) imgTag.src = "";
+        if (imgTag) window.setProtectedImage(imgTag, "");
       }
 
       if (editModal) {
@@ -2164,13 +2131,13 @@
       if (previewContainer && imgTag) {
         try {
           const previewUrl = URL.createObjectURL(file);
-          imgTag.src = previewUrl;
+          window.setProtectedImage(imgTag, previewUrl);
           previewContainer.classList.remove("hidden");
           previewContainer.classList.add("flex");
         } catch (e) {
           const reader = new FileReader();
           reader.onload = function(evt) {
-            imgTag.src = evt.target.result;
+            window.setProtectedImage(imgTag, evt.target.result);
             previewContainer.classList.remove("hidden");
             previewContainer.classList.add("flex");
           };
@@ -2193,13 +2160,13 @@
       const imgTag = document.getElementById("edit-post-img-tag");
       if (previewContainer && imgTag) {
         if (url) {
-          imgTag.src = url;
+          window.setProtectedImage(imgTag, url);
           previewContainer.classList.remove("hidden");
           previewContainer.classList.add("flex");
         } else {
           previewContainer.classList.add("hidden");
           previewContainer.classList.remove("flex");
-          imgTag.src = "";
+          window.setProtectedImage(imgTag, "");
         }
       }
     }
@@ -2224,7 +2191,7 @@
         previewContainer.classList.add("hidden");
         previewContainer.classList.remove("flex");
       }
-      if (imgTag) imgTag.src = "";
+      if (imgTag) window.setProtectedImage(imgTag, "");
       haptic("impact");
     }
     window.removeEditPhoto = removeEditPhoto;
@@ -2360,7 +2327,7 @@
         const imageUrl = safeImageUrl(p.image_url);
         const imageHtml = imageUrl ? `
           <div class="mt-2 rounded-xl overflow-hidden border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-900 flex items-center justify-center">
-            <img src="${escapeHtml(imageUrl)}" data-image-url="${escapeHtml(imageUrl)}" alt="Фото новости" class="safe-image-open w-full h-auto max-h-72 object-contain rounded-xl cursor-pointer">
+            <img ${window.protectedImageAttrs(imageUrl)} data-image-url="${escapeHtml(imageUrl)}" alt="Фото новости" class="safe-image-open w-full h-auto max-h-72 object-contain rounded-xl cursor-pointer">
           </div>
         ` : '<div class="mt-2 p-2 rounded-xl bg-zinc-100 dark:bg-zinc-800/50 text-[11px] text-ios-secondaryText italic">Без фотографии</div>';
 
@@ -2415,7 +2382,7 @@
         console.error("loadAdminPendingNews error:", err);
         container.innerHTML = `
           <div class="py-10 text-center text-xs text-red-500">
-            Ошибка при загрузке предложки: ${err.message || "попробуйте позже"}
+            Ошибка при загрузке предложки: ${escapeHtml(err.message || "попробуйте позже")}
           </div>
         `;
       }
@@ -2511,7 +2478,7 @@
         console.error("loadAdminUsers error:", err);
         listContainer.innerHTML = `
           <div class="py-10 text-center text-xs text-red-500">
-            Ошибка при загрузке пользователей: ${err.message || "попробуйте позже"}
+            Ошибка при загрузке пользователей: ${escapeHtml(err.message || "попробуйте позже")}
           </div>
         `;
       }
@@ -2808,6 +2775,7 @@
     function renderCommentsList(comments, hasMore = comments?.length === 50) {
       const container = document.getElementById("comments-sheet-list");
       state.commentsLoaded = comments || [];
+      state.commentsHasMore = hasMore;
       state.commentsOffset = state.commentsLoaded.length;
       if (!comments || comments.length === 0) {
         container.innerHTML = `
@@ -2832,13 +2800,16 @@
         const classSafe = c.author_class ? `<span class="text-[10px] text-ios-blue font-normal">(${escapeHtml(c.author_class)})</span>` : "";
         const textSafe = escapeHtml(c.text);
         const dateSafe = escapeHtml(c.created_at);
+        const editBtn = Number(c.user_id) === Number(state.user?.id)
+          ? `<button type="button" class="edit-comment-btn g-btn" data-comment-id="${c.id}" aria-label="Редактировать комментарий">Изменить</button>` : '';
 
         return `
           <div class="p-3 rounded-2xl bg-zinc-100 dark:bg-ios-cardDark2 space-y-1">
             <div class="flex items-center justify-between">
               <span class="text-xs font-bold text-zinc-900 dark:text-white">${authorSafe} ${classSafe}</span>
               <div class="flex items-center space-x-1.5">
-                <span class="text-[10px] text-ios-secondaryText">${dateSafe}</span>
+                <span class="text-[10px] text-ios-secondaryText">${dateSafe}${c.is_edited ? ' · изменён' : ''}</span>
+                ${editBtn}
                 ${deleteBtn}
               </div>
             </div>
@@ -2851,6 +2822,8 @@
 
     // Comment deletion listener (admin or comment author)
     document.getElementById("comments-sheet-list")?.addEventListener("click", async (e) => {
+      const editBtn = e.target.closest('.edit-comment-btn');
+      if (editBtn) { window.toolsEditComment?.(Number(editBtn.dataset.commentId)); return; }
       const olderBtn = e.target.closest(".load-older-comments");
       if (olderBtn && state.activePostForComments) {
         olderBtn.disabled = true;
@@ -3169,7 +3142,7 @@
       const linkUrl = safeHttpsUrl(m.link_url);
       const imageHtml = materialImageUrl ? `
         <div class="mt-3 rounded-2xl overflow-hidden border border-zinc-100 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/30">
-          <img src="${escapeHtml(materialImageUrl)}" data-image-url="${escapeHtml(materialImageUrl)}" alt="Схема / таблица" class="safe-image-open w-full h-auto rounded-2xl block object-contain cursor-pointer shadow-xs" loading="lazy">
+          <img ${window.protectedImageAttrs(materialImageUrl)} data-image-url="${escapeHtml(materialImageUrl)}" alt="Схема / таблица" class="safe-image-open w-full h-auto rounded-2xl block object-contain cursor-pointer shadow-xs" loading="lazy">
         </div>
       ` : '';
 
@@ -3358,6 +3331,6 @@
     
 </script>
 
-<script src="/static/features.js?v=2"></script>
+<script src="/static/features.js?v=3"></script>
 </body>
 </html>

@@ -1,4 +1,5 @@
 from datetime import datetime
+import re
 from typing import Dict, List, Optional
 from urllib.parse import urlparse
 from pydantic import BaseModel, ConfigDict, Field, field_validator
@@ -15,19 +16,19 @@ class StructureResponse(BaseModel):
 # User Profile Schemas
 # -------------------------------------------------------------
 class UserSyncRequest(BaseModel):
-    id: int
-    first_name: str
-    last_name: Optional[str] = None
-    username: Optional[str] = None
-    photo_url: Optional[str] = None
+    id: int = Field(gt=0, lt=2**63)
+    first_name: str = Field(min_length=1, max_length=100)
+    last_name: Optional[str] = Field(None, max_length=100)
+    username: Optional[str] = Field(None, max_length=100)
+    photo_url: Optional[str] = Field(None, max_length=512)
     class_name: Optional[str] = None
     profile_name: Optional[str] = None
 
 class UserProfileUpdate(BaseModel):
     class_name: str = Field(..., description="11А, 11Б, 11В, 11Г, 11Д, 11Ж")
     profile_name: str = Field(..., description="Соц-гум, Филологический, Физмат, etc.")
-    first_name: str = Field(..., min_length=2, description="Имя ученика (обязательно)")
-    last_name: str = Field(..., min_length=2, description="Фамилия ученика (обязательно)")
+    first_name: str = Field(..., min_length=2, max_length=100, description="Имя ученика (обязательно)")
+    last_name: str = Field(..., min_length=2, max_length=100, description="Фамилия ученика (обязательно)")
     subgroup: Optional[int] = Field(None, description="Not used")
 
 class UserResponse(BaseModel):
@@ -104,13 +105,15 @@ def _validate_news_image_url(value: Optional[str]) -> Optional[str]:
     if value is None or not value.strip():
         return None
     value = value.strip()
-    if len(value) > 2048 or any(char in value for char in "\"'<>\\\n\r"):
+    if len(value) > 512 or any(char in value for char in "\"'<>\\\n\r"):
         raise ValueError("Некорректный адрес изображения")
     if value.startswith("/uploads/"):
         filename = value.removeprefix("/uploads/")
         if filename and "/" not in filename and filename not in {".", ".."}:
             return value
         raise ValueError("Некорректный адрес загруженного изображения")
+    if re.fullmatch(r"/api/media/[A-Za-z0-9_-]{10,250}", value):
+        return value
     parsed = urlparse(value)
     if parsed.scheme == "https" and parsed.netloc and not parsed.username and not parsed.password:
         return value
@@ -119,13 +122,18 @@ def _validate_news_image_url(value: Optional[str]) -> Optional[str]:
 
 class NewsCreateRequest(BaseModel):
     title: str = Field(..., min_length=3, max_length=255)
-    content: str = Field(..., min_length=5)
+    content: str = Field(..., min_length=5, max_length=20000)
     image_url: Optional[str] = None
     author_id: Optional[int] = None
     author_name: Optional[str] = "Гимназист"
     author_class: Optional[str] = None
     author_username: Optional[str] = None
     is_anonymous: bool = False
+
+    @field_validator("title", "content", mode="before")
+    @classmethod
+    def strip_content(cls, value):
+        return value.strip() if isinstance(value, str) else value
 
     @field_validator("image_url")
     @classmethod
@@ -134,10 +142,15 @@ class NewsCreateRequest(BaseModel):
 
 class NewsEditRequest(BaseModel):
     title: str = Field(..., min_length=3, max_length=255)
-    content: str = Field(..., min_length=5)
+    content: str = Field(..., min_length=5, max_length=20000)
     image_url: Optional[str] = None
     admin_id: Optional[int] = None
     user_id: Optional[int] = None
+
+    @field_validator("title", "content", mode="before")
+    @classmethod
+    def strip_content(cls, value):
+        return value.strip() if isinstance(value, str) else value
 
     @field_validator("image_url")
     @classmethod
@@ -174,6 +187,21 @@ class CommentCreateRequest(BaseModel):
     author_class: Optional[str] = None
     text: str = Field(..., min_length=1, max_length=1000)
 
+    @field_validator("text", mode="before")
+    @classmethod
+    def strip_text(cls, value):
+        return value.strip() if isinstance(value, str) else value
+
+
+class CommentEditRequest(BaseModel):
+    text: str = Field(..., min_length=1, max_length=1000)
+    revision: str = Field(..., pattern=r"^[0-9a-f]{64}$")
+
+    @field_validator("text", mode="before")
+    @classmethod
+    def strip_text(cls, value):
+        return value.strip() if isinstance(value, str) else value
+
 class CommentResponse(BaseModel):
     id: int
     post_id: int
@@ -182,6 +210,9 @@ class CommentResponse(BaseModel):
     author_class: Optional[str] = None
     text: str
     created_at: str
+    is_edited: bool = False
+    updated_at: Optional[str] = None
+    revision: str = ""
 
 class ModerationActionRequest(BaseModel):
     action: str = Field(..., pattern=r"^(approve|reject)$")
@@ -216,13 +247,34 @@ class EgeSubjectResponse(BaseModel):
     tasks_count: int
 
 class EgeMaterialCreateRequest(BaseModel):
-    subject_code: str
-    task_number: int
+    subject_code: str = Field(..., pattern=r"^(russian|math)$")
+    task_number: int = Field(..., ge=1, le=27)
     title: str = Field(..., min_length=2, max_length=255)
-    theory: str = Field(..., min_length=2)
-    image_url: Optional[str] = None
-    link_url: Optional[str] = None
+    theory: str = Field(..., min_length=2, max_length=100000)
+    image_url: Optional[str] = Field(None, max_length=512)
+    link_url: Optional[str] = Field(None, max_length=512)
     admin_id: int
+
+    @field_validator("title", "theory", mode="before")
+    @classmethod
+    def strip_content(cls, value):
+        return value.strip() if isinstance(value, str) else value
+
+    @field_validator("image_url")
+    @classmethod
+    def validate_image(cls, value):
+        return _validate_news_image_url(value)
+
+    @field_validator("link_url")
+    @classmethod
+    def validate_link(cls, value):
+        if not value:
+            return None
+        value = value.strip()
+        parsed = urlparse(value)
+        if parsed.scheme != "https" or not parsed.hostname or parsed.username or parsed.password or any(c in value for c in '\"\'<>\\\r\n'):
+            raise ValueError("Ссылка должна быть безопасным HTTPS адресом")
+        return value
 
 class EgeMaterialResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)

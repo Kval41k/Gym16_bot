@@ -80,6 +80,11 @@ async def init_db() -> None:
         for name in ("start_time", "end_time"):
             if name not in {column["name"] for column in lesson_columns}:
                 await conn.execute(text(f"ALTER TABLE lessons ADD COLUMN {name} VARCHAR(5)"))
+        for table, column, definition in (("comments", "updated_at", "TIMESTAMP"),
+                                          ("user_preferences", "theme", "VARCHAR(10) DEFAULT 'auto' NOT NULL")):
+            columns = await conn.run_sync(lambda sync_conn: inspect(sync_conn).get_columns(table))
+            if column not in {item["name"] for item in columns}:
+                await conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {column} {definition}"))
 
     async with async_session() as session:
         # 1. Seed classes if missing

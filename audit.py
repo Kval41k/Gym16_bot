@@ -13,7 +13,7 @@ SECTIONS = {
     "users": "profile", "user_preferences": "profile", "lessons": "schedule",
     "bell_schedules": "schedule", "news_posts": "news", "news_reviews": "news",
     "comments": "comments", "reactions": "reactions", "ege_materials": "ege",
-    "material_progress": "ege",
+    "material_progress": "ege", "media_uploads": "media",
 }
 
 

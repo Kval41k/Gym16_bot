@@ -39,6 +39,7 @@ from aiogram.types import (
 from sqlalchemy import func, select, update
 
 from config import settings
+from security import install_log_redaction, safe_csv_writer
 from database import async_session
 from models import BellSchedule, NewsPost, User
 from audit import audit_actor
@@ -1028,7 +1029,7 @@ async def cmd_unban_user(message: Message):
 async def main():
     proxy = os.getenv("TELEGRAM_PROXY") or os.getenv("HTTPS_PROXY") or os.getenv("HTTP_PROXY")
     if proxy:
-        logger.info(f"Using Telegram proxy: {proxy}")
+        logger.info("Using configured Telegram proxy")
         session = AiohttpSession(proxy=proxy, timeout=60.0)
     else:
         session = AiohttpSession(timeout=60.0)

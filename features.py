@@ -32,9 +32,10 @@ LESSON_FIELDS = ("day_of_week", "lesson_number", "subject", "teacher_name", "cab
 
 
 class PreferencesRequest(BaseModel):
-    lesson_reminders: bool = False
-    reminder_minutes: Literal[5, 10, 15] = 10
-    schedule_changes: bool = False
+    lesson_reminders: Optional[bool] = None
+    reminder_minutes: Optional[Literal[5, 10, 15]] = None
+    schedule_changes: Optional[bool] = None
+    theme: Optional[Literal["auto", "light", "dark"]] = None
 
 
 class ProgressRequest(BaseModel):
@@ -149,18 +150,18 @@ def install_features(app, require_user, require_admin, cache_clear):
     async def preferences(user=Depends(student), db=Depends(get_db)):
         pref = await db.get(UserPreferences, user.id)
         return {key: getattr(pref, key) if pref else default for key, default in
-                (("lesson_reminders", False), ("reminder_minutes", 10), ("schedule_changes", False))}
+                (("lesson_reminders", False), ("reminder_minutes", 10), ("schedule_changes", False), ("theme", "auto"))}
 
     @router.put("/api/me/preferences")
     async def save_preferences(payload: PreferencesRequest, user=Depends(student), db=Depends(get_db)):
         pref = await db.get(UserPreferences, user.id)
         if not pref:
-            pref = UserPreferences(user_id=user.id)
+            pref = UserPreferences(user_id=user.id, lesson_reminders=False, reminder_minutes=10, schedule_changes=False, theme="auto")
             db.add(pref)
-        for key, value in payload.model_dump().items():
+        for key, value in payload.model_dump(exclude_none=True).items():
             setattr(pref, key, value)
         await db.commit()
-        return payload.model_dump()
+        return {key: getattr(pref, key) for key in ("lesson_reminders", "reminder_minutes", "schedule_changes", "theme")}
 
     @router.get("/api/me/materials")
     async def material_progress(user=Depends(student), db=Depends(get_db)):

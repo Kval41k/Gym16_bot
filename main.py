@@ -8,6 +8,7 @@ import json
 import os
 import urllib.parse
 import uuid
+import re
 from contextlib import asynccontextmanager
 from datetime import datetime, time, timedelta, timezone
 from pathlib import Path
@@ -22,18 +23,19 @@ from fastapi import (
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.gzip import GZipMiddleware
 import time
-from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, StreamingResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, StreamingResponse, Response
 from fastapi.staticfiles import StaticFiles
-from sqlalchemy import delete, func, select, update
+from sqlalchemy import delete, func, select, update, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from config import DEFAULT_CLASSES, CLASS_PROFILES_MAP, ALL_PROFILES, settings
+from security import BodyLimitMiddleware, clean_image, install_log_redaction, safe_csv_writer
 from database import async_session, get_db, init_db
 from timetable import day_bells, lesson_times, lesson_timeline
-from models import BellSchedule, Comment, EgeMaterial, EgeSubject, Lesson, NewsPost, Profile, Reaction, SchoolClass, User
+from models import BellSchedule, Comment, EgeMaterial, EgeSubject, Lesson, MediaUpload, NewsPost, Profile, Reaction, SchoolClass, User
 from schemas import (
-    BellItem, CommentCreateRequest, CommentResponse, DayScheduleResponse,
+    BellItem, CommentCreateRequest, CommentEditRequest, CommentResponse, DayScheduleResponse,
     EgeMaterialCreateRequest, EgeMaterialResponse, EgeSubjectResponse,
     LessonItem, LessonSlot, LiveStatusResponse, ModerationActionRequest,
     NewsCreateRequest, NewsEditRequest, NewsResponse, ReactionCount, ReactionToggleRequest,
@@ -133,7 +135,22 @@ async def audit_identity(request: Request, call_next):
             pass
     token = audit_actor.set(actor)
     try:
-        return await call_next(request)
+        if request.url.path == "/api/upload" and actor is None:
+            return JSONResponse({"detail": "Требуется подтверждённая авторизация Telegram."}, 401)
+        response = await call_next(request)
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["Referrer-Policy"] = "no-referrer"
+        response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
+        response.headers["Content-Security-Policy"] = (
+            "default-src 'self'; script-src 'self' https://telegram.org 'unsafe-inline'; "
+            "style-src 'self' 'unsafe-inline'; img-src 'self' https: blob: data:; "
+            "connect-src 'self'; font-src 'self' data:; object-src 'none'; base-uri 'none'; "
+            "form-action 'self'; frame-ancestors 'self' https://web.telegram.org https://*.telegram.org"
+        )
+        if request.url.path.startswith(("/api/me/", "/api/user/", "/api/admin/", "/api/news", "/api/ege", "/uploads/", "/api/media/", "/admin/")):
+            response.headers["Cache-Control"] = "no-store"
+            response.headers["Cross-Origin-Resource-Policy"] = "same-origin"
+        return response
     finally:
         audit_actor.reset(token)
 
@@ -147,13 +164,13 @@ app.add_middleware(
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["Content-Type", "X-Telegram-Init-Data"],
 )
+app.add_middleware(BodyLimitMiddleware)
 
 # Ensure directories exist before mounting
 settings.UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 settings.STATIC_DIR.mkdir(parents=True, exist_ok=True)
 
-# Mount local uploads for direct static image access
-app.mount("/uploads", StaticFiles(directory=settings.UPLOAD_DIR), name="uploads")
+# Uploaded media is served by authenticated routes below.
 
 # Mount static frontend directory (for TMA HTML/JS)
 if settings.STATIC_DIR.exists():
@@ -167,11 +184,14 @@ def verify_telegram_init_data(init_data_str: str) -> Optional[Dict[str, Any]]:
     Validates initData from Telegram WebApp using HMAC-SHA256 according to Telegram specs.
     Returns parsed user dict or None if invalid.
     """
-    if not init_data_str:
+    if not init_data_str or not settings.BOT_TOKEN or len(init_data_str) > 16384:
         return None
 
     try:
-        parsed_data = dict(urllib.parse.parse_qsl(init_data_str))
+        pairs = urllib.parse.parse_qsl(init_data_str, keep_blank_values=True, strict_parsing=True, max_num_fields=32)
+        if len({key for key, _ in pairs}) != len(pairs):
+            return None
+        parsed_data = dict(pairs)
         hash_received = parsed_data.pop("hash", None)
         if not hash_received:
             return None
@@ -210,8 +230,17 @@ def require_telegram_user(init_data_str: Optional[str]) -> Dict[str, Any]:
         user_id = 0
 
     now = int(time.time())
-    if not user_id or not auth_date or auth_date > now + 300 or now - auth_date > 86400:
+    if not 0 < user_id < 2**63 or not auth_date or auth_date > now + 300 or now - auth_date > 86400:
         raise HTTPException(status_code=401, detail="Срок авторизации Telegram истёк. Перезапустите приложение.")
+    return user
+
+
+async def require_active_user(identity, db):
+    user = await db.get(User, int(identity["id"]))
+    if not user:
+        raise HTTPException(409, "Сначала заполните профиль Telegram.")
+    if user.is_banned:
+        raise HTTPException(403, "Ваш аккаунт заблокирован.")
     return user
 
 
@@ -359,16 +388,12 @@ async def notify_admins_about_post(
 
     local_image_path: Optional[Path] = None
     if image_url:
-        img_name = Path(image_url).name
-        candidates = [
-            settings.UPLOAD_DIR / img_name,
-            Path("uploads") / img_name,
-            Path(__file__).resolve().parent / "uploads" / img_name,
-        ]
-        for c in candidates:
-            if c.exists():
-                local_image_path = c
-                break
+        parsed = urllib.parse.urlsplit(image_url)
+        own_host = not parsed.netloc or parsed.netloc == urllib.parse.urlsplit(settings.BASE_URL).netloc
+        if own_host and re.fullmatch(r"/uploads/[a-f0-9]{32}\.(?:jpe?g|png|webp|gif|bmp|heic|heif)", parsed.path):
+            candidate = settings.UPLOAD_DIR / parsed.path.rsplit("/", 1)[-1]
+            if candidate.is_file() and not candidate.is_symlink():
+                local_image_path = candidate
 
     admin_recipients = set(settings.admin_ids)
     if settings.admin_usernames:
@@ -410,10 +435,12 @@ async def notify_admins_about_post(
             # 2. Try sending by URL if not sent yet
             if not sent_photo and image_url:
                 target_url = image_url
-                if not target_url.startswith("http"):
+                if target_url.startswith("/api/media/"):
+                    target_url = target_url.rsplit("/", 1)[-1]
+                elif not target_url.startswith("http"):
                     if settings.BASE_URL:
                         target_url = f"{settings.BASE_URL.rstrip('/')}/{image_url.lstrip('/')}"
-                if target_url.startswith("http"):
+                if target_url.startswith("http") or re.fullmatch(r"[A-Za-z0-9_-]{10,250}", target_url):
                     try:
                         resp = await client.post(
                             f"{bot_url}/sendPhoto",
@@ -516,7 +543,8 @@ async def sync_user(
 
     if payload.class_name and payload.class_name not in CLASS_PROFILES_MAP:
         raise HTTPException(status_code=422, detail="Выберите существующий класс.")
-    if payload.profile_name and payload.class_name and payload.profile_name not in CLASS_PROFILES_MAP[payload.class_name]:
+    effective_class = payload.class_name or (user.class_name if user else None)
+    if payload.profile_name and (not effective_class or payload.profile_name not in CLASS_PROFILES_MAP.get(effective_class, [])):
         raise HTTPException(status_code=422, detail="Профиль не соответствует выбранному классу.")
 
     is_admin = (
@@ -530,7 +558,7 @@ async def sync_user(
             first_name=payload.first_name,
             last_name=payload.last_name or "",
             username=telegram_username,
-            photo_url=payload.photo_url,
+            photo_url=telegram_user.get("photo_url"),
             class_name=payload.class_name or ("11А" if is_admin else None),
             profile_name=payload.profile_name or ("Соц-гум" if is_admin else None),
             is_admin=is_admin
@@ -542,8 +570,8 @@ async def sync_user(
         if payload.last_name is not None:
             user.last_name = payload.last_name
         user.username = telegram_username
-        if payload.photo_url:
-            user.photo_url = payload.photo_url
+        if telegram_user.get("photo_url"):
+            user.photo_url = telegram_user["photo_url"]
         if payload.class_name:
             user.class_name = payload.class_name
         if payload.profile_name:
@@ -867,7 +895,9 @@ async def get_news(
     x_telegram_init_data: Optional[str] = Header(None, alias="X-Telegram-Init-Data"),
     db: AsyncSession = Depends(get_db)
 ):
-    parsed_user_id: Optional[int] = None
+    identity = require_telegram_user(x_telegram_init_data)
+    await require_active_user(identity, db)
+    parsed_user_id: Optional[int] = int(identity["id"])
     if user_id:
         cleaned_uid = str(user_id).strip()
         if not cleaned_uid.isdigit():
@@ -1002,6 +1032,9 @@ async def suggest_news(
     if user.is_banned:
         raise HTTPException(status_code=403, detail="Ваш аккаунт заблокирован администратором.")
 
+    if payload.image_url and payload.image_url.startswith(("/uploads/", "/api/media/")):
+        await require_media_access(payload.image_url, telegram_user, db)
+
     author_class = user.class_name
     author_name = f"{user.first_name or ''} {user.last_name or ''}".strip() or "Гимназист"
 
@@ -1129,17 +1162,75 @@ async def toggle_reaction(
         for e in EMOJI_PALETTE
     ]
 
+def comment_response(comment: Comment) -> CommentResponse:
+    created = comment.created_at
+    if created and created.tzinfo is None:
+        created = created.replace(tzinfo=timezone.utc)
+    modified = comment.updated_at
+    if modified and modified.tzinfo is None:
+        modified = modified.replace(tzinfo=timezone.utc)
+    revision = hashlib.sha256(f"{comment.id}:{comment.text}:{modified.isoformat() if modified else ''}".encode()).hexdigest()
+    return CommentResponse(id=comment.id, post_id=comment.post_id, user_id=comment.user_id,
+        author_name=comment.author_name, author_class=comment.author_class, text=comment.text,
+        created_at=created.astimezone(TYUMEN_TZ).strftime("%d.%m %H:%M") if created else "",
+        is_edited=modified is not None, updated_at=modified.isoformat() if modified else None, revision=revision)
+
+
+@app.get("/api/news/comments/{comment_id}", response_model=CommentResponse)
+async def get_comment(comment_id: int,
+    x_telegram_init_data: Optional[str] = Header(None, alias="X-Telegram-Init-Data"), db: AsyncSession = Depends(get_db)):
+    await require_active_user(require_telegram_user(x_telegram_init_data), db)
+    comment = await db.get(Comment, comment_id)
+    post = await db.get(NewsPost, comment.post_id) if comment else None
+    if not comment or not post or post.status != "approved":
+        raise HTTPException(404, "Комментарий не найден")
+    return comment_response(comment)
+
+
+@app.put("/api/news/comments/{comment_id}", response_model=CommentResponse)
+async def edit_comment(comment_id: int, payload: CommentEditRequest,
+    x_telegram_init_data: Optional[str] = Header(None, alias="X-Telegram-Init-Data"), db: AsyncSession = Depends(get_db)):
+    identity = require_telegram_user(x_telegram_init_data)
+    user_id = int(identity["id"])
+    enforce_rate_limit(f"comment-edit:{user_id}", 30, 60)
+    from database import engine
+    if engine.dialect.name == "sqlite":
+        from sqlalchemy import text
+        await db.execute(text("BEGIN IMMEDIATE"))
+    user = await db.get(User, user_id)
+    if not user or user.is_banned:
+        raise HTTPException(403, "Редактирование недоступно")
+    comment = await db.scalar(select(Comment).where(Comment.id == comment_id).with_for_update())
+    if not comment:
+        raise HTTPException(404, "Комментарий не найден")
+    if comment.user_id != user_id:
+        raise HTTPException(403, "Можно редактировать только свои комментарии")
+    post = await db.get(NewsPost, comment.post_id)
+    if not post or post.status != "approved":
+        raise HTTPException(404, "Новость не найдена")
+    if not hmac.compare_digest(comment_response(comment).revision, payload.revision):
+        raise HTTPException(409, "Комментарий уже изменился. Закройте редактор и откройте его заново, чтобы загрузить актуальную версию.")
+    if comment.text != payload.text:
+        comment.text = payload.text
+        comment.updated_at = datetime.now(timezone.utc)
+        await db.commit()
+        await db.refresh(comment)
+    return comment_response(comment)
+
+
 @app.get("/api/news/{post_id}/comments", response_model=List[CommentResponse])
 async def get_comments(
     post_id: int,
     limit: int = Query(50, ge=1, le=100),
     offset: int = Query(0, ge=0),
+    x_telegram_init_data: Optional[str] = Header(None, alias="X-Telegram-Init-Data"),
     db: AsyncSession = Depends(get_db)
 ):
     """
     Retrieves all comments for a news post (Bottom Sheet).
     Timestamps formatted in Tyumen timezone.
     """
+    await require_active_user(require_telegram_user(x_telegram_init_data), db)
     post = await db.get(NewsPost, post_id)
     if not post or post.status != "approved":
         raise HTTPException(status_code=404, detail="News post not found")
@@ -1165,15 +1256,7 @@ async def get_comments(
         else:
             c_date = ""
 
-        result.append(CommentResponse(
-            id=c.id,
-            post_id=c.post_id,
-            user_id=c.user_id,
-            author_name=c.author_name,
-            author_class=c.author_class,
-            text=c.text,
-            created_at=c_date
-        ))
+        result.append(comment_response(c))
 
     result.reverse()
     return result
@@ -1212,15 +1295,7 @@ async def add_comment(
     await db.commit()
     await db.refresh(new_comment)
 
-    return CommentResponse(
-        id=new_comment.id,
-        post_id=new_comment.post_id,
-        user_id=new_comment.user_id,
-        author_name=new_comment.author_name,
-        author_class=new_comment.author_class,
-        text=new_comment.text,
-        created_at=datetime.now(TYUMEN_TZ).strftime("%d.%m %H:%M")
-    )
+    return comment_response(new_comment)
 
 # -------------------------------------------------------------
 # -------------------------------------------------------------
@@ -1330,16 +1405,10 @@ async def delete_news_post(
     if not post:
         raise HTTPException(status_code=404, detail="News post not found")
 
-    if post.image_url:
-        img_path = settings.UPLOAD_DIR / Path(post.image_url).name
-        if img_path.exists():
-            try:
-                img_path.unlink()
-            except Exception:
-                pass
-
+    old_image = post.image_url
     await db.delete(post)
     await db.commit()
+    await remove_unused_image(old_image, db)
     return {"status": "success", "post_id": post_id, "action": "deleted"}
 
 @app.put("/api/admin/news/{post_id}", response_model=NewsResponse)
@@ -1462,6 +1531,62 @@ ALLOWED_IMAGE_TYPES = {
     "image/pjpeg", "image/x-png"
 }
 ALLOWED_EXTENSIONS = {"jpg", "jpeg", "png", "webp", "gif", "heic", "heif", "bmp"}
+IMAGE_PROCESSING = asyncio.Semaphore(2)
+
+
+async def require_media_access(path, identity, db):
+    user = await require_active_user(identity, db)
+    username = str(identity.get("username") or "").lower().lstrip("@")
+    if user.id in settings.admin_ids or username in settings.admin_usernames:
+        return
+    if path.startswith("/uploads/"):
+        upload = await db.get(MediaUpload, path.rsplit("/", 1)[-1])
+        if upload and upload.user_id == user.id:
+            return
+    variants = [path, settings.BASE_URL.rstrip("/") + path] if settings.BASE_URL else [path]
+    post = await db.scalar(select(NewsPost.id).where(NewsPost.image_url.in_(variants),
+        or_(NewsPost.status == "approved", NewsPost.author_id == user.id)))
+    material = await db.scalar(select(EgeMaterial.id).where(EgeMaterial.image_url.in_(variants)))
+    if post is None and material is None:
+        raise HTTPException(404, "Изображение не найдено")
+
+
+async def remove_unused_image(image_url, db):
+    if not image_url:
+        return
+    parsed = urllib.parse.urlsplit(image_url)
+    if parsed.netloc and parsed.netloc != urllib.parse.urlsplit(settings.BASE_URL).netloc:
+        return
+    path = parsed.path
+    if not re.fullmatch(r"/uploads/[a-f0-9]{32}\.(?:jpe?g|png|webp|gif|bmp|heic|heif)", path):
+        return
+    variants = [path, settings.BASE_URL.rstrip("/") + path]
+    if await db.scalar(select(NewsPost.id).where(NewsPost.image_url.in_(variants)).limit(1)):
+        return
+    if await db.scalar(select(EgeMaterial.id).where(EgeMaterial.image_url.in_(variants)).limit(1)):
+        return
+    file = settings.UPLOAD_DIR / path.rsplit("/", 1)[-1]
+    if not file.is_symlink():
+        file.unlink(missing_ok=True)
+
+
+async def validate_ege_task(payload, db):
+    subject = await db.scalar(select(EgeSubject).where(EgeSubject.code == payload.subject_code))
+    if not subject or payload.task_number > subject.tasks_count:
+        raise HTTPException(422, "Такого номера задания нет в выбранном предмете")
+
+
+@app.get("/uploads/{filename}")
+async def uploaded_image(filename: str,
+    x_telegram_init_data: Optional[str] = Header(None, alias="X-Telegram-Init-Data"), db: AsyncSession = Depends(get_db)):
+    identity = require_telegram_user(x_telegram_init_data)
+    if not re.fullmatch(r"[a-f0-9]{32}\.(?:jpe?g|png|webp|gif|bmp|heic|heif)", filename):
+        raise HTTPException(404, "Изображение не найдено")
+    await require_media_access(f"/uploads/{filename}", identity, db)
+    path = settings.UPLOAD_DIR / filename
+    if path.is_symlink() or not path.is_file() or path.resolve().parent != settings.UPLOAD_DIR.resolve():
+        raise HTTPException(404, "Изображение не найдено")
+    return FileResponse(path, headers={"Cache-Control": "no-store"})
 
 @app.post("/api/upload")
 async def upload_image(
@@ -1471,8 +1596,8 @@ async def upload_image(
 ):
     """
     Saves an uploaded image locally to /uploads without paid cloud services.
-    Supports all mobile image formats (including iPhone HEIC / JPEG / PNG).
-    Validates file extension, disallows SVG/scripts, and checks image magic bytes.
+    Decodes raster content, strips metadata and rejects corrupt or oversized images.
+    HEIC requires conversion to JPEG before uploading.
     """
     telegram_user = require_telegram_user(x_telegram_init_data)
     enforce_rate_limit(f"upload:{telegram_user['id']}", 10, 3600)
@@ -1500,23 +1625,22 @@ async def upload_image(
     if len(content) < 16:
         raise HTTPException(status_code=400, detail="Некорректный файл изображения.")
 
-    # Validate image magic bytes to prevent polyglot / script uploads
-    is_valid_image = (
-        content[:2] == b"\xff\xd8" or                            # JPEG
-        content[:8] == b"\x89PNG\r\n\x1a\n" or                    # PNG
-        content[:4] in (b"GIF8",) or                             # GIF
-        (content[:4] == b"RIFF" and b"WEBP" in content[:16]) or  # WebP
-        b"ftyp" in content[:24] or                               # HEIC / HEIF
-        content[:2] == b"BM"                                     # BMP
-    )
-    if not is_valid_image:
-        raise HTTPException(status_code=400, detail="Файл поврежден или не является допустимым изображением.")
-
+    try:
+        async with IMAGE_PROCESSING:
+            content, ext = await asyncio.to_thread(clean_image, content)
+    except ValueError as error:
+        raise HTTPException(400, str(error))
+    if len(content) > 10 * 1024 * 1024:
+        raise HTTPException(413, "После обработки изображение превышает 10 МБ")
     filename = f"{uuid.uuid4().hex}.{ext}"
     file_path = settings.UPLOAD_DIR / filename
-
-    with open(file_path, "wb") as f:
-        f.write(content)
+    await asyncio.to_thread(file_path.write_bytes, content)
+    try:
+        db.add(MediaUpload(filename=filename, user_id=user.id))
+        await db.commit()
+    except Exception:
+        file_path.unlink(missing_ok=True)
+        raise
 
     return {
         "url": f"/uploads/{filename}",
@@ -1524,46 +1648,44 @@ async def upload_image(
     }
 
 @app.get("/api/media/{file_id}")
-async def proxy_telegram_media(file_id: str):
-    """
-    Proxy endpoint: Streams media directly from Telegram Bot API via file_id.
-    Provides free, permanent media hosting directly via Telegram CDN.
-    """
-    if not settings.BOT_TOKEN or "ABCdefGHI" in settings.BOT_TOKEN:
-        raise HTTPException(status_code=500, detail="Telegram Bot Token is not configured")
-
+async def proxy_telegram_media(file_id: str,
+    x_telegram_init_data: Optional[str] = Header(None, alias="X-Telegram-Init-Data"), db: AsyncSession = Depends(get_db)):
+    identity = require_telegram_user(x_telegram_init_data)
+    if not re.fullmatch(r"[A-Za-z0-9_-]{10,250}", file_id):
+        raise HTTPException(404, "Изображение не найдено")
+    await require_media_access(f"/api/media/{file_id}", identity, db)
+    enforce_rate_limit(f"media:{identity['id']}", 120, 60)
     bot_url = f"https://api.telegram.org/bot{settings.BOT_TOKEN}"
-
-    async with httpx.AsyncClient(timeout=15.0) as client:
-        # Step 1: getFilePath from Telegram
-        info_resp = await client.get(f"{bot_url}/getFile", params={"file_id": file_id})
-        if info_resp.status_code != 200:
-            raise HTTPException(status_code=404, detail="Media not found on Telegram servers")
-
-        file_path = info_resp.json().get("result", {}).get("file_path")
-        if not file_path:
-            raise HTTPException(status_code=404, detail="Telegram file path not found")
-
-        # Step 2: Stream content
-        download_url = f"https://api.telegram.org/file/bot{settings.BOT_TOKEN}/{file_path}"
-        media_resp = await client.get(download_url)
-        if media_resp.status_code != 200:
-            raise HTTPException(status_code=media_resp.status_code, detail="Failed to fetch media from Telegram")
-
-        content_type = media_resp.headers.get("content-type", "image/jpeg")
-        return StreamingResponse(
-            iter([media_resp.content]),
-            media_type=content_type,
-            headers={"Cache-Control": "public, max-age=86400"}
-        )
+    try:
+        async with httpx.AsyncClient(timeout=15) as client:
+            info = await client.get(f"{bot_url}/getFile", params={"file_id": file_id})
+            if not info.is_success:
+                raise HTTPException(404, "Изображение не найдено")
+            file_path = info.json().get("result", {}).get("file_path", "")
+            if not file_path or file_path.startswith("/") or ".." in file_path:
+                raise HTTPException(404, "Изображение не найдено")
+            content = bytearray()
+            async with client.stream("GET", f"https://api.telegram.org/file/bot{settings.BOT_TOKEN}/{file_path}") as response:
+                if not response.is_success:
+                    raise HTTPException(404, "Изображение не найдено")
+                async for chunk in response.aiter_bytes():
+                    content.extend(chunk)
+                    if len(content) > 10 * 1024 * 1024:
+                        raise HTTPException(413, "Изображение превышает 10 МБ")
+        async with IMAGE_PROCESSING:
+            clean, ext = await asyncio.to_thread(clean_image, bytes(content))
+        return Response(clean, media_type="image/png" if ext == "png" else "image/jpeg", headers={"Cache-Control": "no-store"})
+    except (httpx.HTTPError, ValueError):
+        raise HTTPException(502, "Не удалось загрузить изображение")
 
 
 # -------------------------------------------------------------
 # EGE (ЕГЭ) Preparation Endpoints
 # -------------------------------------------------------------
 @app.get("/api/ege/subjects", response_model=List[EgeSubjectResponse])
-async def get_ege_subjects(db: AsyncSession = Depends(get_db)):
+async def get_ege_subjects(x_telegram_init_data: Optional[str] = Header(None, alias="X-Telegram-Init-Data"), db: AsyncSession = Depends(get_db)):
     """Returns available EGE subjects (Русский язык, Математика, etc.)"""
+    await require_active_user(require_telegram_user(x_telegram_init_data), db)
     res = await db.execute(select(EgeSubject).order_by(EgeSubject.id))
     subjects = res.scalars().all()
     return subjects
@@ -1572,9 +1694,11 @@ async def get_ege_subjects(db: AsyncSession = Depends(get_db)):
 async def get_ege_materials(
     subject_code: str = Query("russian"),
     task_number: Optional[int] = Query(None),
+    x_telegram_init_data: Optional[str] = Header(None, alias="X-Telegram-Init-Data"),
     db: AsyncSession = Depends(get_db)
 ):
     """Returns cheat-sheets and theory materials filtered by subject and task number."""
+    await require_active_user(require_telegram_user(x_telegram_init_data), db)
     query = select(EgeMaterial).where(EgeMaterial.subject_code == subject_code)
     if task_number is not None and task_number > 0:
         query = query.where(EgeMaterial.task_number == task_number)
@@ -1607,6 +1731,8 @@ async def create_ege_material(
     await check_admin_permission_or_raise(
         admin_id=payload.admin_id, x_telegram_init_data=x_telegram_init_data, db=db
     )
+
+    await validate_ege_task(payload, db)
 
     new_mat = EgeMaterial(
         subject_code=payload.subject_code,
@@ -1643,6 +1769,8 @@ async def update_ege_material(
     await check_admin_permission_or_raise(
         admin_id=payload.admin_id, x_telegram_init_data=x_telegram_init_data, db=db
     )
+
+    await validate_ege_task(payload, db)
 
     mat = await db.get(EgeMaterial, material_id)
     if not mat:
@@ -1685,17 +1813,11 @@ async def delete_ege_material(
     if not mat:
         raise HTTPException(status_code=404, detail="Material not found")
 
-    if mat.image_url:
-        p = settings.UPLOAD_DIR / Path(mat.image_url).name
-        if p.exists():
-            try:
-                p.unlink()
-            except Exception:
-                pass
-
+    old_image = mat.image_url
     cache_clear_prefix("ege_")
     await db.delete(mat)
     await db.commit()
+    await remove_unused_image(old_image, db)
     return {"status": "success", "material_id": material_id, "action": "deleted"}
 
 # -------------------------------------------------------------

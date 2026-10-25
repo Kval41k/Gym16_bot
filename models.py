@@ -208,6 +208,7 @@ class Comment(Base):
     author_class: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
     text: Mapped[str] = mapped_column(Text, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), index=True)
+    updated_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
 
     # Relationships
     post: Mapped["NewsPost"] = relationship("NewsPost", back_populates="comments")
@@ -291,6 +292,7 @@ class UserPreferences(Base):
     lesson_reminders: Mapped[bool] = mapped_column(Boolean, default=False)
     reminder_minutes: Mapped[int] = mapped_column(Integer, default=10)
     schedule_changes: Mapped[bool] = mapped_column(Boolean, default=False)
+    theme: Mapped[str] = mapped_column(String(10), default="auto", nullable=False)
 
 
 class MaterialProgress(Base):
@@ -299,6 +301,13 @@ class MaterialProgress(Base):
     material_id: Mapped[int] = mapped_column(Integer, ForeignKey("ege_materials.id", ondelete="CASCADE"), primary_key=True)
     bookmarked: Mapped[bool] = mapped_column(Boolean, default=False)
     studied: Mapped[bool] = mapped_column(Boolean, default=False)
+
+
+class MediaUpload(Base):
+    __tablename__ = "media_uploads"
+    filename: Mapped[str] = mapped_column(String(100), primary_key=True)
+    user_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
 class NewsReview(Base):

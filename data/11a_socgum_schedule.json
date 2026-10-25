@@ -1,6 +1,6 @@
 {
-  "revision": "11a-socgum-google-calendar-20261024-v1",
-  "source": "Google Calendar · школьные еженедельные события",
+  "revision": "11a-calendar-20261025-v2",
+  "source": "Google Calendar, with administrator corrections on 2026-10-25",
   "checked_on": "2026-10-24",
   "timezone": "Asia/Yekaterinburg",
   "rows": [
@@ -109,19 +109,6 @@
       "note": null
     },
     {
-      "day_of_week": 0,
-      "subject": "IT Lab",
-      "start_time": "15:00",
-      "end_time": "16:00",
-      "teacher_name": "",
-      "cabinet": "3/314",
-      "lesson_number": 8,
-      "class_name": "11А",
-      "profile_name": "Соц-гум",
-      "subgroup": null,
-      "note": "Дополнительное занятие"
-    },
-    {
       "day_of_week": 1,
       "subject": "Английский язык",
       "start_time": "08:15",
@@ -211,19 +198,6 @@
       "profile_name": "Соц-гум",
       "subgroup": null,
       "note": null
-    },
-    {
-      "day_of_week": 1,
-      "subject": "Консультация по информатике",
-      "start_time": "14:40",
-      "end_time": "15:20",
-      "teacher_name": "",
-      "cabinet": "",
-      "lesson_number": 8,
-      "class_name": "11А",
-      "profile_name": "Соц-гум",
-      "subgroup": null,
-      "note": "Дополнительное занятие"
     },
     {
       "day_of_week": 2,
@@ -490,13 +464,19 @@
       "subject": "Консультация по профильной математике",
       "start_time": "10:00",
       "end_time": "12:00",
-      "teacher_name": "",
-      "cabinet": "",
+      "teacher_name": "Ермакова М.В.",
+      "cabinet": "3/306",
       "lesson_number": 1,
       "class_name": "11А",
-      "profile_name": "Соц-гум",
+      "profile_name": null,
       "subgroup": null,
       "note": "Дополнительное занятие"
     }
-  ]
+  ],
+  "previous_revision": "11a-socgum-google-calendar-20261024-v1",
+  "removed_subjects": [
+    "IT Lab",
+    "Консультация по информатике"
+  ],
+  "notification": "📅 Расписание 11А обновлено: убраны IT Lab и консультация по информатике. Консультация по профильной математике — для обоих профилей в субботу, 10:00–12:00, Ермакова М.В., кабинет 3/306."
 }

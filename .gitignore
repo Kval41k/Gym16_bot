@@ -1,5 +1,7 @@
 # Python environment & cache
 venv/
+.venv/
+node_modules/
 backups/
 .test-data/
 ENV/

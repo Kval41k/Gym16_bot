@@ -111,6 +111,13 @@ loadSchedule = async function(quiet = false) {
 
 // Saved personal settings and progress live on the server, across devices.
 document.getElementById('edit-profile-btn').insertAdjacentHTML('afterend', `
+  <section class="g-card g-stack"><h3 class="g-title">Оформление</h3>
+    <p class="g-muted">Режим «Как в Telegram» автоматически меняет тему вместе с Telegram.</p>
+    <div class="g-theme-options" role="group" aria-label="Тема приложения">
+      <button type="button" class="g-btn" data-busy="theme" data-theme-choice="auto" onclick="toolsChooseTheme('auto')">Как в Telegram</button>
+      <button type="button" class="g-btn" data-busy="theme" data-theme-choice="light" onclick="toolsChooseTheme('light')">☀ Светлая</button>
+      <button type="button" class="g-btn" data-busy="theme" data-theme-choice="dark" onclick="toolsChooseTheme('dark')">☾ Тёмная</button>
+    </div></section>
   <section class="g-card g-stack"><h3 class="g-title">Уведомления в Telegram</h3>
     <p class="g-muted">Включи нужные уведомления и открой чат бота командой /start. Время — Тюмень (UTC+5).</p>
     <label class="g-row"><input type="checkbox" id="tools-reminders"> Перед началом урока</label>
@@ -124,6 +131,7 @@ async function loadPersonalTools() {
   try {
     const [prefs, progress] = await Promise.all([toolsRequest('/api/me/preferences'), toolsRequest('/api/me/materials')]);
     toolsState.personal = prefs; toolsState.progress = progress;
+    if (!toolsBusy.has('theme')) window.GymTheme?.setMode(prefs.theme || 'auto');
     document.getElementById('tools-reminders').checked = prefs.lesson_reminders;
     document.getElementById('tools-changes').checked = prefs.schedule_changes;
     document.getElementById('tools-reminder-minutes').value = prefs.reminder_minutes;
@@ -131,6 +139,27 @@ async function loadPersonalTools() {
   } catch (error) { console.warn('Personal tools unavailable:', error.message); }
 }
 window.loadPersonalTools = loadPersonalTools;
+function toolsThemeButtons() {
+  document.querySelectorAll('[data-theme-choice]').forEach(button => {
+    button.setAttribute('aria-pressed', String(button.dataset.themeChoice === window.GymTheme?.getMode()));
+  });
+}
+window.addEventListener('gym16-theme-applied', toolsThemeButtons);
+toolsThemeButtons();
+async function toolsChooseTheme(mode) {
+  return toolsRun('theme', async () => {
+    const previous = window.GymTheme.getMode();
+    window.GymTheme.setMode(mode);
+    try {
+      const prefs = await toolsRequest('/api/me/preferences', 'PUT', {theme: mode});
+      toolsState.personal = prefs;
+      toolsToast('Тема сохранена');
+    } catch (error) {
+      window.GymTheme.setMode(previous);
+      throw error;
+    }
+  });
+}
 async function toolsSavePreferences() {
   return toolsRun('prefs', async () => {
     toolsState.personal = await toolsRequest('/api/me/preferences', 'PUT', {
@@ -200,7 +229,7 @@ document.addEventListener('click', event => {
   const url = safeImageUrl(image.dataset.imageUrl);
   if (!url) return;
   event.preventDefault(); event.stopImmediatePropagation();
-  document.getElementById('tools-viewer-image').src = url;
+  window.setProtectedImage(document.getElementById('tools-viewer-image'), url);
   toolsZoomLevel = 1; toolsZoom(0);
   document.getElementById('tools-image-viewer').showModal();
 }, true);
@@ -252,6 +281,44 @@ function toolsMaterial(id, field) {
   return toolsRun('material-' + id, async () => {
     toolsState.progress[id] = await toolsRequest('/api/me/materials/' + id, 'PUT', {[field]: !toolsState.progress[id]?.[field]});
     toolsRenderEge();
+  });
+}
+
+// Only the author can edit a comment; the server checks ownership and revision.
+document.body.insertAdjacentHTML('beforeend', `<dialog class="g-editor" id="tools-comment-editor" aria-labelledby="tools-comment-editor-title">
+  <form onsubmit="toolsSaveComment(event)" class="g-stack"><h3 class="g-title" id="tools-comment-editor-title">Изменить комментарий</h3>
+  <label class="g-label" for="tools-comment-text">Текст комментария</label>
+  <textarea class="g-input" id="tools-comment-text" maxlength="1000" required></textarea>
+  <p class="g-error" id="tools-comment-error" role="alert"></p>
+  <div class="g-row" style="justify-content:flex-end"><button type="button" class="g-btn" onclick="document.getElementById('tools-comment-editor').close()">Отмена</button>
+    <button type="submit" class="g-btn primary" data-busy="comment-edit">Сохранить</button></div></form></dialog>`);
+async function toolsEditComment(id) {
+  return toolsRun('comment-open', async () => {
+    const comment = await toolsRequest('/api/news/comments/' + id);
+    if (Number(comment.user_id) !== Number(state.user.id)) throw new Error('Можно изменять только свои комментарии');
+    toolsState.commentEdit = comment;
+    document.getElementById('tools-comment-text').value = comment.text;
+    document.getElementById('tools-comment-error').textContent = '';
+    document.getElementById('tools-comment-editor').showModal();
+    document.getElementById('tools-comment-text').focus();
+  });
+}
+async function toolsSaveComment(event) {
+  event.preventDefault();
+  return toolsRun('comment-edit', async () => {
+    const original = toolsState.commentEdit;
+    if (!original) return;
+    const text = document.getElementById('tools-comment-text').value.trim();
+    const errorElement = document.getElementById('tools-comment-error');
+    if (!text) { errorElement.textContent = 'Введите текст комментария'; return; }
+    try {
+      const comment = await toolsRequest('/api/news/comments/' + original.id, 'PUT', {text, revision: original.revision});
+      if (state.activePostForComments === original.post_id) {
+        renderCommentsList((state.commentsLoaded || []).map(item => item.id === comment.id ? comment : item), state.commentsHasMore);
+      }
+      document.getElementById('tools-comment-editor').close();
+      toolsToast('Комментарий изменён');
+    } catch (error) { errorElement.textContent = error.message; }
   });
 }
 

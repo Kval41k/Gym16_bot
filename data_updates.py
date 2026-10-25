@@ -30,20 +30,36 @@ async def apply_calendar_schedule():
                 settings.BACKUP_DIR.mkdir(parents=True, exist_ok=True)
                 await asyncio.to_thread((settings.BACKUP_DIR / f"schedule-before-{revision}.json").write_text,
                                         json.dumps(previous, ensure_ascii=False, indent=2), encoding="utf-8")
-            # Previously common rows must remain available to the other profile.
-            for lesson in current:
-                if lesson.profile_name == "Соц-гум":
-                    await db.delete(lesson)
-                elif lesson.profile_name is None:
-                    lesson.profile_name = "Филологический"
-            for row in snapshot["rows"]:
-                db.add(Lesson(**row))
+            previous_revision = snapshot.get("previous_revision")
+            if previous_revision and await db.get(AppliedDataUpdate, previous_revision):
+                # A focused correction must preserve other manual edits made after v1.
+                for lesson in current:
+                    if lesson.profile_name == "Соц-гум" and lesson.subject in snapshot["removed_subjects"]:
+                        await db.delete(lesson)
+                target = next(row for row in snapshot["rows"] if row["subject"] == "Консультация по профильной математике")
+                existing = [lesson for lesson in current if lesson.subject == target["subject"]]
+                consultation = existing[0] if existing else Lesson(**target)
+                if not existing:
+                    db.add(consultation)
+                for extra in existing[1:]:
+                    await db.delete(extra)
+                for key, value in target.items():
+                    setattr(consultation, key, value)
+            else:
+                # Previously common rows remain available to the other profile.
+                for lesson in current:
+                    if lesson.profile_name == "Соц-гум":
+                        await db.delete(lesson)
+                    elif lesson.profile_name is None:
+                        lesson.profile_name = "Филологический"
+                for row in snapshot["rows"]:
+                    db.add(Lesson(**row))
             users = (await db.scalars(select(User).join(UserPreferences).where(
-                User.class_name == "11А", User.profile_name == "Соц-гум", User.is_banned.is_(False),
+                User.class_name == "11А", User.is_banned.is_(False),
                 UserPreferences.schedule_changes.is_(True)))).all()
             for user in users:
                 db.add(Notification(user_id=user.id, dedup_key=f"schedule:{revision}:{user.id}",
-                    text="📅 Расписание 11А соц-гум сверено с Google Календарём: обновлены предметы, кабинеты и точное время занятий. Проверьте расписание в приложении."))
+                    text=snapshot.get("notification", "📅 Расписание 11А обновлено. Проверьте расписание в приложении.")))
             db.add(AppliedDataUpdate(revision=revision))
             await db.commit()
             return True
