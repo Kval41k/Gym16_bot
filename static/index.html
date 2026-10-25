@@ -728,6 +728,7 @@
     <div class="pt-4 text-xs text-zinc-400">
       Если вы считаете, что это ошибка, обратитесь к администратору.
     </div>
+    <a href="https://t.me/kvalx" onclick="contactAdmin(); return false;" class="g-btn primary" style="display:inline-flex;align-items:center;justify-content:center">Связаться с администратором</a>
   </div>
 
 
@@ -3328,6 +3329,16 @@
       }
     }
     window.contactDeveloper = contactDeveloper;
+    function contactAdmin() {
+      haptic("selection");
+      const url = "https://t.me/kvalx";
+      if (window.Telegram?.WebApp?.openTelegramLink) {
+        window.Telegram.WebApp.openTelegramLink(url);
+      } else {
+        window.open(url, "_blank", "noopener,noreferrer");
+      }
+    }
+    window.contactAdmin = contactAdmin;
 
     window.handleModeratePost = handleModeratePost;
     window.togglePostReaction = togglePostReaction;
