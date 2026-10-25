@@ -74,6 +74,11 @@ def generate_admin_auth_token(admin_id: int, timestamp: int) -> str:
     key = hashlib.sha256(settings.BOT_TOKEN.encode("utf-8")).digest()
     return hmac.new(key, msg, hashlib.sha256).hexdigest()
 
+def get_admin_contact_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(inline_keyboard=[[
+        InlineKeyboardButton(text="Связаться с администратором", url="https://t.me/kvalx")
+    ]])
+
 @router.message.outer_middleware()
 async def ban_check_middleware(handler, event: Message, data: dict):
     user_id = event.from_user.id if event.from_user else None
@@ -81,7 +86,8 @@ async def ban_check_middleware(handler, event: Message, data: dict):
         async with async_session() as session:
             db_user = await session.get(User, user_id)
             if db_user and db_user.is_banned:
-                await event.answer("⛔ <b>Доступ ограничен.</b>\nВаш аккаунт заблокирован администратором.")
+                await event.answer("⛔ <b>Доступ ограничен.</b>\nВаш аккаунт заблокирован администратором.",
+                                   reply_markup=get_admin_contact_keyboard())
                 return
             from access import access_allowed
             if db_user and not await access_allowed(session, db_user):
@@ -101,6 +107,9 @@ async def ban_check_callback_middleware(handler, event: CallbackQuery, data: dic
             db_user = await session.get(User, user_id)
             if db_user and db_user.is_banned:
                 await event.answer("⛔ Ваш аккаунт заблокирован администратором.", show_alert=True)
+                if isinstance(event.message, Message) and event.message.chat.type == "private":
+                    await event.message.answer("Если вы считаете блокировку ошибкой, свяжитесь с администратором.",
+                                               reply_markup=get_admin_contact_keyboard())
                 return
             from access import access_allowed
             if db_user and not await access_allowed(session, db_user):
