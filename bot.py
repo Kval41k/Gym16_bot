@@ -81,6 +81,9 @@ def get_creator_contact_keyboard() -> InlineKeyboardMarkup:
 
 @router.message.outer_middleware()
 async def ban_check_middleware(handler, event: Message, data: dict):
+    # Class-group commands live in their own router; legacy personal/admin flows stay private.
+    if event.chat.type != "private":
+        return
     user_id = event.from_user.id if event.from_user else None
     if user_id and not is_admin_user(user_id, event.from_user.username):
         async with async_session() as session:
@@ -101,6 +104,9 @@ async def ban_check_middleware(handler, event: Message, data: dict):
 
 @router.callback_query.outer_middleware()
 async def ban_check_callback_middleware(handler, event: CallbackQuery, data: dict):
+    if event.message and event.message.chat.type != "private":
+        await event.answer("Откройте личный чат с ботом для этого действия.")
+        return
     user_id = event.from_user.id if event.from_user else None
     if user_id and not is_admin_user(user_id, event.from_user.username):
         async with async_session() as session:
@@ -1061,6 +1067,8 @@ async def main():
         logger.warning("BOT_STORAGE_URL is unset; in-progress bot conversations will reset on restart.")
     isolation = storage.create_isolation() if isinstance(storage, RedisStorage) else SimpleEventIsolation()
     dp = Dispatcher(storage=storage, events_isolation=isolation)
+    from headman_bot import router as class_group_router
+    dp.include_router(class_group_router)
     dp.include_router(router)
 
     logger.info("Starting Gymnasium 16 aiogram 3 Bot...")

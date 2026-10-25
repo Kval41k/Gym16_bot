@@ -14,7 +14,7 @@ from access import access_allowed, configured_admin, require_school_access
 from config import CLASS_PROFILES_MAP
 from database import engine, get_db
 from features import LessonRow, ScheduleRequest, parse_schedule, lesson_dict
-from models import AccessPolicy, DatedSchedule, NewsDraft, NewsPost, Notification, SchoolInvite, User, UserPreferences
+from models import AccessPolicy, ClassLinkToken, DatedSchedule, NewsDraft, NewsPost, Notification, SchoolInvite, User, UserPreferences
 from timetable import effective_lessons, lesson_timeline
 
 TZ = ZoneInfo('Asia/Yekaterinburg')
@@ -66,7 +66,8 @@ class PolicyRequest(BaseModel):
 
 
 class RoleRequest(BaseModel):
-    role: Literal['student','editor']
+    role: Literal['student','editor','headman']
+    class_name: Optional[str] = None
 
 
 class DraftRequest(BaseModel):
@@ -78,6 +79,36 @@ class DraftRequest(BaseModel):
 
 class PinRequest(BaseModel):
     pinned: bool
+
+
+async def change_date_schedule(payload,db,cache_clear,reset=False,locked=False):
+    if not locked:await write_lock(db)
+    if payload.class_name not in CLASS_PROFILES_MAP:raise HTTPException(422,'Выберите существующий класс')
+    if payload.date.weekday()==6 and payload.rows:raise HTTPException(422,'Воскресенье — выходной. Выберите учебный день.')
+    rows=parse_schedule(ScheduleRequest(class_name=payload.class_name,rows=payload.rows))
+    if any(row.day_of_week!=payload.date.weekday() for row in rows):raise HTTPException(422,'День урока должен совпадать с выбранной датой')
+    old=await date_payload(db,payload.class_name,payload.date)
+    if not hmac.compare_digest(old['base_revision'],payload.base_revision):raise HTTPException(409,'Расписание изменилось. Загрузите дату заново.')
+    record=await db.scalar(select(DatedSchedule).where(DatedSchedule.class_name==payload.class_name,DatedSchedule.lesson_date==payload.date))
+    if reset:
+        if record:await db.delete(record)
+    else:
+        if not record:
+            record=DatedSchedule(class_name=payload.class_name,lesson_date=payload.date);db.add(record)
+        record.rows_json=json.dumps([row.model_dump() for row in rows],ensure_ascii=False)
+        record.note=payload.note.strip()
+    users=(await db.scalars(select(User).where(User.class_name==payload.class_name))).all()
+    notices=(await db.scalars(select(Notification).where(Notification.status=='pending',Notification.dedup_key.like(f'lesson:{payload.date}:%')))).all()
+    ids={user.id for user in users}
+    for notice in notices:
+        if notice.user_id in ids:notice.status='cancelled'
+    change_id=uuid.uuid4().hex
+    for user in users:
+        pref=await db.get(UserPreferences,user.id)
+        if pref and pref.schedule_changes and await access_allowed(db,user):
+            db.add(Notification(user_id=user.id,dedup_key=f'date:{change_id}:{user.id}',text=f'📅 Расписание {payload.class_name} на {payload.date:%d.%m.%Y} обновлено. '+('Восстановлено обычное расписание.' if reset else payload.note.strip() or 'Проверьте замены в приложении.')))
+    await db.commit();cache_clear('sched:')
+    return await date_payload(db,payload.class_name,payload.date)
 
 
 def install_community(app, require_identity, require_admin, require_editor, cache_clear, rate_limit):
@@ -98,42 +129,13 @@ def install_community(app, require_identity, require_admin, require_editor, cach
         if class_name not in CLASS_PROFILES_MAP:raise HTTPException(422,'Выберите существующий класс')
         return await date_payload(db,class_name,date)
 
-    async def change_date(payload,db,reset=False):
-        await write_lock(db)
-        if payload.class_name not in CLASS_PROFILES_MAP:raise HTTPException(422,'Выберите существующий класс')
-        if payload.date.weekday()==6 and payload.rows:raise HTTPException(422,'Воскресенье — выходной. Выберите учебный день.')
-        rows=parse_schedule(ScheduleRequest(class_name=payload.class_name,rows=payload.rows))
-        if any(row.day_of_week!=payload.date.weekday() for row in rows):raise HTTPException(422,'День урока должен совпадать с выбранной датой')
-        old=await date_payload(db,payload.class_name,payload.date)
-        if not hmac.compare_digest(old['base_revision'],payload.base_revision):raise HTTPException(409,'Расписание изменилось. Загрузите дату заново.')
-        record=await db.scalar(select(DatedSchedule).where(DatedSchedule.class_name==payload.class_name,DatedSchedule.lesson_date==payload.date))
-        if reset:
-            if record:await db.delete(record)
-        else:
-            if not record:
-                record=DatedSchedule(class_name=payload.class_name,lesson_date=payload.date);db.add(record)
-            record.rows_json=json.dumps([row.model_dump() for row in rows],ensure_ascii=False)
-            record.note=payload.note.strip()
-        users=(await db.scalars(select(User).where(User.class_name==payload.class_name))).all()
-        notices=(await db.scalars(select(Notification).where(Notification.status=='pending',Notification.dedup_key.like(f'lesson:{payload.date}:%')))).all()
-        ids={user.id for user in users}
-        for notice in notices:
-            if notice.user_id in ids:notice.status='cancelled'
-        change_id=uuid.uuid4().hex
-        for user in users:
-            pref=await db.get(UserPreferences,user.id)
-            if pref and pref.schedule_changes and await access_allowed(db,user):
-                db.add(Notification(user_id=user.id,dedup_key=f'date:{change_id}:{user.id}',text=f'📅 Расписание {payload.class_name} на {payload.date:%d.%m.%Y} обновлено. '+('Восстановлено обычное расписание.' if reset else payload.note.strip() or 'Проверьте замены в приложении.')))
-        await db.commit();cache_clear('sched:')
-        return await date_payload(db,payload.class_name,payload.date)
-
     @router.put('/api/admin/schedule/date')
     async def put_date(payload:DateRequest,actor=Depends(admin),db=Depends(get_db)):
-        return await change_date(payload,db)
+        return await change_date_schedule(payload,db,cache_clear)
 
     @router.post('/api/admin/schedule/date/reset')
     async def reset_date(payload:DateRequest,actor=Depends(admin),db=Depends(get_db)):
-        return await change_date(payload,db,True)
+        return await change_date_schedule(payload,db,cache_clear,True)
 
     @router.get('/api/me/next-lesson')
     async def next_lesson(user=Depends(student),db=Depends(get_db)):
@@ -209,13 +211,20 @@ def install_community(app, require_identity, require_admin, require_editor, cach
 
     @router.put('/api/admin/users/{user_id}/role')
     async def role(user_id:int,payload:RoleRequest,actor=Depends(admin),db=Depends(get_db)):
+        await write_lock(db)
         user=await db.get(User,user_id)
         if not user:raise HTTPException(404,'Пользователь не найден')
         if configured_admin(user):raise HTTPException(422,'Администраторы назначаются в настройках хостинга')
+        scope=payload.class_name or user.class_name
+        if payload.role=='headman' and scope not in CLASS_PROFILES_MAP:raise HTTPException(422,'Укажите класс старосты')
+        if user.role != payload.role or user.headman_class_name != (scope if payload.role=='headman' else None):
+            for token in (await db.scalars(select(ClassLinkToken).where(ClassLinkToken.created_by==user.id, ClassLinkToken.used_at.is_(None)))).all():
+                token.used_at=datetime.now(timezone.utc)
         user.role=payload.role
-        if payload.role=='editor':user.is_member=True
+        user.headman_class_name=scope if payload.role=='headman' else None
+        if payload.role in ('editor','headman'):user.is_member=True
         await db.commit()
-        return {'id':user.id,'role':user.role}
+        return {'id':user.id,'role':user.role,'headman_class_name':user.headman_class_name}
 
     @router.put('/api/news/{post_id}/pin')
     async def pin(post_id:int,payload:PinRequest,actor=Depends(editor),db=Depends(get_db)):

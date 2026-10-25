@@ -36,8 +36,7 @@ function toolsDate(iso) {
 document.getElementById('live-status-card').insertAdjacentHTML('afterend', `
   <div class="g-row g-between school-schedule-toolbar"><div class="g-tabs" role="group" aria-label="Вид расписания">
   <button class="g-btn primary" id="tools-day" onclick="toolsScheduleMode('day')">День</button>
-  <button class="g-btn" id="tools-week" onclick="toolsScheduleMode('week')">Неделя</button></div>
-  <button class="g-btn school-schedule-today" onclick="toolsToday()">Сегодня</button></div>
+  <button class="g-btn" id="tools-week" onclick="toolsScheduleMode('week')">Неделя</button></div></div>
   <div id="tools-schedule-date" class="g-muted"></div>`);
 function toolsScheduleMode(mode) { toolsState.mode = mode; loadSchedule(); }
 function toolsToday() {
@@ -379,7 +378,7 @@ document.getElementById('tab-admin').insertAdjacentHTML('beforeend', `
   <section id="admin-section-logs" hidden class="g-stack"><div class="g-card g-stack"><h3 class="g-title">Журнал действий</h3>
     <p class="g-muted">Кто, когда и что изменил в приложении или боте. История собирается с момента установки обновления.</p>
     <input class="g-input" id="tools-log-search" placeholder="Имя, @username, Telegram ID или ID записи" oninput="toolsLogSearch()">
-    <div class="g-search-controls"><select class="g-input" id="tools-log-section" onchange="toolsLoadLogs()"><option value="">Все разделы</option><option value="profile">Профиль и настройки</option><option value="schedule">Расписание</option><option value="news">Новости</option><option value="comments">Комментарии</option><option value="reactions">Реакции</option><option value="ege">ЕГЭ</option></select>
+    <div class="g-search-controls"><select class="g-input" id="tools-log-section" onchange="toolsLoadLogs()"><option value="">Все разделы</option><option value="profile">Профиль и настройки</option><option value="schedule">Расписание</option><option value="news">Новости</option><option value="comments">Комментарии</option><option value="reactions">Реакции</option><option value="ege">ЕГЭ</option><option value="headman">Староста: чат, посещаемость, питание</option></select>
     <select class="g-input" id="tools-log-action" onchange="toolsLoadLogs()"><option value="">Все действия</option><option value="create">Добавления</option><option value="update">Изменения</option><option value="delete">Удаления</option></select>
     <label class="g-muted">С даты<input class="g-input" type="date" id="tools-log-from" onchange="toolsLoadLogs()"></label><label class="g-muted">По дату<input class="g-input" type="date" id="tools-log-to" onchange="toolsLoadLogs()"></label></div>
     <button class="g-btn" onclick="toolsLoadLogs()">Обновить журнал</button></div><div id="tools-logs-list"></div><button class="g-btn" id="tools-logs-more" data-busy="logs" onclick="toolsLoadLogs(true)" hidden>Показать ещё</button></section>
@@ -495,9 +494,9 @@ function toolsDownloadSchedule() {
 }
 
 // Audit history: filters and cursor pagination keep the page responsive.
-const toolsLogSections={profile:'Профиль',schedule:'Расписание',news:'Новости',comments:'Комментарии',reactions:'Реакции',ege:'ЕГЭ'};
+const toolsLogSections={profile:'Профиль',schedule:'Расписание',news:'Новости',comments:'Комментарии',reactions:'Реакции',ege:'ЕГЭ',headman:'Староста'};
 const toolsEntities={users:'Пользователь',user_preferences:'Настройки уведомлений',lessons:'Урок',bell_schedules:'Звонки',news_posts:'Новость',news_reviews:'Решение модератора',comments:'Комментарий',reactions:'Реакция',ege_materials:'Материал',material_progress:'Закладки и прогресс'};
-const toolsLogFields={id:'ID',user_id:'Пользователь',post_id:'Новость',first_name:'Имя',last_name:'Фамилия',username:'Telegram',class_name:'Класс',profile_name:'Профиль',subgroup:'Группа',is_admin:'Администратор',is_banned:'Блокировка',title:'Заголовок',content:'Текст',text:'Текст',emoji:'Реакция',status:'Статус',reason:'Причина',subject:'Предмет',teacher_name:'Учитель',cabinet:'Кабинет',day_of_week:'День недели',lesson_number:'Номер урока',note:'Примечание',start_time:'Начало занятия',end_time:'Конец занятия',bookmarked:'В закладках',studied:'Изучено',lesson_reminders:'Напоминания об уроках',schedule_changes:'Изменения расписания',reminder_minutes:'За сколько минут',theory:'Теория',task_number:'Номер задания',subject_code:'Предмет ЕГЭ',material_id:'Материал',author_name:'Автор',author_id:'ID автора',author_class:'Класс автора',is_anonymous:'Анонимность',image_url:'Изображение',link_url:'Ссылка',published_at:'Дата публикации'};
+const toolsLogFields={id:'ID',user_id:'Пользователь',post_id:'Новость',first_name:'Имя',last_name:'Фамилия',username:'Telegram',class_name:'Класс',profile_name:'Профиль',subgroup:'Группа',headman_class_name:'Класс старосты',attendance_date:'Дата посещаемости',meal_date:'Дата питания',option_index:'Выбранная позиция',category:'Категория питания',chat_title:'Название чата',attendance_time:'Время утреннего опроса',attendance_enabled:'Автоматический опрос',updated_by:'Кто изменил',is_admin:'Администратор',is_banned:'Блокировка',title:'Заголовок',content:'Текст',text:'Текст',emoji:'Реакция',status:'Статус',reason:'Причина',subject:'Предмет',teacher_name:'Учитель',cabinet:'Кабинет',day_of_week:'День недели',lesson_number:'Номер урока',note:'Примечание',start_time:'Начало занятия',end_time:'Конец занятия',bookmarked:'В закладках',studied:'Изучено',lesson_reminders:'Напоминания об уроках',schedule_changes:'Изменения расписания',reminder_minutes:'За сколько минут',theory:'Теория',task_number:'Номер задания',subject_code:'Предмет ЕГЭ',material_id:'Материал',author_name:'Автор',author_id:'ID автора',author_class:'Класс автора',is_anonymous:'Анонимность',image_url:'Изображение',link_url:'Ссылка',published_at:'Дата публикации'};
 let toolsLogTimer, toolsLogRequest=0;
 function toolsLogSearch() { clearTimeout(toolsLogTimer);toolsLogTimer=setTimeout(()=>toolsLoadLogs(),350); }
 async function toolsLoadLogs(more=false) {

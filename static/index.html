@@ -6,12 +6,13 @@
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
-  <link rel="stylesheet" href="/static/features.css?v=6">
+  <link rel="stylesheet" href="/static/features.css?v=8">
+  <link rel="stylesheet" href="/static/headman.css?v=1">
   <title>Гимназия №16 — 11 Классы</title>
 
   <!-- Telegram Web App Script -->
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
-  <script src="/static/theme.js?v=3"></script>
+  <script src="/static/theme.js?v=8"></script>
   <script src="/static/media.js?v=3"></script>
 
   <link rel="stylesheet" href="/static/ui.css?v=5">
@@ -1098,22 +1099,14 @@
           loadSchedule().catch(() => {});
         } else if (tabId === 'tab-news') {
           if (appTitleEl) appTitleEl.textContent = 'Новости';
-          if (headerBtn) {
-            headerBtn.classList.remove('hidden');
-            headerBtn.textContent = '+ Новость';
-            headerBtn.onclick = openProposeNewsModal;
-          }
+          if (headerBtn) headerBtn.classList.add('hidden');
           loadNews().catch(() => {});
           checkPendingNewsCount().catch(() => {});
         } else if (tabId === 'tab-ege') {
           if (appTitleEl) appTitleEl.textContent = 'ЕГЭ';
+          if (headerBtn) headerBtn.classList.add('hidden');
           const isAdmin = checkCanEdit();
           if (isAdmin) {
-            if (headerBtn) {
-              headerBtn.classList.remove('hidden');
-              headerBtn.textContent = '+ Материал';
-              headerBtn.onclick = () => openAddEgeModal();
-            }
             const egeBtn = document.getElementById('ege-add-mat-btn');
             if (egeBtn) { egeBtn.classList.remove('hidden'); egeBtn.classList.add('flex'); }
           } else {
@@ -2562,6 +2555,7 @@
                   <span>${nameSafe}</span>
                   ${roleBadge}
                   ${u.role === "editor" ? '<span class="g-badge">Редактор</span>' : ""}
+                  ${u.role === "headman" ? `<span class="g-badge">Староста ${escapeHtml(u.headman_class_name||u.class_name||"—")}</span>` : ""}
                   ${statusBadge}
                 </div>
                 <div class="flex items-center gap-2 mt-0.5 text-[11px] text-ios-secondaryText flex-wrap">
@@ -2569,7 +2563,7 @@
                   <span>• ID: <code>${u.id}</code></span>
                 </div>
               </div>
-              <div>${actionBtn}${!isSelfOrAdmin ? `<button class="g-btn" onclick="communitySetRole(${u.id}, '${u.role === "editor" ? "student" : "editor"}')">${u.role === "editor" ? "Снять роль редактора" : "Назначить редактором"}</button>` : ""}</div>
+              <div>${actionBtn}${!isSelfOrAdmin ? `<button class="g-btn" onclick="communitySetRole(${u.id}, '${u.role === "editor" ? "student" : "editor"}')">${u.role === "editor" ? "Снять роль редактора" : "Назначить редактором"}</button><button class="g-btn" onclick="headmanAssignRole(${u.id}, ${u.role === "headman"})">${u.role === "headman" ? "Снять роль старосты" : "Назначить старостой"}</button>` : ""}</div>
             </div>
 
             <div class="flex items-center justify-between text-xs pt-1 border-t border-zinc-200/40 dark:border-zinc-800/60">
@@ -3344,8 +3338,9 @@
     
 </script>
 
-<script src="/static/features.js?v=7"></script>
+<script src="/static/features.js?v=8"></script>
 <script src="/static/community.js?v=6"></script>
 <script src="/static/learning.js?v=5"></script>
+<script src="/static/headman.js?v=1"></script>
 </body>
 </html>

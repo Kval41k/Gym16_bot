@@ -102,3 +102,7 @@ See [SCHOOL_RELEASE_2027.md](SCHOOL_RELEASE_2027.md) for official sources, forma
 `data/photo_timetables_20261025.json` contains the approved photo transcription. `apply_photo_timetables` replaces 11В/11Г/11Д/11Ж and the separate 11Б snapshot once, backs up old rows, and aligns 11А philology times. `data/ege_2027.json` contains the theory; `data/practice_2027.json` is the server-side question bank. Rebuild authored content with `python scripts/build_ege_content.py`. Changing published content later requires a reviewed version/migration so existing administrator edits and user progress are preserved.
 
 Additional release checks: `python tests/check_school_release.py`. The profile reminder control is a keyboard-accessible 5/10/15 minute slider, and subgroup selection is explicit. Hosting and persistent-storage provisioning remain deferred.
+
+## Старосты и чаты классов
+
+Добавлена роль старосты с отдельной вкладкой: расписание своего класса, посещаемость и питание. Подключение группы, опрос на 07:00, меню и ограничения бесплатного хостинга описаны в [HEADMAN_RELEASE.md](HEADMAN_RELEASE.md).

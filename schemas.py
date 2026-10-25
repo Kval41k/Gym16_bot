@@ -44,6 +44,7 @@ class UserResponse(BaseModel):
     subgroup: Optional[int] = None
     is_admin: bool
     role: str = "student"
+    headman_class_name: Optional[str] = None
     access_allowed: bool = True
     is_onboarded: bool = False
     is_banned: bool = False
@@ -235,6 +236,7 @@ class UserAdminItem(BaseModel):
     class_name: Optional[str] = None
     profile_name: Optional[str] = None
     role: str = "student"
+    headman_class_name: Optional[str] = None
     is_admin: bool
     is_banned: bool = False
     is_onboarded: bool

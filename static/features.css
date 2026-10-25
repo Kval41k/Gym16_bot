@@ -1,4 +1,4 @@
-:root { --g-bg:#F2F2F7; --g-card:#fff; --g-soft:#f1f4f9; --g-text:#18181b; --g-muted:#657084; --g-line:#e2e7ef; --g-blue:#007aff; }
+:root { --g-bg:#F2F2F7; --g-card:#fff; --g-soft:#f1f4f9; --g-text:#18181b; --g-muted:#657084; --g-line:#e2e7ef; --g-blue:#007aff; --g-button-text:#fff; }
 .dark { --g-bg:#111216; --g-card:#1c1c1e; --g-soft:#27272b; --g-text:#fafafa; --g-muted:#a2aabb; --g-line:#36363c; }
 html[data-theme-mode] body { background:var(--g-bg); color:var(--g-text); }
 html[data-theme-mode=auto] .bg-white, html[data-theme-mode=auto].dark .dark\:bg-ios-cardDark { background-color:var(--g-card); }
@@ -19,14 +19,13 @@ html[data-theme-mode=auto] .bg-zinc-100, html[data-theme-mode=auto].dark .dark\:
 .g-row { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
 .g-between { justify-content:space-between; }
 .school-schedule-toolbar { width:100%; flex-wrap:nowrap; }
-.school-schedule-today { margin-left:auto; flex-shrink:0; }
 .g-stack > * + * { margin-top:12px; }
 .g-muted { color:var(--g-muted); font-size:12px; line-height:1.6; }
 .g-title { font-size:16px; font-weight:700; line-height:1.4; }
 .g-label { display:block; font-size:12px; font-weight:600; margin:12px 0 5px; }
 .g-btn { padding:9px 13px; border-radius:12px; background:var(--g-soft); color:var(--g-text); font-size:12px; font-weight:600; border:1px solid var(--g-line); min-height:36px; }
 .g-btn:hover { filter:brightness(.96); }
-.g-btn.primary, .g-btn[aria-pressed=true] { background:var(--g-blue); color:white; border-color:transparent; }
+.g-btn.primary, .g-btn[aria-pressed=true] { background:var(--g-blue); color:var(--g-button-text); border-color:transparent; }
 .g-btn.danger { color:#d82c42; }
 .g-btn:disabled, button:disabled { opacity:.5; cursor:wait; }
 .g-input { width:100%; padding:11px 12px; background:var(--g-soft); border:1px solid var(--g-line); border-radius:12px; font-size:13px; color:var(--g-text); min-width:0; }

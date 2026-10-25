@@ -25,4 +25,14 @@ f.window.GymTheme.setMode('invalid');assert.equal(f.window.GymTheme.getMode(),'l
 assert.equal(fixture(1).window.GymTheme.getMode(),'light');
 assert.equal(fixture(2).window.GymTheme.getMode(),'auto');
 f=fixture(3,'');f.system.matches=true;f.events.system();assert(f.classes.has('dark'));
-console.log('PASS: Telegram light/dark events, explicit overrides, automatic system fallback, safe theme colours, persistent per-user preference');
+f=fixture(4);f.app.colorScheme='dark';
+f.app.themeParams={button_color:'#ffffff',button_text_color:'#ffffff'};f.events.themeChanged();
+assert.equal(f.properties.get('--g-button-text'),'#000000','White Telegram buttons must have visible dark text');
+f.app.themeParams={button_color:'#000000',button_text_color:'#000000'};f.events.themeChanged();
+assert.equal(f.properties.get('--g-button-text'),'#ffffff','Dark buttons must have visible light text');
+f.app.themeParams={button_color:'#ffffff',button_text_color:'#112233'};f.events.themeChanged();
+assert.equal(f.properties.get('--g-button-text'),'#112233','Readable Telegram button text is preserved');
+f.app.themeParams={button_color:'#ffffff',button_text_color:'url(evil)'};f.events.themeChanged();
+assert.equal(f.properties.get('--g-button-text'),'#000000');
+f.window.GymTheme.setMode('dark');assert(!f.properties.has('--g-button-text'),'Explicit themes clear Telegram foreground overrides');
+console.log('PASS: Telegram light/dark events, white/dark button contrast, explicit overrides, automatic system fallback, safe theme colours, persistent per-user preference');

@@ -84,6 +84,7 @@ async def init_db() -> None:
         for table, column, definition in (("ege_materials", "source_key", "VARCHAR(100)"),
                                           ("ege_materials", "is_archived", "BOOLEAN DEFAULT FALSE NOT NULL"),
                                           ("users", "role", "VARCHAR(20) DEFAULT 'student' NOT NULL"),
+                                          ("users", "headman_class_name", "VARCHAR(20)"),
                                           ("users", "is_member", "BOOLEAN DEFAULT TRUE NOT NULL"),
                                           ("news_posts", "is_pinned", "BOOLEAN DEFAULT FALSE NOT NULL"),
                                           ("comments", "updated_at", "TIMESTAMP"),

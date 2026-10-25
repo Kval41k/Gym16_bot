@@ -106,15 +106,14 @@ async def lifespan(app: FastAPI):
     from learning import apply_learning_catalog
     await apply_learning_catalog()
     from features import maintenance_loop
-    worker = asyncio.create_task(maintenance_loop())
+    from headman_bot import class_group_loop
+    workers = [asyncio.create_task(maintenance_loop()), asyncio.create_task(class_group_loop())]
     try:
         yield
     finally:
-        worker.cancel()
-        try:
-            await worker
-        except asyncio.CancelledError:
-            pass
+        for worker in workers:
+            worker.cancel()
+        await asyncio.gather(*workers, return_exceptions=True)
 
 # -------------------------------------------------------------
 # FastAPI Application
@@ -614,6 +613,7 @@ async def sync_user(
         class_name=user.class_name,
         profile_name=user.profile_name,
         subgroup=user.subgroup,
+        headman_class_name=user.headman_class_name,
         is_admin=is_admin,
         is_banned=user.is_banned,
         role="admin" if user.is_admin else user.role,
@@ -645,6 +645,7 @@ async def get_user_profile(
         class_name=user.class_name,
         profile_name=user.profile_name,
         subgroup=user.subgroup,
+        headman_class_name=user.headman_class_name,
         is_admin=configured_admin,
         is_banned=user.is_banned,
         role="admin" if user.is_admin else user.role,
@@ -705,6 +706,7 @@ async def update_user_profile(
         class_name=user.class_name,
         profile_name=user.profile_name,
         subgroup=user.subgroup,
+        headman_class_name=user.headman_class_name,
         is_admin=(user.id in settings.admin_ids or bool(user.username and user.username.lower().lstrip("@") in settings.admin_usernames)),
         is_banned=user.is_banned,
         role="admin" if user.is_admin else user.role,
@@ -1897,6 +1899,7 @@ async def get_all_users_for_admin(
             is_admin=(u.id in settings.admin_ids or bool(u.username and u.username.lower().lstrip("@") in settings.admin_usernames)),
             is_banned=u.is_banned,
             role=u.role,
+            headman_class_name=u.headman_class_name,
             is_onboarded=is_onboarded,
             created_at=c_str
         ))
@@ -2325,3 +2328,6 @@ install_community(app, require_telegram_user, check_admin_permission_or_raise, c
 
 from learning import install_learning
 install_learning(app, require_telegram_user, require_active_user, check_editor_permission_or_raise, enforce_rate_limit)
+
+from headman import install_headman
+install_headman(app, require_telegram_user, cache_clear_prefix, enforce_rate_limit)

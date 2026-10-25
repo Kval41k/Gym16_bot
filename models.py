@@ -27,6 +27,7 @@ class User(Base):
     
     is_admin: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     role: Mapped[str] = mapped_column(String(20), default="student", nullable=False)
+    headman_class_name: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
     is_member: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     is_banned: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     
@@ -390,3 +391,101 @@ class PracticeSession(Base):
     correct: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     answered_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class ClassChat(Base):
+    __tablename__ = 'class_chats'
+    class_name: Mapped[str] = mapped_column(String(20), primary_key=True)
+    chat_id: Mapped[Optional[int]] = mapped_column(BigInteger, nullable=True, unique=True)
+    chat_title: Mapped[str] = mapped_column(String(255), default='', nullable=False)
+    attendance_time: Mapped[str] = mapped_column(String(5), default='07:00', nullable=False)
+    attendance_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    attendance_weekdays: Mapped[str] = mapped_column(String(20), default='0,1,2,3,4,5', nullable=False)
+    linked_by: Mapped[Optional[int]] = mapped_column(BigInteger, nullable=True)
+
+
+class ClassLinkToken(Base):
+    __tablename__ = 'class_link_tokens'
+    code_hash: Mapped[str] = mapped_column(String(64), primary_key=True)
+    created_by: Mapped[int] = mapped_column(BigInteger, ForeignKey('users.id', ondelete='CASCADE'), nullable=False)
+    class_name: Mapped[str] = mapped_column(String(20), nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    used_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class ClassRoster(Base):
+    __tablename__ = 'class_rosters'
+    class_name: Mapped[str] = mapped_column(String(20), primary_key=True)
+    user_id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    first_name: Mapped[str] = mapped_column(String(100), nullable=False)
+    last_name: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    username: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+
+
+class MealMenu(Base):
+    __tablename__ = 'meal_menus'
+    __table_args__ = (UniqueConstraint('class_name', 'meal_date', name='uq_meal_menu_class_date'),)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    class_name: Mapped[str] = mapped_column(String(20), nullable=False)
+    meal_date: Mapped[date] = mapped_column(Date, nullable=False)
+    options_json: Mapped[str] = mapped_column(Text, nullable=False)
+    revision: Mapped[str] = mapped_column(String(32), nullable=False)
+    status: Mapped[str] = mapped_column(String(20), default='draft', nullable=False)
+    created_by: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class ClassPoll(Base):
+    __tablename__ = 'class_polls'
+    id: Mapped[str] = mapped_column(String(32), primary_key=True)
+    delivery_key: Mapped[str] = mapped_column(String(140), nullable=False, unique=True)
+    class_name: Mapped[str] = mapped_column(String(20), nullable=False, index=True)
+    poll_date: Mapped[date] = mapped_column(Date, nullable=False)
+    kind: Mapped[str] = mapped_column(String(20), nullable=False)
+    menu_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey('meal_menus.id', ondelete='CASCADE'), nullable=True)
+    chat_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    options_json: Mapped[str] = mapped_column(Text, nullable=False)
+    status: Mapped[str] = mapped_column(String(20), default='pending', nullable=False)
+    telegram_poll_id: Mapped[Optional[str]] = mapped_column(String(100), nullable=True, unique=True)
+    message_id: Mapped[Optional[int]] = mapped_column(BigInteger, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    claimed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    sent_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_error: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+
+
+class Attendance(Base):
+    __tablename__ = 'attendance'
+    class_name: Mapped[str] = mapped_column(String(20), primary_key=True)
+    user_id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    attendance_date: Mapped[date] = mapped_column(Date, primary_key=True)
+    status: Mapped[str] = mapped_column(String(10), nullable=False)
+    updated_by: Mapped[Optional[int]] = mapped_column(BigInteger, nullable=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+
+class MealChoice(Base):
+    __tablename__ = 'meal_choices'
+    menu_id: Mapped[int] = mapped_column(Integer, ForeignKey('meal_menus.id', ondelete='CASCADE'), primary_key=True)
+    user_id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    category: Mapped[str] = mapped_column(String(20), primary_key=True)
+    option_index: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    updated_by: Mapped[Optional[int]] = mapped_column(BigInteger, nullable=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+
+class ClassPollVoteCursor(Base):
+    __tablename__ = 'class_poll_vote_cursors'
+    poll_id: Mapped[str] = mapped_column(String(32), ForeignKey('class_polls.id', ondelete='CASCADE'), primary_key=True)
+    user_id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    last_update_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+
+
+class ClassPollAnswerInbox(Base):
+    __tablename__ = 'class_poll_answer_inbox'
+    update_id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=False)
+    telegram_poll_id: Mapped[str] = mapped_column(String(100), nullable=False, index=True)
+    user_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    payload_json: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

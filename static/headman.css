@@ -1,0 +1,25 @@
+.headman-hero { display:flex; align-items:center; justify-content:space-between; gap:16px; }
+.headman-hero h2 { font-size:24px; margin:4px 0; }
+.headman-hero label { max-width:100px; font-size:12px; }
+.headman-tabs { display:flex; gap:6px; overflow-x:auto; padding-bottom:4px; }
+.headman-tabs .g-btn { flex-shrink:0; }
+.headman-date { max-width:160px; }
+.headman-person { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:12px 0; border-bottom:1px solid var(--g-line); font-size:14px; }
+.headman-person:last-child { border:0; }
+.headman-person .g-input { max-width:135px; }
+.headman-menu-category { border:1px solid var(--g-line); border-radius:16px; padding:12px; }
+.headman-menu-category legend { font-size:14px; font-weight:700; padding:0 6px; }
+.headman-table-wrap { overflow-x:auto; margin-top:12px; }
+.headman-table { min-width:720px; width:100%; border-collapse:collapse; font-size:12px; }
+.headman-table th,.headman-table td { text-align:left; padding:10px 8px; border-bottom:1px solid var(--g-line); }
+.headman-table th { color:var(--g-muted); }
+.headman-table td:first-child { min-width:140px; }
+.headman-table .g-input { min-width:175px; }
+.headman-lesson { border:1px solid var(--g-line); border-radius:14px; padding:12px; }
+.headman-lesson summary { font-size:13px; font-weight:600; cursor:pointer; }
+.headman-fields { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:0 12px; margin-bottom:12px; }
+.headman-steps { list-style:decimal; padding-left:20px; font-size:13px; line-height:1.7; }
+.headman-steps li+li { margin-top:10px; }
+.headman-code { display:block; white-space:pre-wrap; overflow-wrap:anywhere; user-select:all; padding:14px; background:var(--g-soft); border-radius:12px; font-size:13px; }
+#headman-error:empty { display:none; }
+@media(max-width:360px) { .headman-fields { grid-template-columns:1fr; } .headman-person { align-items:flex-start; } }

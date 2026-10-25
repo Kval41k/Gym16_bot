@@ -10,6 +10,8 @@ from models import AuditLog
 
 audit_actor = ContextVar("audit_actor", default=None)
 SECTIONS = {
+    "class_chats": "headman", "class_rosters": "headman", "class_polls": "headman",
+    "attendance": "headman", "meal_menus": "headman", "meal_choices": "headman",
     "practice_progress": "ege",
     "dated_schedules": "schedule", "school_invites": "access", "access_policy": "access",
     "users": "profile", "user_preferences": "profile", "lessons": "schedule",
