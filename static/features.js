@@ -34,10 +34,10 @@ function toolsDate(iso) {
 
 // Schedule: day/week modes, familiar class/profile controls, clear current/next lessons.
 document.getElementById('live-status-card').insertAdjacentHTML('afterend', `
-  <div class="g-row g-between"><div class="g-tabs" role="group" aria-label="Вид расписания">
+  <div class="g-row g-between school-schedule-toolbar"><div class="g-tabs" role="group" aria-label="Вид расписания">
   <button class="g-btn primary" id="tools-day" onclick="toolsScheduleMode('day')">День</button>
   <button class="g-btn" id="tools-week" onclick="toolsScheduleMode('week')">Неделя</button></div>
-  <button class="g-btn" onclick="toolsToday()">Сегодня</button></div>
+  <button class="g-btn school-schedule-today" onclick="toolsToday()">Сегодня</button></div>
   <div id="tools-schedule-date" class="g-muted"></div>`);
 function toolsScheduleMode(mode) { toolsState.mode = mode; loadSchedule(); }
 function toolsToday() {

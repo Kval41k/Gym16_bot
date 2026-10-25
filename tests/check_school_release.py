@@ -1,5 +1,5 @@
 """Independent regressions for photo transcription, philology clock and EGE-2027 training."""
-import asyncio, hashlib, hmac, io, json, logging, os, sys, tempfile, time, urllib.parse, zipfile, subprocess
+import asyncio, hashlib, hmac, io, json, logging, os, re, sys, tempfile, time, urllib.parse, zipfile, subprocess
 from datetime import datetime, timezone
 from fractions import Fraction
 from pathlib import Path
@@ -35,6 +35,8 @@ async def run():
  async with async_session() as db:
   installed=await db.scalar(select(Lesson).where(Lesson.class_name=='11А',Lesson.profile_name=='Соц-гум',Lesson.subject=='Английский язык'))
   installed.teacher_name='Бурейкевич Ю.Ю.';await db.commit()
+  meaningful=await db.scalar(select(Lesson).where(Lesson.class_name=='11А',Lesson.profile_name=='Филологический'))
+  meaningful.note='Принести атлас';meaningful_id=meaningful.id;await db.commit()
  assert await apply_photo_timetables()
  assert await apply_learning_catalog()
  assert not await apply_photo_timetables() and not await apply_learning_catalog()
@@ -65,6 +67,10 @@ async def run():
    for row in await day('11А',d,'Филологический'):
     if row['lesson_number'] in soc:assert (row['start_time'],row['end_time'])==soc[row['lesson_number']]
   monday=await day('11А',0,'Филологический');assert monday[0]['lesson_number']==0 and monday[-1]['end_time']=='14:50'
+  for d in range(6):
+   assert not any(re.fullmatch(r'\s*\d{1,2}:\d{2}\s*[-–—]\s*\d{1,2}:\d{2}\s*',r['note'] or '') for r in await day('11А',d))
+  async with async_session() as db:
+   assert (await db.get(Lesson,meaningful_id)).note=='Принести атлас'
   assert (await call('GET','/api/schedule/lessons?class_name=11Б'))['schedule_loaded'] is True
   assert [r['subject'] for r in await day('11Б',4,group=1)][4:6]==['Информатика и ИКТ','Английский язык']
   assert [r['subject'] for r in await day('11Б',4,group=2)][4:6]==['Английский язык','Информатика и ИКТ']

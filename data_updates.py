@@ -1,6 +1,7 @@
 """Apply reviewed timetable snapshots once; later admin edits remain authoritative."""
 import asyncio
 import json
+import re
 from pathlib import Path
 from sqlalchemy import select, text
 
@@ -113,4 +114,29 @@ async def apply_photo_timetables():
     for filename,align_clock in [('photo_timetables_20261025.json',True),('11b_reviewed_20261025.json',False)]:
         snapshot=json.loads((directory/filename).read_text())
         changed=await _apply_photo_snapshot(snapshot,align_clock) or changed
+    changed=await apply_11a_shared_clock() or changed
     return changed
+
+
+async def apply_11a_shared_clock():
+    """Remove legacy time-only captions while keeping useful lesson notes."""
+    revision='11a-shared-clock-notes-20261025-v1'
+    token=audit_actor.set({'id':0,'first_name':'Единое время уроков 11А','source':'schedule'})
+    try:
+        async with async_session() as db:
+            if engine.dialect.name=='sqlite':await db.execute(text('BEGIN IMMEDIATE'))
+            else:await db.execute(text('SELECT pg_advisory_xact_lock(110011)'))
+            if await db.get(AppliedDataUpdate,revision):return False
+            rows=(await db.scalars(select(Lesson).where(Lesson.class_name=='11А'))).all()
+            shared={(row['day_of_week'],row['lesson_number']):(row['start_time'],row['end_time']) for row in json.loads(SNAPSHOT.read_text())['rows']}
+            from timetable import day_bells
+            for row in rows:
+                times=shared.get((row.day_of_week,row.lesson_number))
+                if times is None:times=(await day_bells(db,row.day_of_week)).get(row.lesson_number)
+                if times:row.start_time,row.end_time=times
+                if re.fullmatch(r'\s*\d{1,2}:\d{2}\s*[-–—]\s*\d{1,2}:\d{2}\s*',row.note or ''):
+                    row.note=''
+            db.add(AppliedDataUpdate(revision=revision))
+            await db.commit()
+            return True
+    finally:audit_actor.reset(token)

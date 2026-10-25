@@ -18,6 +18,8 @@ html[data-theme-mode=auto] .bg-zinc-100, html[data-theme-mode=auto].dark .dark\:
 .g-card { padding:16px; background:var(--g-card); border:1px solid var(--g-line); border-radius:20px; margin-bottom:12px; color:var(--g-text); }
 .g-row { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
 .g-between { justify-content:space-between; }
+.school-schedule-toolbar { width:100%; flex-wrap:nowrap; }
+.school-schedule-today { margin-left:auto; flex-shrink:0; }
 .g-stack > * + * { margin-top:12px; }
 .g-muted { color:var(--g-muted); font-size:12px; line-height:1.6; }
 .g-title { font-size:16px; font-weight:700; line-height:1.4; }
