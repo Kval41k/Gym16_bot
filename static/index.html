@@ -293,7 +293,7 @@
       <!-- App Info Card -->
       <div class="rounded-2xl p-4 bg-zinc-100 dark:bg-ios-cardDark2/60 text-center space-y-1 text-xs text-ios-secondaryText">
         <p class="font-semibold text-zinc-700 dark:text-zinc-300">МАОУ гимназия №16</p>
-        <p class="text-[11px] text-zinc-500 dark:text-zinc-400">Проект сделан <a href="https://t.me/untiltedvoid" onclick="contactDeveloper(); return false;" class="text-ios-blue font-semibold hover:underline">@untiltedvoid</a></p>
+        <p class="text-[11px] text-zinc-500 dark:text-zinc-400">Проект сделан <a href="https://t.me/untitledvoid" onclick="contactDeveloper(); return false;" class="text-ios-blue font-semibold hover:underline">@untitledvoid</a></p>
         <p>Telegram Mini App v1.0.0 • iOS HIG Edition</p>
         <p class="pt-1 text-[10px] text-zinc-400">Быстрое расписание с фильтром по профилям</p>
       </div>
@@ -726,9 +726,9 @@
       <p class="text-sm text-ios-secondaryText max-w-xs mx-auto">Ваш аккаунт заблокирован администратором гимназии. Вы не можете пользоваться мини-приложением и ботом.</p>
     </div>
     <div class="pt-4 text-xs text-zinc-400">
-      Если вы считаете, что это ошибка, обратитесь к администратору.
+      Если вы считаете, что это ошибка, обратитесь к создателю.
     </div>
-    <a href="https://t.me/kvalx" onclick="contactAdmin(); return false;" class="g-btn primary" style="display:inline-flex;align-items:center;justify-content:center">Связаться с администратором</a>
+    <a href="https://t.me/untitledvoid" onclick="contactDeveloper(); return false;" class="g-btn primary" style="display:inline-flex;align-items:center;justify-content:center">Связаться с создателем</a>
   </div>
 
 
@@ -3321,7 +3321,7 @@
     window.closeModerationModal = closeModerationModal;
     function contactDeveloper() {
       haptic("selection");
-      const url = "https://t.me/untiltedvoid";
+      const url = "https://t.me/untitledvoid";
       if (window.Telegram?.WebApp?.openTelegramLink) {
         window.Telegram.WebApp.openTelegramLink(url);
       } else {
@@ -3329,16 +3329,6 @@
       }
     }
     window.contactDeveloper = contactDeveloper;
-    function contactAdmin() {
-      haptic("selection");
-      const url = "https://t.me/kvalx";
-      if (window.Telegram?.WebApp?.openTelegramLink) {
-        window.Telegram.WebApp.openTelegramLink(url);
-      } else {
-        window.open(url, "_blank", "noopener,noreferrer");
-      }
-    }
-    window.contactAdmin = contactAdmin;
 
     window.handleModeratePost = handleModeratePost;
     window.togglePostReaction = togglePostReaction;

@@ -74,9 +74,9 @@ def generate_admin_auth_token(admin_id: int, timestamp: int) -> str:
     key = hashlib.sha256(settings.BOT_TOKEN.encode("utf-8")).digest()
     return hmac.new(key, msg, hashlib.sha256).hexdigest()
 
-def get_admin_contact_keyboard() -> InlineKeyboardMarkup:
+def get_creator_contact_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=[[
-        InlineKeyboardButton(text="Связаться с администратором", url="https://t.me/kvalx")
+        InlineKeyboardButton(text="Связаться с создателем", url="https://t.me/untitledvoid")
     ]])
 
 @router.message.outer_middleware()
@@ -87,7 +87,7 @@ async def ban_check_middleware(handler, event: Message, data: dict):
             db_user = await session.get(User, user_id)
             if db_user and db_user.is_banned:
                 await event.answer("⛔ <b>Доступ ограничен.</b>\nВаш аккаунт заблокирован администратором.",
-                                   reply_markup=get_admin_contact_keyboard())
+                                   reply_markup=get_creator_contact_keyboard())
                 return
             from access import access_allowed
             if db_user and not await access_allowed(session, db_user):
@@ -108,8 +108,8 @@ async def ban_check_callback_middleware(handler, event: CallbackQuery, data: dic
             if db_user and db_user.is_banned:
                 await event.answer("⛔ Ваш аккаунт заблокирован администратором.", show_alert=True)
                 if isinstance(event.message, Message) and event.message.chat.type == "private":
-                    await event.message.answer("Если вы считаете блокировку ошибкой, свяжитесь с администратором.",
-                                               reply_markup=get_admin_contact_keyboard())
+                    await event.message.answer("Если вы считаете блокировку ошибкой, свяжитесь с создателем.",
+                                               reply_markup=get_creator_contact_keyboard())
                 return
             from access import access_allowed
             if db_user and not await access_allowed(session, db_user):
@@ -164,7 +164,7 @@ def get_main_inline_keyboard() -> InlineKeyboardMarkup:
                 ),
                 InlineKeyboardButton(
                     text="💬 Написать разработчику",
-                    url="https://t.me/untiltedvoid"
+                    url="https://t.me/untitledvoid"
                 )
             ]
         ]
@@ -286,7 +286,7 @@ async def cmd_help(message: Message):
         "/bells — Расписание звонков гимназии\n"
         "/suggest — Предложить новость в ленту\n"
         "/help — Справка по командам\n\n"
-        "💬 <b>Связь с разработчиком:</b> @untiltedvoid (сообщить о баге или предложить идею)\n"
+        "💬 <b>Связь с разработчиком:</b> @untitledvoid (сообщить о баге или предложить идею)\n"
     )
     if is_admin_user(message.from_user.id, message.from_user.username):
         help_text += (
