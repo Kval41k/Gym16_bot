@@ -83,3 +83,32 @@ html[data-theme-mode=auto] .bg-zinc-100, html[data-theme-mode=auto].dark .dark\:
 .g-date-row-fields { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; margin-bottom:12px; }
 .g-selectable { user-select:text; -webkit-user-select:text; }
 button:focus-visible, summary:focus-visible { outline:2px solid var(--g-blue); outline-offset:3px; }
+/* Notification timing control uses three touch-friendly positions, not a native select. */
+.g-reminder-control { padding:16px; background:var(--g-soft); border:1px solid var(--g-line); border-radius:18px; }
+.g-reminder-control output { color:var(--g-blue); font-size:15px; font-weight:700; font-variant-numeric:tabular-nums; }
+.g-reminder-range { --reminder-fill:50%; appearance:none; -webkit-appearance:none; width:100%; height:7px; margin:24px 0 12px; border-radius:20px; background:linear-gradient(to right,var(--g-blue) var(--reminder-fill),var(--g-line) var(--reminder-fill)); cursor:pointer; }
+.g-reminder-range::-webkit-slider-thumb { appearance:none; -webkit-appearance:none; width:27px; height:27px; border-radius:50%; background:white; border:5px solid var(--g-blue); box-shadow:0 2px 8px #0003; }
+.g-reminder-range::-moz-range-thumb { width:19px; height:19px; border-radius:50%; background:white; border:5px solid var(--g-blue); box-shadow:0 2px 8px #0003; }
+.g-reminder-ticks { display:flex; justify-content:space-between; }
+.g-reminder-ticks button { min-height:36px; min-width:54px; padding:5px 8px; border-radius:10px; color:var(--g-muted); font-size:12px; }
+.g-reminder-ticks button[aria-pressed=true] { color:var(--g-blue); background:color-mix(in srgb,var(--g-blue) 10%,transparent); font-weight:700; }
+.school-groups { margin-bottom:10px; }
+.school-ege-overview > * + * { margin-top:10px; }
+.school-theory summary { padding:10px 0; font-size:14px; font-weight:650; cursor:pointer; color:var(--g-blue); }
+.school-theory p, .school-theory div { font-size:14px; line-height:1.65; }
+.school-practice-button { margin-top:12px; min-height:44px; }
+.school-practice-dialog { max-width:640px; max-height:88dvh; overflow:auto; }
+.school-practice-dialog > * + * { margin-top:14px; }
+.school-question { white-space:pre-wrap; font-size:17px; line-height:1.65; user-select:text; -webkit-user-select:text; }
+.school-answer-options label { display:flex; align-items:center; gap:12px; padding:13px; margin-top:8px; border:1px solid var(--g-line); border-radius:14px; min-height:48px; font-size:15px; cursor:pointer; }
+.school-answer-options label:has(input:checked) { border-color:var(--g-blue); background:color-mix(in srgb,var(--g-blue) 10%,transparent); }
+.school-answer-options input { accent-color:var(--g-blue); width:18px; height:18px; flex:none; }
+.school-feedback { padding:16px; border:1px solid var(--g-line); border-radius:16px; background:var(--g-soft); }
+.school-feedback.correct { border-color:#34a96d; }
+.school-feedback.incorrect { border-color:#db9241; }
+.school-feedback p { margin-top:10px; font-size:14px; line-height:1.65; white-space:pre-wrap; }
+.school-practice-submit { min-height:44px; width:100%; }
+.school-practice-dialog > .g-row:first-child { flex-wrap:nowrap; align-items:flex-start; }
+.school-practice-dialog > .g-row:first-child h3 { flex:1; min-width:0; }
+.school-practice-dialog > .g-row:first-child button { flex:none; }
+.school-groups[hidden] { display:none; }

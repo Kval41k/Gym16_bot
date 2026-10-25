@@ -16,15 +16,12 @@ if (getTyumenDate().getDay()===0) community.week.setDate(community.week.getDate(
 function communityScheduleDate(day) {const value=new Date(community.week);value.setDate(value.getDate()+day);return communityISO(value);}
 function communityDateLabel() {
   const node=document.getElementById('tools-schedule-date');
-  const picker=document.getElementById('community-day-picker');if(picker)picker.value=communityScheduleDate(state.selectedDay);
-  if(node) node.textContent=(toolsState.mode==='week'?'Неделя с '+community.week.toLocaleDateString('ru-RU'):communityParseDate(communityScheduleDate(state.selectedDay)).toLocaleDateString('ru-RU',{weekday:'long',day:'numeric',month:'long'}))+' · '+(state.viewingClass||state.user.class_name||'11А');
+  if(node)node.textContent=(toolsState.mode==='week'?'Учебная неделя':communityParseDate(communityScheduleDate(state.selectedDay)).toLocaleDateString('ru-RU',{weekday:'long',day:'numeric',month:'long'}))+' · '+(state.viewingClass||state.user.class_name||'11А');
 }
-document.getElementById('tools-schedule-date').insertAdjacentHTML('afterend',`<div class="g-date-navigation"><button class="g-btn" onclick="communityWeek(-1)" aria-label="Предыдущая неделя">‹</button><label class="g-muted">Дата<input class="g-input" type="date" id="community-day-picker" onchange="communityPickDay(this.value)"></label><button class="g-btn" onclick="communityWeek(1)" aria-label="Следующая неделя">›</button><button class="g-btn" onclick="communityTomorrow()">Завтра</button></div>`);
-document.getElementById('community-day-picker').value=communityScheduleDate(state.selectedDay);
-function communityWeek(delta) {community.week.setDate(community.week.getDate()+delta*7);document.getElementById('community-day-picker').value=communityScheduleDate(state.selectedDay);loadSchedule();}
-function communityPickDay(value) {if(!/^\d{4}-\d{2}-\d{2}$/.test(value))return;const date=communityParseDate(value);community.week=communityMonday(date);toolsState.mode='day';if(date.getDay()===0){state.selectedDay=6;loadSchedule();}else selectDay(date.getDay()-1);}
-function communityTomorrow() {const date=getTyumenDate();date.setDate(date.getDate()+1);const value=communityISO(date);document.getElementById('community-day-picker').value=value;communityPickDay(value);}
-toolsToday=function(){community.week=communityMonday(getTyumenDate());const day=getTyumenDate().getDay();state.selectedDay=day===0?6:day-1;toolsState.mode='day';document.getElementById('community-day-picker').value=communityToday();loadSchedule();};
+// Students browse weekdays, today and tomorrow; arbitrary date selection belongs to administration.
+document.getElementById('tools-schedule-date').previousElementSibling.insertAdjacentHTML('beforeend',`<button class="g-btn" onclick="communityTomorrow()">Завтра</button>`);
+function communityTomorrow(){const day=getTyumenDate();day.setDate(day.getDate()+1);community.week=communityMonday(day);toolsState.mode='day';state.selectedDay=day.getDay()===0?6:day.getDay()-1;if(state.selectedDay<6)selectDay(state.selectedDay);else loadSchedule();}
+toolsToday=function(){community.week=communityMonday(getTyumenDate());const day=getTyumenDate().getDay();state.selectedDay=day===0?6:day-1;toolsState.mode='day';if(state.selectedDay<6)selectDay(state.selectedDay);else loadSchedule();};
 
 document.getElementById('live-status-card').insertAdjacentHTML('afterend',`<section class="g-card g-next-card" id="community-next-card" hidden aria-live="polite"></section>`);
 async function communityNextLesson() {

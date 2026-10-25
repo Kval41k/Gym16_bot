@@ -81,7 +81,9 @@ async def init_db() -> None:
         for name in ("start_time", "end_time"):
             if name not in {column["name"] for column in lesson_columns}:
                 await conn.execute(text(f"ALTER TABLE lessons ADD COLUMN {name} VARCHAR(5)"))
-        for table, column, definition in (("users", "role", "VARCHAR(20) DEFAULT 'student' NOT NULL"),
+        for table, column, definition in (("ege_materials", "source_key", "VARCHAR(100)"),
+                                          ("ege_materials", "is_archived", "BOOLEAN DEFAULT FALSE NOT NULL"),
+                                          ("users", "role", "VARCHAR(20) DEFAULT 'student' NOT NULL"),
                                           ("users", "is_member", "BOOLEAN DEFAULT TRUE NOT NULL"),
                                           ("news_posts", "is_pinned", "BOOLEAN DEFAULT FALSE NOT NULL"),
                                           ("comments", "updated_at", "TIMESTAMP"),
@@ -117,7 +119,7 @@ async def init_db() -> None:
                 ))
 
         # 4. Seed EGE subjects (Russian 27 tasks, Math 20 tasks).
-        # Materials list is left empty initially per user request.
+        # Reviewed study notes are applied once by learning.apply_learning_catalog after base initialization.
         from models import EgeSubject
         subj_res = await session.execute(select(EgeSubject))
         existing_subjects = {s.code: s for s in subj_res.scalars().all()}
@@ -128,8 +130,9 @@ async def init_db() -> None:
             existing_subjects["russian"].tasks_count = 27
 
         if "math" not in existing_subjects:
-            session.add(EgeSubject(code="math", name="Математика", icon="📐", tasks_count=20))
+            session.add(EgeSubject(code="math", name="Профильная математика", icon="📐", tasks_count=20))
         else:
             existing_subjects["math"].tasks_count = 20
+            existing_subjects["math"].name = "Профильная математика"
 
         await session.commit()

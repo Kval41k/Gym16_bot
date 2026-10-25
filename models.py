@@ -252,6 +252,8 @@ class EgeMaterial(Base):
         String(50), ForeignKey("ege_subjects.code", ondelete="CASCADE"), nullable=False, index=True
     )
     task_number: Mapped[int] = mapped_column(Integer, nullable=False, index=True)  # 1..27
+    source_key: Mapped[Optional[str]] = mapped_column(String(100), unique=True, nullable=True)
+    is_archived: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     title: Mapped[str] = mapped_column(String(255), nullable=False)
     theory: Mapped[str] = mapped_column(Text, nullable=False)
     image_url: Mapped[Optional[str]] = mapped_column(String(512), nullable=True)
@@ -366,3 +368,25 @@ class NewsDraft(Base):
     content: Mapped[str] = mapped_column(Text, default="", nullable=False)
     is_anonymous: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     revision: Mapped[str] = mapped_column(String(32), nullable=False)
+
+
+class PracticeProgress(Base):
+    __tablename__ = 'practice_progress'
+    user_id: Mapped[int] = mapped_column(BigInteger, ForeignKey('users.id', ondelete='CASCADE'), primary_key=True)
+    question_id: Mapped[str] = mapped_column(String(80), primary_key=True)
+    attempts: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    mistakes: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    mastered: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    next_review_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+
+class PracticeSession(Base):
+    __tablename__ = 'practice_sessions'
+    id: Mapped[str] = mapped_column(String(32), primary_key=True)
+    user_id: Mapped[int] = mapped_column(BigInteger, ForeignKey('users.id', ondelete='CASCADE'), nullable=False, index=True)
+    question_id: Mapped[str] = mapped_column(String(80), nullable=False)
+    answer: Mapped[Optional[str]] = mapped_column(String(1000), nullable=True)
+    correct: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    answered_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)

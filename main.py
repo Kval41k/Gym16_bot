@@ -100,8 +100,11 @@ async def lifespan(app: FastAPI):
     
     # Initialize DB schema and base seeds
     await init_db()
-    from data_updates import apply_calendar_schedule
+    from data_updates import apply_calendar_schedule, apply_photo_timetables
     await apply_calendar_schedule()
+    await apply_photo_timetables()
+    from learning import apply_learning_catalog
+    await apply_learning_catalog()
     from features import maintenance_loop
     worker = asyncio.create_task(maintenance_loop())
     try:
@@ -1738,7 +1741,7 @@ async def get_ege_materials(
 ):
     """Returns cheat-sheets and theory materials filtered by subject and task number."""
     await require_active_user(require_telegram_user(x_telegram_init_data), db)
-    query = select(EgeMaterial).where(EgeMaterial.subject_code == subject_code)
+    query = select(EgeMaterial).where(EgeMaterial.subject_code == subject_code, EgeMaterial.is_archived.is_(False))
     if task_number is not None and task_number > 0:
         query = query.where(EgeMaterial.task_number == task_number)
     query = query.order_by(EgeMaterial.task_number.asc(), EgeMaterial.created_at.desc())
@@ -2319,3 +2322,6 @@ install_features(app, require_telegram_user, check_admin_permission_or_raise, ca
 
 from community import install_community
 install_community(app, require_telegram_user, check_admin_permission_or_raise, check_editor_permission_or_raise, cache_clear_prefix, enforce_rate_limit)
+
+from learning import install_learning
+install_learning(app, require_telegram_user, require_active_user, check_editor_permission_or_raise, enforce_rate_limit)

@@ -86,7 +86,7 @@ loadSchedule = async function(quiet = false) {
       const params = new URLSearchParams({class_name: targetClass, day_of_week: Math.min(day,5), only_my_profile: profile !== 'all', profile_name: profile === 'all' ? '' : profile});
       const date = window.communityScheduleDate?.(day);
       if (date) params.set('date', date);
-      if (targetClass === state.user?.class_name && state.user?.subgroup) params.set('subgroup', state.user.subgroup);
+      if (window.schoolViewingGroup?.()) params.set('subgroup', window.schoolViewingGroup());
       return toolsRequest('/api/schedule/lessons?' + params);
     }));
     if (requestId !== toolsState.scheduleRequest) return;
@@ -126,7 +126,9 @@ document.getElementById('edit-profile-btn').insertAdjacentHTML('afterend', `
   <section class="g-card g-stack"><h3 class="g-title">Уведомления в Telegram</h3>
     <p class="g-muted">Включи нужные уведомления и открой чат бота командой /start. Время — Тюмень (UTC+5).</p>
     <label class="g-row"><input type="checkbox" id="tools-reminders"> Перед началом урока</label>
-    <select class="g-input" id="tools-reminder-minutes"><option value="5">За 5 минут</option><option value="10" selected>За 10 минут</option><option value="15">За 15 минут</option></select>
+    <div class="g-reminder-control"><div class="g-row g-between"><label for="tools-reminder-minutes" class="g-muted">Напомнить до начала</label><output id="school-reminder-value" for="tools-reminder-minutes">За 10 минут</output></div>
+    <input id="tools-reminder-minutes" class="g-reminder-range" type="range" min="5" max="15" step="5" value="10" aria-label="За сколько минут до урока напоминать" aria-valuetext="За 10 минут" oninput="schoolReminderPreview()">
+    <div class="g-reminder-ticks">${[5,10,15].map(n=>`<button type="button" data-reminder-minutes="${n}" onclick="schoolChooseReminder(${n})">${n} мин</button>`).join('')}</div></div>
     <label class="g-row"><input type="checkbox" id="tools-changes"> При изменении расписания моего класса</label>
     <button class="g-btn primary" data-busy="prefs" onclick="toolsSavePreferences()">Сохранить настройки</button>
     <div class="g-muted">Доставка напоминаний зависит от доступности сервера. На бесплатном хостинге во время сна сервиса они не отправляются.</div>
@@ -140,6 +142,7 @@ async function loadPersonalTools() {
     document.getElementById('tools-reminders').checked = prefs.lesson_reminders;
     document.getElementById('tools-changes').checked = prefs.schedule_changes;
     document.getElementById('tools-reminder-minutes').value = prefs.reminder_minutes;
+    window.schoolReminderPreview?.();
     toolsRenderEge();
   } catch (error) { console.warn('Personal tools unavailable:', error.message); }
 }

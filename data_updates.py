@@ -65,3 +65,52 @@ async def apply_calendar_schedule():
             return True
     finally:
         audit_actor.reset(token)
+
+
+async def _apply_photo_snapshot(snapshot, align_clock=False):
+    """Apply one reviewed source without resetting unrelated class snapshots."""
+    revision=snapshot['revision']
+    token=audit_actor.set({'id':0,'first_name':'Обновление расписания по фотографиям','source':'schedule'})
+    try:
+        async with async_session() as db:
+            if engine.dialect.name=='sqlite':await db.execute(text('BEGIN IMMEDIATE'))
+            else:await db.execute(text('SELECT pg_advisory_xact_lock(110011)'))
+            if await db.get(AppliedDataUpdate,revision):return False
+            classes={row['class_name'] for row in snapshot['rows']}
+            affected=classes|({'11А'} if align_clock else set())
+            current=(await db.scalars(select(Lesson).where(Lesson.class_name.in_(affected)))).all()
+            settings.BACKUP_DIR.mkdir(parents=True,exist_ok=True)
+            previous=[{column.key:getattr(row,column.key) for column in Lesson.__table__.columns} for row in current]
+            await asyncio.to_thread((settings.BACKUP_DIR/f'schedule-before-{revision}.json').write_text,json.dumps(previous,ensure_ascii=False,indent=2),encoding='utf-8')
+            # The old philology Monday counted the form period as lesson 1; match the reviewed 0–7 clock.
+            philology=[row for row in current if row.class_name=='11А' and row.profile_name=='Филологический']
+            legacy_monday=any(row.day_of_week==0 and row.lesson_number==1 and row.subject=='Разговоры о важном' for row in philology) and not any(row.day_of_week==0 and row.lesson_number==0 for row in philology)
+            shared_times={(row['day_of_week'],row['lesson_number']):(row['start_time'],row['end_time']) for row in json.loads(SNAPSHOT.read_text())['rows']}
+            from timetable import day_bells
+            for row in current:
+                if row.class_name in classes:await db.delete(row)
+            for row in current:
+                if row.class_name=='11А' and row.teacher_name.replace(' ','') in {'БурейкевичЮ.Ю.','БураковичЮ.Ю.','БураковаЮ.Ю.','БуракевичЮ.Ю.'}:
+                    row.teacher_name='Буракевич Ю.Ю.'
+            for row in philology:
+                if legacy_monday and row.day_of_week==0:row.lesson_number-=1
+                times=shared_times.get((row.day_of_week,row.lesson_number))
+                if times is None:times=(await day_bells(db,row.day_of_week)).get(row.lesson_number)
+                if times:row.start_time,row.end_time=times
+            for row in snapshot['rows']:db.add(Lesson(**row))
+            affected_users=select(User.id).where(User.class_name.in_(affected))
+            stale=(await db.scalars(select(Notification).where(Notification.status=='pending',Notification.dedup_key.like('lesson:%'),Notification.user_id.in_(affected_users)))).all()
+            for notice in stale:notice.status='cancelled'
+            db.add(AppliedDataUpdate(revision=revision))
+            await db.commit()
+            return True
+    finally:audit_actor.reset(token)
+
+
+async def apply_photo_timetables():
+    directory=Path(__file__).parent/'data'
+    changed=False
+    for filename,align_clock in [('photo_timetables_20261025.json',True),('11b_reviewed_20261025.json',False)]:
+        snapshot=json.loads((directory/filename).read_text())
+        changed=await _apply_photo_snapshot(snapshot,align_clock) or changed
+    return changed

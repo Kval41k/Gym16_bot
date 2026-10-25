@@ -557,8 +557,11 @@ async def seed():
                     admin_user.is_admin = True
 
         await session.commit()
-        from data_updates import apply_calendar_schedule
+        from data_updates import apply_calendar_schedule, apply_photo_timetables
         await apply_calendar_schedule()
+        await apply_photo_timetables()
+        from learning import apply_learning_catalog
+        await apply_learning_catalog()
         logger.info("✅ Database successfully populated with synchronized 11А schedule, bells, and profiles!")
 
 if __name__ == "__main__":
