@@ -2,11 +2,11 @@
 <html lang="ru" class="h-full">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
-  <link rel="stylesheet" href="/static/features.css?v=3">
+  <link rel="stylesheet" href="/static/features.css?v=4">
   <title>Гимназия №16 — 11 Классы</title>
 
   <!-- Telegram Web App Script -->
@@ -14,7 +14,7 @@
   <script src="/static/theme.js?v=3"></script>
   <script src="/static/media.js?v=3"></script>
 
-  <link rel="stylesheet" href="/static/ui.css?v=3">
+  <link rel="stylesheet" href="/static/ui.css?v=4">
 
   <style>
     /* Apple Human Interface Typography & Smooth Scroll */
@@ -864,9 +864,12 @@
       return Boolean(state.user.is_admin);
     }
 
+    function checkCanEdit() { return checkIsAdmin() || state.user?.role === "editor"; }
+
     function updateAdminNavigation() {
       const navTabAdmin = document.getElementById('nav-tab-admin');
-      if (navTabAdmin && checkIsAdmin()) navTabAdmin.classList.remove('hidden');
+      if (navTabAdmin) navTabAdmin.classList.toggle('hidden', !checkCanEdit());
+      window.communityRoleUI?.();
     }
 
     const state = {
@@ -1103,7 +1106,7 @@
           checkPendingNewsCount().catch(() => {});
         } else if (tabId === 'tab-ege') {
           if (appTitleEl) appTitleEl.textContent = 'ЕГЭ';
-          const isAdmin = checkIsAdmin();
+          const isAdmin = checkCanEdit();
           if (isAdmin) {
             if (headerBtn) {
               headerBtn.classList.remove('hidden');
@@ -1124,7 +1127,7 @@
           if (appTitleEl) appTitleEl.textContent = 'Админ панель';
           if (headerBtn) headerBtn.classList.add('hidden');
           loadAdminPendingNews().catch(() => {});
-          loadAdminUsers().catch(() => {});
+          if (checkIsAdmin()) loadAdminUsers().catch(() => {});
         }
       } catch (err) {
         console.error('switchTab error:', err);
@@ -1178,6 +1181,7 @@
                 return;
               }
 
+              if (window.communityAccessGate?.(syncedUser)) return;
               updateAdminNavigation();
               window.loadPersonalTools?.();
               loadNews().catch(() => {});
@@ -1816,7 +1820,7 @@
         ? `<span class="px-1.5 py-0.5 rounded-md bg-blue-50 text-ios-blue dark:bg-blue-950 dark:text-blue-300 text-[10px] font-bold border border-blue-200/50 dark:border-blue-900/50">${escapeHtml(post.author_class)}</span>`
         : "";
 
-      const isAdmin = checkIsAdmin();
+      const isAdmin = checkCanEdit();
       const adminActions = isAdmin ? `
         <div class="flex items-center space-x-1.5 ml-auto">
           <button onclick="event.stopPropagation(); handleDeleteNewsPost(${post.id})" data-post-id="${post.id}" class="delete-news-btn px-2.5 py-1 rounded-lg bg-red-50 hover:bg-red-100 dark:bg-red-950/60 dark:hover:bg-red-900/80 text-red-600 dark:text-red-400 text-xs font-medium flex items-center space-x-1 active-press cursor-pointer">
@@ -1880,6 +1884,7 @@
     // Propose News Modal Handling
     // --------------------------------------------------------
     function openProposeNewsModal() {
+      window.communityDraftOpen?.();
       const modal = document.getElementById("propose-news-modal");
       if (modal) {
         modal.classList.remove("hidden");
@@ -1893,7 +1898,8 @@
       haptic("selection");
     }
 
-    function closeProposeNewsModal() {
+    async function closeProposeNewsModal() {
+      if (window.communityDraftClose && !await window.communityDraftClose()) return;
       const modal = document.getElementById("propose-news-modal");
       if (modal) {
         modal.classList.add("hidden");
@@ -2005,9 +2011,11 @@
       if (submitBtn) {
         submitBtn.disabled = true;
         submitBtn.textContent = "Отправка...";
+        [titleInput, contentInput, document.getElementById("propose-anonymous")].forEach(el => { if (el) el.disabled = true; });
       }
 
       try {
+        await window.communityDraftFlush?.();
         let imageUrl = document.getElementById("propose-image-url-input")?.value.trim() || null;
         if (window.selectedImageFile) {
           try {
@@ -2016,7 +2024,7 @@
               imageUrl = uploadRes.url;
             }
           } catch (uploadErr) {
-            console.warn("Photo upload failed, proceeding without photo:", uploadErr);
+            throw new Error("Фото не загрузилось. Попробуйте ещё раз: " + uploadErr.message);
           }
         }
 
@@ -2039,7 +2047,8 @@
 
         if (postRes) {
           haptic("success");
-          closeProposeNewsModal();
+          await window.communityDraftSent?.();
+          await closeProposeNewsModal();
           alert("Спасибо! Твоя новость успешно отправлена на модерацию администратору.");
           await checkPendingNewsCount();
           await loadNews();
@@ -2051,6 +2060,7 @@
         if (submitBtn) {
           submitBtn.disabled = false;
           submitBtn.textContent = "Отправить на модерацию";
+          [titleInput, contentInput, document.getElementById("propose-anonymous")].forEach(el => { if (el) el.disabled = false; });
         }
       }
     }
@@ -2265,7 +2275,7 @@
     const closeModerationBtn = document.getElementById("close-moderation-modal-btn");
 
     async function checkPendingNewsCount() {
-      if (!checkIsAdmin()) return;
+      if (!checkCanEdit()) return;
       try {
         const uid = state.user?.id || 0;
         const pending = await API.get(`/api/admin/news/pending?admin_id=${uid}`);
@@ -2364,7 +2374,7 @@
     }
 
     async function loadAdminPendingNews() {
-      if (!checkIsAdmin()) return;
+      if (!checkCanEdit()) return;
       const container = document.getElementById("admin-pending-list");
       if (!container) return;
       container.innerHTML = `
@@ -2549,6 +2559,7 @@
                 <div class="text-xs font-bold text-zinc-900 dark:text-white flex items-center gap-1.5 flex-wrap">
                   <span>${nameSafe}</span>
                   ${roleBadge}
+                  ${u.role === "editor" ? '<span class="g-badge">Редактор</span>' : ""}
                   ${statusBadge}
                 </div>
                 <div class="flex items-center gap-2 mt-0.5 text-[11px] text-ios-secondaryText flex-wrap">
@@ -2556,7 +2567,7 @@
                   <span>• ID: <code>${u.id}</code></span>
                 </div>
               </div>
-              <div>${actionBtn}</div>
+              <div>${actionBtn}${!isSelfOrAdmin ? `<button class="g-btn" onclick="communitySetRole(${u.id}, '${u.role === "editor" ? "student" : "editor"}')">${u.role === "editor" ? "Снять роль редактора" : "Назначить редактором"}</button>` : ""}</div>
             </div>
 
             <div class="flex items-center justify-between text-xs pt-1 border-t border-zinc-200/40 dark:border-zinc-800/60">
@@ -2789,7 +2800,7 @@
 
       const olderButton = hasMore ? '<button type="button" class="load-older-comments w-full py-2 text-xs font-semibold text-ios-blue">Показать предыдущие комментарии</button>' : '';
       container.innerHTML = olderButton + comments.map(c => {
-        const canDelete = state.user && (checkIsAdmin() || c.user_id === state.user.id);
+        const canDelete = state.user && (checkCanEdit() || c.user_id === state.user.id);
         const deleteBtn = canDelete ? `
           <button data-comment-id="${c.id}" class="delete-comment-btn p-1 text-zinc-400 hover:text-red-500 rounded-md active-press" title="Удалить комментарий">
             <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
@@ -3051,7 +3062,7 @@
       const sub = state.ege.activeSubject || 'russian';
       const topics = FIPI_TOPICS[sub] || {};
       const maxTasks = sub === 'russian' ? 27 : 20;
-      const isAdmin = checkIsAdmin();
+      const isAdmin = checkCanEdit();
 
       // Case A: Specific task filter is selected (e.g. №4)
       if (state.ege.selectedTask !== null) {
@@ -3331,6 +3342,7 @@
     
 </script>
 
-<script src="/static/features.js?v=3"></script>
+<script src="/static/features.js?v=4"></script>
+<script src="/static/community.js?v=4"></script>
 </body>
 </html>

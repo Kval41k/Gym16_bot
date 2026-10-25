@@ -32,7 +32,9 @@ from sqlalchemy.orm import selectinload
 from config import DEFAULT_CLASSES, CLASS_PROFILES_MAP, ALL_PROFILES, settings
 from security import BodyLimitMiddleware, clean_image, install_log_redaction, safe_csv_writer
 from database import async_session, get_db, init_db
-from timetable import day_bells, lesson_times, lesson_timeline
+from timetable import day_bells, lesson_times, lesson_timeline, effective_lessons
+from datetime import date as CalendarDate
+from access import access_allowed, require_school_access
 from models import BellSchedule, Comment, EgeMaterial, EgeSubject, Lesson, MediaUpload, NewsPost, Profile, Reaction, SchoolClass, User
 from schemas import (
     BellItem, CommentCreateRequest, CommentEditRequest, CommentResponse, DayScheduleResponse,
@@ -241,6 +243,7 @@ async def require_active_user(identity, db):
         raise HTTPException(409, "Сначала заполните профиль Telegram.")
     if user.is_banned:
         raise HTTPException(403, "Ваш аккаунт заблокирован.")
+    await require_school_access(db, user)
     return user
 
 
@@ -321,6 +324,18 @@ async def check_admin_permission_or_raise(
         status_code=status.HTTP_403_FORBIDDEN,
         detail="⛔ Доступ запрещен. Требуется подтвержденная авторизация администратора."
     )
+
+async def check_editor_permission_or_raise(admin_id=None, ts=None, sign=None, x_telegram_init_data=None, db=None):
+    if x_telegram_init_data:
+        identity = require_telegram_user(x_telegram_init_data)
+        user = await require_active_user(identity, db)
+        if user.role == "editor":
+            if admin_id is not None and admin_id != user.id:
+                raise HTTPException(403, "ID не совпадает с Telegram-пользователем")
+            return user.id
+    return await check_admin_permission_or_raise(admin_id=admin_id, ts=ts, sign=sign,
+        x_telegram_init_data=x_telegram_init_data, db=db)
+
 
 async def check_is_admin(admin_id: int, db: AsyncSession) -> bool:
     """Checks configured admin identity; persisted role flags are not authority."""
@@ -547,7 +562,7 @@ async def sync_user(
     if payload.profile_name and (not effective_class or payload.profile_name not in CLASS_PROFILES_MAP.get(effective_class, [])):
         raise HTTPException(status_code=422, detail="Профиль не соответствует выбранному классу.")
 
-    is_admin = (
+    is_admin = bool(
         payload.id in settings.admin_ids 
         or (telegram_username and telegram_username.lower().lstrip("@") in settings.admin_usernames)
     )
@@ -561,7 +576,7 @@ async def sync_user(
             photo_url=telegram_user.get("photo_url"),
             class_name=payload.class_name or ("11А" if is_admin else None),
             profile_name=payload.profile_name or ("Соц-гум" if is_admin else None),
-            is_admin=is_admin
+            is_admin=bool(is_admin)
         )
         db.add(user)
     else:
@@ -598,6 +613,8 @@ async def sync_user(
         subgroup=user.subgroup,
         is_admin=is_admin,
         is_banned=user.is_banned,
+        role="admin" if user.is_admin else user.role,
+        access_allowed=await access_allowed(db, user),
         is_onboarded=is_onboarded
     )
 
@@ -627,6 +644,8 @@ async def get_user_profile(
         subgroup=user.subgroup,
         is_admin=configured_admin,
         is_banned=user.is_banned,
+        role="admin" if user.is_admin else user.role,
+        access_allowed=await access_allowed(db, user),
         is_onboarded=is_onboarded
     )
 
@@ -685,6 +704,8 @@ async def update_user_profile(
         subgroup=user.subgroup,
         is_admin=(user.id in settings.admin_ids or bool(user.username and user.username.lower().lstrip("@") in settings.admin_usernames)),
         is_banned=user.is_banned,
+        role="admin" if user.is_admin else user.role,
+        access_allowed=await access_allowed(db, user),
         is_onboarded=True
     )
 
@@ -759,11 +780,13 @@ async def get_live_status(
 ):
     now = datetime.now(TYUMEN_TZ)
     base = {"current_time": now.strftime("%H:%M")}
-    if class_name and not await db.scalar(select(Lesson.id).where(Lesson.class_name == class_name).limit(1)):
+    from models import DatedSchedule
+    has_dated_schedule = bool(class_name and await db.scalar(select(DatedSchedule.id).where(DatedSchedule.class_name == class_name, DatedSchedule.lesson_date == now.date())))
+    if class_name and not has_dated_schedule and not await db.scalar(select(Lesson.id).where(Lesson.class_name == class_name).limit(1)):
         return LiveStatusResponse(**base, state="no_schedule", message=f"Расписание для {class_name} ещё не загружено")
     if now.weekday() == 6:
         return LiveStatusResponse(**base, state="weekend", message="Сегодня воскресенье — уроков нет")
-    timeline = await lesson_timeline(db, now.weekday(), class_name, profile_name, subgroup)
+    timeline = await lesson_timeline(db, now.weekday(), class_name, profile_name, subgroup, now.date())
     if not timeline:
         return LiveStatusResponse(**base, state="after_school", message="Сегодня в расписании нет занятий")
     current = now.strftime("%H:%M")
@@ -800,6 +823,7 @@ async def get_lessons(
     only_my_profile: bool = Query(False, description="Filter for student's profile"),
     profile_name: Optional[str] = Query(None),
     subgroup: Optional[int] = Query(None),
+    date: Optional[CalendarDate] = Query(None),
     db: AsyncSession = Depends(get_db)
 ):
     """
@@ -807,24 +831,22 @@ async def get_lessons(
     If only_my_profile=True, filters to common lessons + matching profile.
     If only_my_profile=False, returns all class lessons grouped into slots with split indicators.
     """
-    cache_key = f"sched:{class_name}:{day_of_week}:{only_my_profile}:{profile_name}:{subgroup}"
+    if date is not None:
+        day_of_week = date.weekday()
+    cache_key = f"sched:{date}:{class_name}:{day_of_week}:{only_my_profile}:{profile_name}:{subgroup}"
     cached = cache_get(cache_key, 180.0)
     if cached:
         return cached
 
     times = await day_bells(db, day_of_week)
 
-    query = select(Lesson).where(
-        Lesson.class_name == class_name,
-        Lesson.day_of_week == day_of_week
-    ).order_by(Lesson.lesson_number, Lesson.profile_name)
-
-    res = await db.execute(query)
-    raw_lessons = res.scalars().all()
+    raw_lessons = await effective_lessons(db, day_of_week, class_name, date)
     class_schedule_id = await db.scalar(
         select(Lesson.id).where(Lesson.class_name == class_name).limit(1)
     )
-    schedule_loaded = class_schedule_id is not None
+    from models import DatedSchedule
+    override = await db.scalar(select(DatedSchedule).where(DatedSchedule.class_name == class_name, DatedSchedule.lesson_date == date)) if date else None
+    schedule_loaded = class_schedule_id is not None or override is not None
 
     # Apply profile filter if requested
     filtered_lessons: List[Lesson] = []
@@ -879,7 +901,7 @@ async def get_lessons(
         day_name=DAY_NAMES[day_of_week],
         class_name=class_name,
         schedule_loaded=schedule_loaded,
-        slots=slots
+        slots=slots, date=date.isoformat() if date else None, is_override=override is not None, note=override.note if override else ""
     )
     cache_set(cache_key, resp)
     return resp
@@ -890,6 +912,7 @@ async def get_lessons(
 @app.get("/api/news", response_model=List[NewsResponse])
 async def get_news(
     user_id: Optional[str] = Query(None),
+    q: str = Query("", max_length=120),
     limit: int = Query(20, ge=1, le=100),
     offset: int = Query(0, ge=0),
     x_telegram_init_data: Optional[str] = Header(None, alias="X-Telegram-Init-Data"),
@@ -914,10 +937,14 @@ async def get_news(
         select(NewsPost)
         .where(NewsPost.status == "approved")
         .options(selectinload(NewsPost.author))
-        .order_by(NewsPost.created_at.desc())
+        .order_by(NewsPost.is_pinned.desc(), NewsPost.created_at.desc(), NewsPost.id.desc())
         .offset(offset)
         .limit(limit)
     )
+    if q.strip():
+        from database import engine
+        fold = func.gym16_casefold if engine.dialect.name == "sqlite" else func.lower
+        query = query.where(or_(fold(NewsPost.title).contains(q.strip().casefold(), autoescape=True), fold(NewsPost.content).contains(q.strip().casefold(), autoescape=True)))
     res = await db.execute(query)
     posts = res.scalars().all()
     post_ids = [post.id for post in posts]
@@ -993,7 +1020,7 @@ async def get_news(
             author_photo = p.author.photo_url
 
         response.append(NewsResponse(
-            id=p.id,
+            id=p.id, is_pinned=p.is_pinned,
             title=p.title,
             content=p.content,
             image_url=p.image_url,
@@ -1029,6 +1056,8 @@ async def suggest_news(
     if not user:
         raise HTTPException(status_code=409, detail="Сначала заполните профиль Telegram.")
 
+    if user:
+        await require_school_access(db, user)
     if user.is_banned:
         raise HTTPException(status_code=403, detail="Ваш аккаунт заблокирован администратором.")
 
@@ -1106,6 +1135,8 @@ async def toggle_reaction(
         raise HTTPException(status_code=404, detail="News post not found or not approved")
 
     user = await db.get(User, payload.user_id)
+    if user:
+        await require_school_access(db, user)
     if user and user.is_banned:
         raise HTTPException(status_code=403, detail="Ваш аккаунт заблокирован администратором.")
 
@@ -1200,6 +1231,8 @@ async def edit_comment(comment_id: int, payload: CommentEditRequest,
     user = await db.get(User, user_id)
     if not user or user.is_banned:
         raise HTTPException(403, "Редактирование недоступно")
+    if user:
+        await require_school_access(db, user)
     comment = await db.scalar(select(Comment).where(Comment.id == comment_id).with_for_update())
     if not comment:
         raise HTTPException(404, "Комментарий не найден")
@@ -1278,6 +1311,8 @@ async def add_comment(
         raise HTTPException(status_code=404, detail="News post not found")
 
     user = await db.get(User, payload.user_id)
+    if user:
+        await require_school_access(db, user)
     if user and user.is_banned:
         raise HTTPException(status_code=403, detail="Ваш аккаунт заблокирован администратором.")
 
@@ -1309,7 +1344,7 @@ async def get_pending_news(
     x_telegram_init_data: Optional[str] = Header(None, alias="X-Telegram-Init-Data"),
     db: AsyncSession = Depends(get_db)
 ):
-    await check_admin_permission_or_raise(
+    await check_editor_permission_or_raise(
         admin_id=admin_id, ts=ts, sign=sign,
         x_telegram_init_data=x_telegram_init_data, db=db
     )
@@ -1355,7 +1390,7 @@ async def moderate_news(
     """
     Approves or rejects a suggested news item.
     """
-    await check_admin_permission_or_raise(
+    await check_editor_permission_or_raise(
         admin_id=payload.admin_id, ts=payload.ts, sign=payload.sign,
         x_telegram_init_data=x_telegram_init_data, db=db
     )
@@ -1396,7 +1431,7 @@ async def delete_news_post(
     Only authorized administrators can delete posts.
     """
     uid = admin_id or user_id
-    await check_admin_permission_or_raise(
+    await check_editor_permission_or_raise(
         admin_id=uid, ts=ts, sign=sign,
         x_telegram_init_data=x_telegram_init_data, db=db
     )
@@ -1423,7 +1458,7 @@ async def edit_news_post(
     Allows administrator to edit post title, content, and image directly in the feed.
     """
     admin_uid = payload.admin_id or payload.user_id
-    await check_admin_permission_or_raise(
+    await check_editor_permission_or_raise(
         admin_id=admin_uid,
         x_telegram_init_data=x_telegram_init_data, db=db
     )
@@ -1511,9 +1546,11 @@ async def delete_comment(
         raise HTTPException(status_code=404, detail="Comment not found")
 
     user = await db.get(User, user_id)
+    if user:
+        await require_school_access(db, user)
     if user and user.is_banned:
         raise HTTPException(status_code=403, detail="Ваш аккаунт заблокирован администратором.")
-    is_admin = await check_is_admin(user_id, db)
+    is_admin = await check_is_admin(user_id, db) or bool(user and user.role == "editor")
 
     if not is_admin and comment.user_id != user_id:
         raise HTTPException(status_code=403, detail="Permission denied to delete this comment")
@@ -1545,7 +1582,7 @@ async def require_media_access(path, identity, db):
             return
     variants = [path, settings.BASE_URL.rstrip("/") + path] if settings.BASE_URL else [path]
     post = await db.scalar(select(NewsPost.id).where(NewsPost.image_url.in_(variants),
-        or_(NewsPost.status == "approved", NewsPost.author_id == user.id)))
+        or_(NewsPost.status == "approved", NewsPost.author_id == user.id, user.role == "editor")))
     material = await db.scalar(select(EgeMaterial.id).where(EgeMaterial.image_url.in_(variants)))
     if post is None and material is None:
         raise HTTPException(404, "Изображение не найдено")
@@ -1604,6 +1641,8 @@ async def upload_image(
     user = await db.get(User, int(telegram_user["id"]))
     if not user:
         raise HTTPException(status_code=409, detail="Сначала заполните профиль Telegram.")
+    if user:
+        await require_school_access(db, user)
     if user.is_banned:
         raise HTTPException(status_code=403, detail="Ваш аккаунт заблокирован администратором.")
 
@@ -1728,7 +1767,7 @@ async def create_ege_material(
     db: AsyncSession = Depends(get_db)
 ):
     """Allows administrator to publish new reference theory/cheat-sheet for EGE tasks."""
-    await check_admin_permission_or_raise(
+    await check_editor_permission_or_raise(
         admin_id=payload.admin_id, x_telegram_init_data=x_telegram_init_data, db=db
     )
 
@@ -1766,7 +1805,7 @@ async def update_ege_material(
     db: AsyncSession = Depends(get_db)
 ):
     """Allows administrator to update an existing EGE material."""
-    await check_admin_permission_or_raise(
+    await check_editor_permission_or_raise(
         admin_id=payload.admin_id, x_telegram_init_data=x_telegram_init_data, db=db
     )
 
@@ -1805,7 +1844,7 @@ async def delete_ege_material(
     db: AsyncSession = Depends(get_db)
 ):
     """Allows administrator to delete an EGE material."""
-    await check_admin_permission_or_raise(
+    await check_editor_permission_or_raise(
         admin_id=admin_id, x_telegram_init_data=x_telegram_init_data, db=db
     )
 
@@ -1854,6 +1893,7 @@ async def get_all_users_for_admin(
             profile_name=u.profile_name,
             is_admin=(u.id in settings.admin_ids or bool(u.username and u.username.lower().lstrip("@") in settings.admin_usernames)),
             is_banned=u.is_banned,
+            role=u.role,
             is_onboarded=is_onboarded,
             created_at=c_str
         ))
@@ -2276,3 +2316,6 @@ async def admin_users_dashboard_page(
 # Register tools after the authentication and cache helpers have been defined.
 from features import install_features
 install_features(app, require_telegram_user, check_admin_permission_or_raise, cache_clear_prefix)
+
+from community import install_community
+install_community(app, require_telegram_user, check_admin_permission_or_raise, check_editor_permission_or_raise, cache_clear_prefix, enforce_rate_limit)

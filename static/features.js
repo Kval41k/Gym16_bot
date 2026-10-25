@@ -44,6 +44,7 @@ function toolsToday() {
   toolsState.mode = 'day'; const day = getTyumenDate().getDay(); selectDay(day === 0 ? 0 : day - 1);
 }
 function toolsLessonPhase(slot, day) {
+  if (window.communityScheduleDate && window.communityScheduleDate(day) !== window.communityToday()) return '';
   const now = getTyumenDate();
   if (!slot.start_time || !slot.end_time || now.getDay() - 1 !== day) return '';
   const minute = now.getHours() * 60 + now.getMinutes();
@@ -82,7 +83,9 @@ loadSchedule = async function(quiet = false) {
   const days = toolsState.mode === 'week' ? [0,1,2,3,4,5] : [state.selectedDay];
   try {
     const results = await Promise.all(days.map(day => {
-      const params = new URLSearchParams({class_name: targetClass, day_of_week: day, only_my_profile: profile !== 'all', profile_name: profile === 'all' ? '' : profile});
+      const params = new URLSearchParams({class_name: targetClass, day_of_week: Math.min(day,5), only_my_profile: profile !== 'all', profile_name: profile === 'all' ? '' : profile});
+      const date = window.communityScheduleDate?.(day);
+      if (date) params.set('date', date);
       if (targetClass === state.user?.class_name && state.user?.subgroup) params.set('subgroup', state.user.subgroup);
       return toolsRequest('/api/schedule/lessons?' + params);
     }));
@@ -93,15 +96,17 @@ loadSchedule = async function(quiet = false) {
     }
     container.innerHTML = results.map((data, index) => {
       const day = days[index];
-      if (getTyumenDate().getDay() - 1 === day) state.todayLessons = data.slots;
+      if (data.date === window.communityToday?.() || (!data.date && getTyumenDate().getDay() - 1 === day)) state.todayLessons = data.slots;
       const next = data.slots.find(slot => toolsLessonPhase(slot, day) === 'future');
       const lessonTimes = data.slots.flatMap(slot => slot.lessons).filter(item => item.start_time && item.end_time);
       const firstTime = lessonTimes.map(item => item.start_time).sort()[0] || '';
       const lastTime = lessonTimes.map(item => item.end_time).sort().at(-1) || '';
       const cards = data.slots.map(slot => renderLessonSlot(slot, day, next?.lesson_number)).join('') || '<div class="g-card g-muted">Уроков в расписании нет.</div>';
-      if (toolsState.mode === 'day') return cards;
-      return `<details class="g-week-day" ${getTyumenDate().getDay() - 1 === day ? 'open' : ''}><summary>${toolsDays[day]} <span class="g-muted">· ${data.slots.length} ур. ${data.slots.length ? `· ${toolsEsc(firstTime)}–${toolsEsc(lastTime)}` : ''}</span></summary><div>${cards}</div></details>`;
+      const note = data.is_override ? `<div class="g-note">${toolsEsc(data.note || (data.slots.length ? 'Замены на эту дату' : 'Занятия отменены'))}</div>` : '';
+      if (toolsState.mode === 'day') return note + cards;
+      return `<details class="g-week-day" ${getTyumenDate().getDay() - 1 === day ? 'open' : ''}><summary>${toolsDays[day]} <span class="g-muted">· ${data.slots.length} ур. ${data.slots.length ? `· ${toolsEsc(firstTime)}–${toolsEsc(lastTime)}` : ''}</span></summary><div>${note}${cards}</div></details>`;
     }).join('');
+    window.communityDateLabel?.();
     calculateLiveStatusLocally();
     updateLiveScheduleStatus().catch(() => {});
   } catch (error) {
@@ -196,7 +201,7 @@ async function toolsMyNews() {
 const toolsOriginalNews = renderNewsPost;
 renderNewsPost = function(post) {
   return toolsOriginalNews(post).replace(`<div class="text-[10px] text-ios-secondaryText">${toolsEsc(post.created_at)}</div>`, `<time>${toolsEsc(post.created_at)}</time>`)
-    .replace('<!-- Post Content -->', `${checkIsAdmin() ? `<button class="g-btn" onclick="openEditModal(${post.id})">✎ Редактировать</button>` : ''}<!-- Post Content -->`);
+    .replace('<!-- Post Content -->', `${checkCanEdit() ? `<button class="g-btn" onclick="openEditModal(${post.id})">✎ Редактировать</button>` : ''}<!-- Post Content -->`);
 };
 handleModeratePost = async function(postId, action) {
   let reason = null;
@@ -325,7 +330,7 @@ async function toolsSaveComment(event) {
 // Admin sections share one navigation and one instance of each panel.
 const toolsAdminTabs = document.getElementById('admin-subtab-moderation-btn').parentElement;
 toolsAdminTabs.className = 'g-tabs';
-toolsAdminTabs.innerHTML = [['moderation','Модерация'],['users','Пользователи'],['schedule','Расписание'],['logs','Логи'],['data','Данные']]
+toolsAdminTabs.innerHTML = [['moderation','Модерация'],['users','Пользователи'],['schedule','Расписание'],['logs','Логи'],['data','Данные'],['access','Приглашения']]
   .map(([id, label]) => `<button class="g-btn ${id === 'moderation' ? 'primary' : ''}" id="admin-subtab-${id}-btn" onclick="setAdminSubtab('${id}')">${label}${id === 'moderation' ? ' <span id="admin-subtab-pending-badge" class="hidden"></span>' : ''}</button>`).join('');
 document.getElementById('tab-admin').insertAdjacentHTML('beforeend', `
   <section id="admin-section-schedule" hidden class="g-stack"><div class="g-card g-stack">
@@ -350,8 +355,9 @@ document.getElementById('tab-admin').insertAdjacentHTML('beforeend', `
     <p class="g-muted">В архиве — база, журнал действий, настройки и загруженные файлы. Сохраните его в надёжном месте: он содержит данные пользователей.</p>
     <p class="g-muted">Автоматически создаётся одна локальная копия в день, хранятся последние 7. При остановленном сервере новые копии не создаются.</p></div></section>`);
 setAdminSubtab = function(tab) {
+  if (!checkIsAdmin() && tab !== 'moderation') tab = 'moderation';
   toolsState.admin = tab;
-  ['moderation','users','schedule','logs','data'].forEach(id => {
+  ['moderation','users','schedule','logs','data','access'].forEach(id => {
     const section = document.getElementById('admin-section-' + id);
     section.hidden = id !== tab; section.classList.toggle('hidden', id !== tab);
     document.getElementById('admin-subtab-' + id + '-btn').classList.toggle('primary', id === tab);
@@ -361,6 +367,7 @@ setAdminSubtab = function(tab) {
   if (tab === 'schedule') toolsAdminSchedule();
   if (tab === 'logs') toolsLoadLogs();
   if (tab === 'data') toolsStorage();
+  if (tab === 'access') communityLoadAccess();
 };
 const toolsSwitchTab = switchTab;
 switchTab = function(tab) {

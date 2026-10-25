@@ -1,7 +1,7 @@
-from datetime import datetime
+from datetime import date, datetime
 from typing import List, Optional
 from sqlalchemy import (
-    BigInteger, Boolean, Column, DateTime, ForeignKey, 
+    BigInteger, Boolean, Column, Date, DateTime, ForeignKey,
     Index, Integer, String, Text, UniqueConstraint, func
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -26,6 +26,8 @@ class User(Base):
     subgroup: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, default=1) # 1 or 2
     
     is_admin: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    role: Mapped[str] = mapped_column(String(20), default="student", nullable=False)
+    is_member: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     is_banned: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
@@ -148,6 +150,7 @@ class NewsPost(Base):
     status: Mapped[str] = mapped_column(String(20), default="pending", nullable=False, index=True)
     
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), index=True)
+    is_pinned: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     published_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
 
     # Relationships
@@ -325,3 +328,41 @@ class Notification(Base):
     status: Mapped[str] = mapped_column(String(20), default="pending", index=True)
     error: Mapped[Optional[str]] = mapped_column(String(255))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class DatedSchedule(Base):
+    __tablename__ = "dated_schedules"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    class_name: Mapped[str] = mapped_column(String(20), nullable=False)
+    lesson_date: Mapped[date] = mapped_column(Date, nullable=False)
+    rows_json: Mapped[str] = mapped_column(Text, nullable=False)
+    note: Mapped[str] = mapped_column(String(255), default="", nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    __table_args__ = (UniqueConstraint("class_name", "lesson_date", name="uq_class_date"),)
+
+
+class AccessPolicy(Base):
+    __tablename__ = "access_policy"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    invites_required: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+
+
+class SchoolInvite(Base):
+    __tablename__ = "school_invites"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    code_hash: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
+    label: Mapped[str] = mapped_column(String(80), nullable=False)
+    max_uses: Mapped[int] = mapped_column(Integer, nullable=False)
+    uses: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    revoked: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    created_by: Mapped[int] = mapped_column(BigInteger, nullable=False)
+
+
+class NewsDraft(Base):
+    __tablename__ = "news_drafts"
+    user_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
+    title: Mapped[str] = mapped_column(String(255), default="", nullable=False)
+    content: Mapped[str] = mapped_column(Text, default="", nullable=False)
+    is_anonymous: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    revision: Mapped[str] = mapped_column(String(32), nullable=False)

@@ -141,6 +141,8 @@ def install_features(app, require_user, require_admin, cache_clear):
             raise HTTPException(409, "Сначала заполните профиль.")
         if user.is_banned:
             raise HTTPException(403, "Ваш аккаунт заблокирован.")
+        from access import require_school_access
+        await require_school_access(db, user)
         return user
 
     async def admin(x_telegram_init_data: Optional[str] = Header(None, alias="X-Telegram-Init-Data"), db=Depends(get_db)):
@@ -346,10 +348,14 @@ async def enqueue_reminders(now=None):
     async with async_session() as db:
         users = (await db.execute(select(User, UserPreferences).join(UserPreferences).where(
             UserPreferences.lesson_reminders.is_(True), User.is_banned.is_(False)))).all()
-        lessons = (await db.scalars(select(Lesson).where(Lesson.day_of_week == now.weekday()))).all()
+        from timetable import effective_lessons
+        lessons = await effective_lessons(db, now.weekday(), lesson_date=now.date())
         from timetable import day_bells, lesson_times
         times = await day_bells(db, now.weekday())
         for user, pref in users:
+            from access import access_allowed
+            if not await access_allowed(db, user):
+                continue
             grouped = {}
             for lesson in lessons:
                 if lesson.class_name != user.class_name or (lesson.profile_name and lesson.profile_name != user.profile_name):
@@ -368,10 +374,16 @@ async def enqueue_reminders(now=None):
                 if not due <= now < due + timedelta(seconds=65):
                     continue
                 key = f"lesson:{now.date()}:{user.id}:{number}:{start}"
-                if await db.scalar(select(Notification.id).where(Notification.dedup_key == key)):
+                existing = await db.scalar(select(Notification).where(Notification.dedup_key == key))
+                if existing and existing.status != "cancelled":
                     continue
                 text = f"🔔 В {start}, через {pref.reminder_minutes} мин.: " + "; ".join(f"{item.subject}, каб. {item.cabinet}" for item in items)
-                db.add(Notification(user_id=user.id, dedup_key=key, text=text))
+                if existing:
+                    existing.status = "pending"
+                    existing.text = text
+                    existing.error = None
+                else:
+                    db.add(Notification(user_id=user.id, dedup_key=key, text=text))
         try:
             await db.commit()
         except IntegrityError:

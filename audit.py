@@ -10,6 +10,7 @@ from models import AuditLog
 
 audit_actor = ContextVar("audit_actor", default=None)
 SECTIONS = {
+    "dated_schedules": "schedule", "school_invites": "access", "access_policy": "access",
     "users": "profile", "user_preferences": "profile", "lessons": "schedule",
     "bell_schedules": "schedule", "news_posts": "news", "news_reviews": "news",
     "comments": "comments", "reactions": "reactions", "ege_materials": "ege",
@@ -37,7 +38,7 @@ def record_changes(session, flush_context):
             details = {}
             for column in state.mapper.column_attrs:
                 key = column.key
-                if key in ("created_at", "updated_at"):
+                if key in ("created_at", "updated_at", "code_hash"):
                     continue
                 value = json_value(getattr(obj, key, None))
                 if action == "update":

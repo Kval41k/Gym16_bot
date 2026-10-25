@@ -3,10 +3,10 @@ import argparse
 import asyncio
 import json
 import zipfile
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from pathlib import Path
 
-from sqlalchemy import DateTime, func, select, text
+from sqlalchemy import Date, DateTime, func, select, text
 from config import settings
 from database import Base, engine
 import models  # Register every table, including audit history.
@@ -48,6 +48,8 @@ async def restore(path: Path, apply: bool):
                         if isinstance(column.type, DateTime) and row.get(column.name):
                             parsed = datetime.fromisoformat(row[column.name])
                             row[column.name] = parsed.replace(tzinfo=timezone.utc) if column.type.timezone and parsed.tzinfo is None else parsed
+                        elif isinstance(column.type, Date) and row.get(column.name):
+                            row[column.name] = date.fromisoformat(row[column.name])
                 if rows:
                     await conn.execute(table.insert(), rows)
                 if engine.dialect.name == "postgresql" and "id" in table.c and table.c.id.autoincrement is not False and table.c.id.primary_key:

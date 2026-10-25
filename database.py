@@ -35,6 +35,7 @@ engine = create_async_engine(DB_URL, **engine_kwargs)
 if is_sqlite:
     @event.listens_for(engine.sync_engine, "connect")
     def sqlite_foreign_keys(connection, record):
+        connection.create_function("gym16_casefold", 1, lambda value: (value or "").casefold(), deterministic=True)
         cursor = connection.cursor()
         cursor.execute("PRAGMA foreign_keys=ON")
         cursor.close()
@@ -80,7 +81,10 @@ async def init_db() -> None:
         for name in ("start_time", "end_time"):
             if name not in {column["name"] for column in lesson_columns}:
                 await conn.execute(text(f"ALTER TABLE lessons ADD COLUMN {name} VARCHAR(5)"))
-        for table, column, definition in (("comments", "updated_at", "TIMESTAMP"),
+        for table, column, definition in (("users", "role", "VARCHAR(20) DEFAULT 'student' NOT NULL"),
+                                          ("users", "is_member", "BOOLEAN DEFAULT TRUE NOT NULL"),
+                                          ("news_posts", "is_pinned", "BOOLEAN DEFAULT FALSE NOT NULL"),
+                                          ("comments", "updated_at", "TIMESTAMP"),
                                           ("user_preferences", "theme", "VARCHAR(10) DEFAULT 'auto' NOT NULL")):
             columns = await conn.run_sync(lambda sync_conn: inspect(sync_conn).get_columns(table))
             if column not in {item["name"] for item in columns}:

@@ -22,12 +22,12 @@ def lesson_times(lesson, bells):
     return bells.get(lesson.lesson_number, ("", ""))
 
 
-async def lesson_timeline(db, day, class_name=None, profile_name=None, subgroup=None):
+async def lesson_timeline(db, day, class_name=None, profile_name=None, subgroup=None, lesson_date=None):
     bells = await day_bells(db, day)
     if not class_name:
         return [{"number": number, "start": start, "end": end, "lessons": []}
                 for number, (start, end) in sorted(bells.items())]
-    rows = (await db.scalars(select(Lesson).where(Lesson.class_name == class_name, Lesson.day_of_week == day))).all()
+    rows = await effective_lessons(db, day, class_name, lesson_date)
     grouped = {}
     for lesson in rows:
         if profile_name and lesson.profile_name and lesson.profile_name.casefold() != profile_name.casefold():
@@ -40,3 +40,25 @@ async def lesson_timeline(db, day, class_name=None, profile_name=None, subgroup=
         key = (start, end)
         grouped.setdefault(key, {"number": lesson.lesson_number, "start": start, "end": end, "lessons": []})["lessons"].append(lesson)
     return sorted(grouped.values(), key=lambda item: (item["start"], item["end"]))
+
+
+async def effective_lessons(db, day, class_name=None, lesson_date=None):
+    """Date overrides replace only that class/day; weekly rows are never mutated."""
+    from types import SimpleNamespace
+    import json
+    from models import DatedSchedule
+    query = select(Lesson).where(Lesson.day_of_week == day)
+    if class_name:
+        query = query.where(Lesson.class_name == class_name)
+    rows = list((await db.scalars(query.order_by(Lesson.lesson_number, Lesson.profile_name))).all())
+    if lesson_date is None:
+        return rows
+    query = select(DatedSchedule).where(DatedSchedule.lesson_date == lesson_date)
+    if class_name:
+        query = query.where(DatedSchedule.class_name == class_name)
+    overrides = (await db.scalars(query)).all()
+    for override in overrides:
+        rows = [row for row in rows if row.class_name != override.class_name]
+        rows.extend(SimpleNamespace(id=-(override.id * 1000 + index + 1), class_name=override.class_name, **row)
+                    for index, row in enumerate(json.loads(override.rows_json)))
+    return sorted(rows, key=lambda row: (row.lesson_number, row.profile_name or '', row.subgroup or 0))

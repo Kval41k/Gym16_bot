@@ -83,6 +83,10 @@ async def ban_check_middleware(handler, event: Message, data: dict):
             if db_user and db_user.is_banned:
                 await event.answer("⛔ <b>Доступ ограничен.</b>\nВаш аккаунт заблокирован администратором.")
                 return
+            from access import access_allowed
+            if db_user and not await access_allowed(session, db_user):
+                await event.answer("Для входа нужен код приглашения. Откройте мини-приложение и введите код от администратора.")
+                return
     token = audit_actor.set(dict(event.from_user.model_dump(), source="bot") if event.from_user else None)
     try:
         return await handler(event, data)
@@ -97,6 +101,10 @@ async def ban_check_callback_middleware(handler, event: CallbackQuery, data: dic
             db_user = await session.get(User, user_id)
             if db_user and db_user.is_banned:
                 await event.answer("⛔ Ваш аккаунт заблокирован администратором.", show_alert=True)
+                return
+            from access import access_allowed
+            if db_user and not await access_allowed(session, db_user):
+                await event.answer("Для входа нужен код приглашения. Откройте мини-приложение и введите код от администратора.")
                 return
     token = audit_actor.set(dict(event.from_user.model_dump(), source="bot") if event.from_user else None)
     try:

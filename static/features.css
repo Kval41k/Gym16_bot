@@ -76,3 +76,10 @@ html[data-theme-mode=auto] .bg-zinc-100, html[data-theme-mode=auto].dark .dark\:
 #schedule-profile-filter-container button, .day-btn { min-height:34px; }
 #comments-sheet-list p { font-size:14px; user-select:text; }
 @media (prefers-reduced-motion:reduce) { *, *::before, *::after { animation:none!important; transition:none!important; } }
+.g-date-navigation { display:flex; gap:8px; align-items:flex-end; flex-wrap:wrap; margin:8px 0 12px; }
+.g-date-navigation label { flex:1; min-width:120px; }
+.g-next-card { border-color:color-mix(in srgb,var(--g-blue) 35%,var(--g-line)); background:color-mix(in srgb,var(--g-blue) 7%,var(--g-card)); }
+.g-next-card > * + * { margin-top:8px; }
+.g-date-row-fields { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; margin-bottom:12px; }
+.g-selectable { user-select:text; -webkit-user-select:text; }
+button:focus-visible, summary:focus-visible { outline:2px solid var(--g-blue); outline-offset:3px; }

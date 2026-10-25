@@ -43,6 +43,8 @@ class UserResponse(BaseModel):
     profile_name: Optional[str] = None
     subgroup: Optional[int] = None
     is_admin: bool
+    role: str = "student"
+    access_allowed: bool = True
     is_onboarded: bool = False
     is_banned: bool = False
 
@@ -97,6 +99,9 @@ class DayScheduleResponse(BaseModel):
     class_name: str
     schedule_loaded: bool = True
     slots: List[LessonSlot]
+    date: Optional[str] = None
+    is_override: bool = False
+    note: str = ""
 
 # -------------------------------------------------------------
 # News Feed & Social Schemas
@@ -176,6 +181,7 @@ class NewsResponse(BaseModel):
     created_at: str
     reactions: List[ReactionCount]
     comments_count: int
+    is_pinned: bool = False
 
 class ReactionToggleRequest(BaseModel):
     user_id: int
@@ -228,6 +234,7 @@ class UserAdminItem(BaseModel):
     username: Optional[str] = None
     class_name: Optional[str] = None
     profile_name: Optional[str] = None
+    role: str = "student"
     is_admin: bool
     is_banned: bool = False
     is_onboarded: bool
