@@ -200,6 +200,12 @@ async def apply_poll_answer(event, bot, sequence=None):
         options = json.loads(poll.options_json)
         if event.option_ids and not 0 <= event.option_ids[0] < len(options):
             return True
+        attendance_status = None
+        if poll.kind == 'attendance' and event.option_ids:
+            from headman import attendance_status_for_option
+            attendance_status = attendance_status_for_option(options, event.option_ids[0])
+            if attendance_status is None:
+                return True
         chat = await db.get(ClassChat, poll.class_name)
         user = await db.get(User, event.user.id)
         if not chat or chat.chat_id != poll.chat_id or (user and user.is_banned):
@@ -236,12 +242,12 @@ async def apply_poll_answer(event, bot, sequence=None):
                     if row:
                         await db.delete(row)
                 elif row:
-                    row.status = 'yes' if event.option_ids[0] == 0 else 'no'
+                    row.status = attendance_status
                     row.updated_by = event.user.id
                 else:
                     db.add(Attendance(class_name=poll.class_name, user_id=event.user.id,
                                       attendance_date=poll.poll_date,
-                                      status='yes' if event.option_ids[0] == 0 else 'no', updated_by=event.user.id))
+                                      status=attendance_status, updated_by=event.user.id))
             elif poll.kind in CATEGORIES and poll.menu_id:
                 menu = await db.get(MealMenu, poll.menu_id)
                 if not menu or menu.class_name != poll.class_name or menu.meal_date != poll.poll_date:
@@ -324,7 +330,11 @@ async def process_poll_answer_inbox(client=None, now=None):
         for row in expired:
             await db.delete(row)
         await db.commit()
-        rows = (await db.scalars(select(ClassPollAnswerInbox).order_by(ClassPollAnswerInbox.update_id).limit(100))).all()
+        # Unknown IDs may be waiting for sendPoll's commit (or an uncertain send).
+        # They must not occupy the batch ahead of votes that can already be applied.
+        rows = (await db.scalars(select(ClassPollAnswerInbox).join(
+            ClassPoll, ClassPoll.telegram_poll_id == ClassPollAnswerInbox.telegram_poll_id
+        ).order_by(ClassPollAnswerInbox.update_id).limit(100))).all()
     member_client = PollMembershipClient(client)
     for row in rows:
         try:
@@ -411,6 +421,8 @@ async def deliver_class_polls(client=None, now=None):
                 continue
             if poll.poll_date > now.date() and poll.kind == 'attendance':
                 continue
+            from headman import upgrade_unsent_poll_options
+            upgrade_unsent_poll_options(poll)
             claimed = await db.execute(update(ClassPoll).where(ClassPoll.id == poll.id,
                 ClassPoll.status == 'pending').values(status='sending', claimed_at=now.astimezone(timezone.utc)))
             await db.commit()

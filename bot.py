@@ -76,7 +76,7 @@ def generate_admin_auth_token(admin_id: int, timestamp: int) -> str:
 
 def get_creator_contact_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=[[
-        InlineKeyboardButton(text="Связаться с создателем", url="https://t.me/untiltedvoid")
+        InlineKeyboardButton(text="Связаться с создателем", url="https://t.me/kvalx")
     ]])
 
 @router.message.outer_middleware()
@@ -170,7 +170,7 @@ def get_main_inline_keyboard() -> InlineKeyboardMarkup:
                 ),
                 InlineKeyboardButton(
                     text="💬 Написать разработчику",
-                    url="https://t.me/untiltedvoid"
+                    url="https://t.me/kvalx"
                 )
             ]
         ]
@@ -292,7 +292,7 @@ async def cmd_help(message: Message):
         "/bells — Расписание звонков гимназии\n"
         "/suggest — Предложить новость в ленту\n"
         "/help — Справка по командам\n\n"
-        "💬 <b>Связь с разработчиком:</b> @untiltedvoid (сообщить о баге или предложить идею)\n"
+        "💬 <b>Связь с разработчиком:</b> @kvalx (сообщить о баге или предложить идею)\n"
     )
     if is_admin_user(message.from_user.id, message.from_user.username):
         help_text += (

@@ -42,6 +42,7 @@ async def run():
   r=await client.get('/api/headman/overview');assert r.status_code==401
   await call('PUT','/api/admin/users/4/role',{'role':'headman','class_name':'11А'},uid=1,status=403)
   admin_view=await call('GET','/api/headman/overview?class_name=11Б',uid=2);assert admin_view['class_name']=='11Б' and len(admin_view['classes'])==6
+  await call('PUT','/api/admin/users/4/role',{'role':'headman','class_name':'11Б'},uid=2,status=422)
   grant=await call('PUT','/api/admin/users/4/role',{'role':'headman','class_name':'11А'},uid=2);assert grant['headman_class_name']=='11А'
   await call('PUT','/api/user/4/profile',{'class_name':'11Б','profile_name':'Физмат','first_name':'Тест','last_name':'Староста','subgroup':1,'headman_class_name':'11Б'})
   me=await call('GET','/api/user/4');assert me['class_name']=='11Б' and me['headman_class_name']=='11А'
@@ -89,6 +90,10 @@ async def run():
    if request.url.path.endswith('/getChatMember'):return httpx.Response(200,json={'ok':True,'result':{'status':'administrator'}})
    if request.url.path.endswith('/sendPoll'):
     assert body['is_anonymous'] is False and body['allows_multiple_answers'] is False
+    option_text=[option['text'] for option in body['options']]
+    if 'Кто сегодня' in body['question']:
+     assert option_text==['Буду','Опоздаю','Болею','Не буду (неуважительная причина)']
+    else:assert len(option_text)==2 and 'Не буду' not in option_text
     sent.append(body);return httpx.Response(200,json={'ok':True,'result':{'message_id':len(sent),'poll':{'id':'poll-'+str(len(sent))}}})
    if request.url.path.endswith('/stopPoll'):return httpx.Response(200,json={'ok':True,'result':{}})
    raise AssertionError('Unexpected method')
@@ -104,11 +109,19 @@ async def run():
    event=PollAnswer(poll_id=by_kind[kind].telegram_poll_id,user=TelegramUser(id=uid,is_bot=False,first_name='Участник',last_name=str(uid)),option_ids=[] if option is None else [option],option_persistent_ids=[] if option is None else [str(option)])
    await headman_bot.record_poll_answer(event,memberbot,Update(update_id=sequence,poll_answer=event))
   await vote('attendance',501,0,100);await vote('attendance',501,1,101)
-  attendance=await call('GET','/api/headman/attendance?date='+str(TODAY));assert next(row for row in attendance['rows'] if row['user_id']==501)['status']=='no'
+  attendance=await call('GET','/api/headman/attendance?date='+str(TODAY));assert next(row for row in attendance['rows'] if row['user_id']==501)['status']=='late'
   await vote('attendance',501,None,102);await vote('attendance',501,0,101)
   attendance=await call('GET','/api/headman/attendance?date='+str(TODAY));assert next(row for row in attendance['rows'] if row['user_id']==501)['status'] is None
-  await vote('main',501,1,103);await vote('drink',501,0,104);await vote('pastry',501,2,105)
-  meal=await call('GET','/api/headman/meals?date='+str(TOMORROW));assert next(row for row in meal['rows'] if row['user_id']==501)['choices']=={'main':1,'drink':0,'pastry':2}
+  await vote('main',501,1,103);await vote('drink',501,0,104);await vote('pastry',501,1,105)
+  await vote('pastry',501,2,114)  # Removed third choice cannot be submitted to a new poll.
+  meal=await call('GET','/api/headman/meals?date='+str(TOMORROW));assert next(row for row in meal['rows'] if row['user_id']==501)['choices']=={'main':1,'drink':0,'pastry':1}
+  assert all(len(counts)==2 for counts in meal['totals'].values())
+  await vote('attendance',505,2,110);await vote('attendance',506,3,111)
+  await vote('attendance',507,0,112);await vote('attendance',508,1,113)
+  attendance=await call('GET','/api/headman/attendance?date='+str(TODAY))
+  assert all(attendance['totals'][status]==1 for status in ['yes','late','sick','unexcused'])
+  assert attendance['totals']['legacy_no']==0 and attendance['totals']['no']==0
+  assert next(row for row in attendance['rows'] if row['user_id']==506)['status']=='unexcused'
   memberbot.get_chat_member=AsyncMock(return_value=SimpleNamespace(status='left'));await vote('main',999,0,106)
   async with async_session() as db:assert await db.get(ClassRoster,('11А',999)) is None
   memberbot.get_chat_member=AsyncMock(return_value=SimpleNamespace(status='member'));await vote('main',8,0,107)
@@ -117,6 +130,10 @@ async def run():
   memberbot.get_chat_member=AsyncMock(side_effect=RuntimeError('temporary lookup failure'))
   await vote('drink',502,1,108)
   async with async_session() as db:assert await db.get(ClassPollAnswerInbox,108)
+  # Unmapped IDs awaiting a send result must not starve ready votes in a batch.
+  async with async_session() as db:
+   db.add_all([ClassPollAnswerInbox(update_id=i,telegram_poll_id='unmapped-'+str(i),user_id=777,payload_json='{}',created_at=NOW) for i in range(1,106)])
+   await db.commit()
   async def replay_transport(request):
    return httpx.Response(200,json={'ok':True,'result':{'status':'member'}})
   async with httpx.AsyncClient(transport=httpx.MockTransport(replay_transport)) as network:
@@ -124,6 +141,9 @@ async def run():
   async with async_session() as db:
    assert await db.get(ClassPollAnswerInbox,108) is None
    assert (await db.get(MealChoice,(meal['menu']['id'],502,'drink'))).option_index==1
+   waiting=(await db.scalars(select(ClassPollAnswerInbox).where(ClassPollAnswerInbox.user_id==777))).all();assert len(waiting)==105
+   for waiting_row in waiting:await db.delete(waiting_row)
+   await db.commit()
   # Answers arriving before sendPoll commits its Telegram ID are retained, not dropped.
   async with async_session() as db:
    pending=ClassPoll(id='a'*32,delivery_key='race-test',class_name='11А',poll_date=TOMORROW,kind='main',menu_id=meal['menu']['id'],chat_id=-1003,options_json=json.dumps(['A','B','Не буду']),status='sending');db.add(pending);await db.commit()
@@ -137,11 +157,42 @@ async def run():
   async with async_session() as db:
    assert await db.get(ClassPollAnswerInbox,109) is None
    assert (await db.get(MealChoice,(meal['menu']['id'],503,'main'))).option_index==0
+  # Existing sent polls retain their old labels and old answer meanings after the format change.
+  async with async_session() as db:
+   legacy_attendance=ClassPoll(id='b'*32,delivery_key='legacy-attendance',class_name='11А',poll_date=TODAY,kind='attendance',chat_id=-1003,options_json=json.dumps(['Буду на уроках','Не буду']),status='sent',telegram_poll_id='legacy-attendance',message_id=51)
+   legacy_meal=ClassPoll(id='c'*32,delivery_key='legacy-meal',class_name='11А',poll_date=TOMORROW,kind='pastry',menu_id=meal['menu']['id'],chat_id=-1003,options_json=json.dumps(['Булочка','Пирожок','Не буду']),status='sent',telegram_poll_id='legacy-meal',message_id=52)
+   db.add_all([legacy_attendance,legacy_meal]);await db.commit()
+   assert not headman.upgrade_unsent_poll_options(legacy_attendance)
+   assert not headman.upgrade_unsent_poll_options(legacy_meal)
+  for poll_id,option,sequence in [('legacy-attendance',1,115),('legacy-meal',2,116)]:
+   event=PollAnswer(poll_id=poll_id,user=TelegramUser(id=509,is_bot=False,first_name='Прежний'),option_ids=[option],option_persistent_ids=[str(option)])
+   await headman_bot.record_poll_answer(event,memberbot,Update(update_id=sequence,poll_answer=event))
+  attendance=await call('GET','/api/headman/attendance?date='+str(TODAY));legacy_absence=next(row for row in attendance['rows'] if row['user_id']==509)
+  assert legacy_absence['status']=='no' and legacy_absence['legacy_absence'] is True
+  assert attendance['totals']['legacy_no']==1 and attendance['totals']['no']==1 and attendance['totals']['unexcused']==1
+  legacy_data=await call('GET','/api/headman/meals?date='+str(TOMORROW));legacy_row=next(row for row in legacy_data['rows'] if row['user_id']==509)
+  assert legacy_row['choices']['pastry']==2 and legacy_row['legacy_declined']['pastry'] is True
+  assert legacy_data['legacy_declined']['pastry']==1
+  await call('PUT','/api/headman/meals/choice',{'date':str(TOMORROW),'user_id':501,'category':'main','option_index':2},status=422)
+  # Never-sent queued polls upgrade in the delivery transaction, unlike sent/ambiguous polls.
+  async with async_session() as db:
+   queued_attendance=ClassPoll(id='d'*32,delivery_key='queued-old-attendance',class_name='11Б',poll_date=TODAY,kind='attendance',chat_id=-1002,options_json=json.dumps(['Буду на уроках','Не буду']),status='pending')
+   queued_meal=ClassPoll(id='e'*32,delivery_key='queued-old-meal',class_name='11А',poll_date=TOMORROW,kind='drink',menu_id=meal['menu']['id'],chat_id=-1003,options_json=json.dumps(['Чай','Компот','Не буду']),status='pending')
+   db.add_all([queued_attendance,queued_meal]);await db.commit()
+  before=len(sent)
+  async with httpx.AsyncClient(transport=httpx.MockTransport(transport)) as network:await headman_bot.deliver_class_polls(network,NOW)
+  assert len(sent)==before+2
+  async with async_session() as db:
+   assert json.loads((await db.get(ClassPoll,'d'*32)).options_json)==headman.ATTENDANCE_OPTIONS
+   assert json.loads((await db.get(ClassPoll,'e'*32)).options_json)==['Чай','Компот']
+   assert json.loads((await db.get(ClassPoll,'b'*32)).options_json)==['Буду на уроках','Не буду']
+   assert json.loads((await db.get(ClassPoll,'c'*32)).options_json)==['Булочка','Пирожок','Не буду']
   # Group members can register without first starting a private chat with the bot.
   join_message=SimpleNamespace(chat=message.chat,from_user=TelegramUser(id=504,is_bot=False,first_name='Ученик'),bot=memberbot,answer=AsyncMock())
   await headman_bot.join_class_roster(join_message)
   async with async_session() as db:assert await db.get(ClassRoster,('11А',504))
   await call('PUT','/api/headman/attendance',{'date':str(TODAY),'user_id':1,'status':'yes'})
+  for status in ['late','sick','unexcused','no',None]:await call('PUT','/api/headman/attendance',{'date':str(TODAY),'user_id':1,'status':status})
   await call('PUT','/api/headman/meals/choice',{'date':str(TOMORROW),'user_id':501,'category':'main','option_index':0})
   await call('PUT','/api/headman/meals/choice',{'date':str(TOMORROW),'user_id':5,'category':'main','option_index':0},status=404)
   await call('POST','/api/headman/polls/'+by_kind['main'].id+'/retry',{},status=409)
@@ -162,6 +213,10 @@ async def run():
   assert restored.returncode==0,restored.stderr[-500:]
   with sqlite3.connect(DIR/'restored.db') as restored_db:
    assert restored_db.execute('SELECT count(*) FROM meal_choices').fetchone()[0]>=3
+   assert restored_db.execute("SELECT count(*) FROM attendance WHERE status IN ('late','sick')").fetchone()[0]>=2
+   assert restored_db.execute('SELECT status FROM attendance WHERE user_id=506').fetchone()[0]=='unexcused'
+   assert restored_db.execute('SELECT status FROM attendance WHERE user_id=509').fetchone()[0]=='no'
+   assert restored_db.execute('SELECT option_index FROM meal_choices WHERE user_id=509').fetchone()[0]==2
    assert restored_db.execute('SELECT headman_class_name FROM users WHERE id=4').fetchone()[0]=='11А'
    assert restored_db.execute('SELECT chat_id FROM class_chats WHERE class_name=?',('11А',)).fetchone()[0]==-1003
   # Group chatter and old admin buttons cannot invoke private bot flows in a class group.
@@ -180,7 +235,7 @@ async def run():
   await call('GET','/api/headman/overview',status=403)
   await headman_bot.link_class_chat(message,CommandObject(prefix='/',command='class_link',args=token['code']))
   assert 'недействителен' in message.answer.call_args.args[0]
-  await call('PUT','/api/admin/users/4/role',{'role':'headman','class_name':'11А'},uid=2)
+  granted=await call('PUT','/api/admin/users/4/role',{'role':'headman','class_name':'11Б'},uid=2);assert granted['headman_class_name']=='11Б'
   await headman_bot.link_class_chat(message,CommandObject(prefix='/',command='class_link',args=token['code']))
   assert 'недействителен' in message.answer.call_args.args[0]
  # Group scheduling starts even when the personal-notification worker is occupied.
@@ -197,5 +252,5 @@ async def run():
   async with main.lifespan(main.app):await asyncio.wait_for(group_started.wait(),2)
  assert set(stopped)=={'personal','groups'}
  await engine.dispose()
- print('PASS: headman frozen class scope, role revocation, token ownership, dated/weekly conflicts, menus/individual tables, native named polls, concurrent send deduplication, ordered retractions, membership/ban checks, safe retry and uncertain-send protection, backup inclusion')
+ print('PASS: headman frozen class scope, role revocation, token ownership, dated/weekly conflicts, menus/individual tables, four attendance statuses/two meal options, frozen legacy poll meanings and queued format upgrades, native named polls, concurrent send deduplication, ordered retractions, membership/ban checks, safe retry and uncertain-send protection, backup inclusion')
 asyncio.run(run())

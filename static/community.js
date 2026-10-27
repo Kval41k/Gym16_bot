@@ -21,22 +21,77 @@ function communityDateLabel() {
 // Students browse weekdays and today; arbitrary date selection belongs to administration.
 toolsToday=function(){community.week=communityMonday(getTyumenDate());const day=getTyumenDate().getDay();state.selectedDay=day===0?6:day-1;toolsState.mode='day';if(state.selectedDay<6)selectDay(state.selectedDay);else loadSchedule();};
 
-document.getElementById('live-status-card').insertAdjacentHTML('afterend',`<section class="g-card g-next-card" id="community-next-card" hidden aria-live="polite"></section>`);
-async function communityNextLesson() {
-  const ticket=(community.nextTicket||0)+1;community.nextTicket=ticket;
-  if(!state.user?.class_name || state.user.access_allowed===false)return;
-  try {
-    const data=await toolsRequest('/api/me/next-lesson');
-    if(ticket!==community.nextTicket)return;
-    const node=document.getElementById('community-next-card');
-    const describe=item=>item.lessons.map(row=>`${toolsEsc(row.subject)}${row.cabinet?' · каб. '+toolsEsc(row.cabinet):''}`).join(' / ');
-    node.hidden=false;
-    node.innerHTML=`<div class="g-muted">МОЁ РАСПИСАНИЕ · ${toolsEsc(data.class_name||'')}</div>${data.current?`<h3 class="g-title">Сейчас: ${describe(data.current)}</h3><p class="g-muted">До конца ${data.current.minutes_left} мин.</p>`:''}${data.next?`<h3 class="g-title">${data.current?'Дальше':'Следующее занятие'}: ${describe(data.next)}</h3><p class="g-muted">${communityParseDate(data.next.date).toLocaleDateString('ru-RU',{weekday:'long',day:'numeric',month:'long'})} · ${toolsEsc(data.next.start_time)}–${toolsEsc(data.next.end_time)}${data.next.date===communityToday()?` · через ${data.next.minutes_until} мин.`:''}</p>`:'<p class="g-muted">На ближайшую неделю занятий нет.</p>'}`;
-  }catch(_){if(ticket===community.nextTicket)document.getElementById('community-next-card').hidden=true;}
+// One personal live card; browsing another class never changes this account's status.
+function communityLiveScope(){return JSON.stringify([state.user?.id,state.user?.class_name,state.user?.profile_name,state.user?.subgroup,state.user?.access_allowed]);}
+function communityLiveParams(){const params=new URLSearchParams();if(state.user?.class_name)params.set('class_name',state.user.class_name);if(state.user?.profile_name)params.set('profile_name',state.user.profile_name);if(state.user?.subgroup)params.set('subgroup',state.user.subgroup);return params;}
+function communityLessonStamp(item,field){return item?.date&&/^\d\d:\d\d$/.test(item[field]||'')?Date.parse(item.date+'T'+item[field]+':00+05:00'):NaN;}
+function communityLessonDescription(item){return [...new Set((item?.lessons||[]).map(row=>row.subject+(row.cabinet?' · каб. '+row.cabinet:'')))].join(' / ');}
+function communityCountdown(target,now){const seconds=Math.max(0,Math.ceil((target-now)/1000));return Math.floor(seconds/60)+':'+String(seconds%60).padStart(2,'0');}
+function communityLiveModel(personal,live,receivedAt,clientNow=Date.now()){
+  const serverTime=Date.parse(personal?.now||'');
+  const now=Number.isFinite(serverTime)?serverTime+Math.max(0,clientNow-receivedAt):clientNow;
+  const wall=new Date(now+5*3600000),today=wall.toISOString().slice(0,10),clock=wall.toISOString().slice(11,16);
+  const model={clock,today,title:'Моё расписание',message:live?.message||'Уточняем время занятий…',countdown:'',next:null};
+  if(live?.state==='no_schedule'){model.title='Расписание ещё не загружено';return model;}
+  const items=[personal?.current,personal?.next].filter(Boolean);
+  const current=items.find(item=>communityLessonStamp(item,'start_time')<=now&&now<communityLessonStamp(item,'end_time'));
+  const next=items.find(item=>communityLessonStamp(item,'start_time')>now);
+  if(next)model.next={description:communityLessonDescription(next),date:next.date,start:next.start_time,end:next.end_time};
+  if(current){
+    model.title='Сейчас идёт урок';model.message=communityLessonDescription(current);
+    model.countdown='До конца урока · '+communityCountdown(communityLessonStamp(current,'end_time'),now);
+    return model;
+  }
+  if(next?.date===today){
+    const hadCurrent=personal?.current?.date===today&&communityLessonStamp(personal.current,'end_time')<=now;
+    const onBreak=live?.state==='break'||hadCurrent;
+    model.title=onBreak?'Перемена':'До начала занятий';
+    model.message=onBreak?'Можно отдохнуть перед следующим уроком':'Первое занятие ещё не началось';
+    model.countdown=(onBreak?'До конца перемены · ':'До первого занятия · ')+communityCountdown(communityLessonStamp(next,'start_time'),now);
+    return model;
+  }
+  if(personal){
+    const weekend=wall.getUTCDay()===0||live?.state==='weekend';
+    model.title=weekend?'Сегодня выходной':live?.state==='after_school'&&/нет занятий/.test(live.message||'')?'Сегодня занятий нет':'Занятия на сегодня закончились';
+    model.message=weekend?'Уроков сегодня нет':live?.state==='after_school'?live.message:'Можно отдохнуть';
+    if(!next)model.message=live?.state==='no_schedule'?live.message:'На ближайшую неделю занятий нет';
+    return model;
+  }
+  // Signed membership can be unavailable; keep the public personal-class status visible.
+  model.title=live?.state==='lesson'?'Сейчас идёт урок':live?.state==='break'?'Перемена':live?.state==='before_school'?'До начала занятий':live?.state==='weekend'?'Сегодня выходной':'Статус занятий';
+  if(live?.next_lesson_time)model.countdown='Следующее занятие в '+live.next_lesson_time;
+  return model;
 }
-const communityOriginalLive=updateLiveScheduleStatus;
-updateLiveScheduleStatus=async function(){await communityOriginalLive();await communityNextLesson();};
-window.updateLiveScheduleStatus=updateLiveScheduleStatus;
+function communityRenderLive(){
+  const node=document.getElementById('live-status-card');if(!node)return;
+  node.classList.add('community-live-card');
+  const cache=community.liveCache,valid=cache&&cache.scope===communityLiveScope()&&Date.now()-cache.receivedAt<90000;
+  const model=valid?communityLiveModel(cache.personal,cache.live,cache.receivedAt):{clock:getTyumenTime(),title:'Моё расписание',message:state.user?.class_name?'Уточняем время занятий…':'Выбери класс и профиль в настройках',countdown:'',next:null};
+  const cls=state.user?.class_name||'';
+  const next=model.next;
+  const nextLabel=next?(next.date===(model.today||communityToday())?'Дальше':communityParseDate(next.date).toLocaleDateString('ru-RU',{weekday:'long',day:'numeric',month:'long'})):'';
+  const html=`<div class="community-live-head"><div id="live-status-title" class="g-muted">${toolsEsc(model.title)}${cls?' · '+toolsEsc(cls):''}</div><time id="live-status-time" class="g-badge">${toolsEsc(model.clock)}</time></div><h3 id="live-status-message" class="g-title">${toolsEsc(model.message)}</h3>${model.countdown?`<p class="community-live-countdown">${toolsEsc(model.countdown)}</p>`:''}${next?`<div class="community-live-next"><span class="g-muted">${toolsEsc(nextLabel)} · ${toolsEsc(next.start)}–${toolsEsc(next.end)}</span><p>${toolsEsc(next.description)}</p></div>`:''}`;
+  if(node.innerHTML!==html)node.innerHTML=html;
+}
+calculateLiveStatusLocally=communityRenderLive;
+updateLiveScheduleStatus=async function(){
+  const scope=communityLiveScope();
+  if(community.liveRequest?.scope===scope)return community.liveRequest.promise;
+  const ticket=(community.liveTicket||0)+1;community.liveTicket=ticket;
+  if(!state.user?.class_name){community.liveCache=null;communityRenderLive();return;}
+  const fetch=async()=>{
+    const results=await Promise.allSettled([API.get('/api/schedule/live?'+communityLiveParams()),state.user.access_allowed===false?Promise.resolve(null):toolsRequest('/api/me/next-lesson')]);
+    if(ticket!==community.liveTicket||scope!==communityLiveScope())return;
+    const live=results[0].status==='fulfilled'?results[0].value:null,personal=results[1].status==='fulfilled'?results[1].value:null;
+    if(live||personal)community.liveCache={scope,live,personal,receivedAt:Date.now()};
+    communityRenderLive();
+  };
+  const promise=fetch();community.liveRequest={scope,promise};
+  try{await promise;}finally{if(community.liveRequest?.promise===promise)community.liveRequest=null;}
+};
+Object.assign(window,{updateLiveScheduleStatus,calculateLiveStatusLocally});
+communityRenderLive();
+setInterval(()=>{if(!document.hidden)communityRenderLive();},1000);
 
 // Search is performed before pagination on the server; pinned announcements come first.
 document.getElementById('news-posts-list').insertAdjacentHTML('beforebegin',`<label class="g-label" for="community-news-search">Поиск по школьной ленте</label><input id="community-news-search" class="g-input" type="search" maxlength="120" placeholder="Заголовок или текст новости" oninput="communitySearchNews()">`);

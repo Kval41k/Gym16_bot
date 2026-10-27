@@ -215,7 +215,9 @@ def install_community(app, require_identity, require_admin, require_editor, cach
         user=await db.get(User,user_id)
         if not user:raise HTTPException(404,'Пользователь не найден')
         if configured_admin(user):raise HTTPException(422,'Администраторы назначаются в настройках хостинга')
-        scope=payload.class_name or user.class_name
+        scope=user.class_name
+        if payload.role=='headman' and payload.class_name and payload.class_name != scope:
+            raise HTTPException(422,'Класс старосты определяется классом, выбранным при регистрации ученика')
         if payload.role=='headman' and scope not in CLASS_PROFILES_MAP:raise HTTPException(422,'Укажите класс старосты')
         if user.role != payload.role or user.headman_class_name != (scope if payload.role=='headman' else None):
             for token in (await db.scalars(select(ClassLinkToken).where(ClassLinkToken.created_by==user.id, ClassLinkToken.used_at.is_(None)))).all():
