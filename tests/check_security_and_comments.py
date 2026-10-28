@@ -5,11 +5,12 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 TEMP = tempfile.TemporaryDirectory(prefix='gym16-security-')
 DIR = Path(TEMP.name)
-os.environ.update(DATABASE_URL='sqlite+aiosqlite:///' + str(DIR/'test.db'), BOT_TOKEN='123456789:TEST_TOKEN_FOR_LOCAL_CHECKS_ONLY', ADMIN_IDS='2', ADMIN_USERNAME='', UPLOAD_DIR=str(DIR/'uploads'), BACKUP_DIR=str(DIR/'backups'))
+os.environ.update(DATABASE_URL=os.getenv('GYM16_TEST_DATABASE_URL') or 'sqlite+aiosqlite:///' + str(DIR/'test.db'), BOT_TOKEN='123456789:TEST_TOKEN_FOR_LOCAL_CHECKS_ONLY', ADMIN_IDS='2', ADMIN_USERNAME='', UPLOAD_DIR=str(DIR/'uploads'), BACKUP_DIR=str(DIR/'backups'))
 # Existing installations do not yet have the new theme/updated_at columns.
-with sqlite3.connect(DIR/'test.db') as conn:
-    conn.execute('CREATE TABLE user_preferences (user_id BIGINT PRIMARY KEY, lesson_reminders BOOLEAN, reminder_minutes INTEGER, schedule_changes BOOLEAN)')
-    conn.execute('CREATE TABLE comments (id INTEGER PRIMARY KEY, post_id INTEGER NOT NULL, user_id BIGINT NOT NULL, author_name VARCHAR(100) NOT NULL, author_class VARCHAR(20), text TEXT NOT NULL, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)')
+if not os.getenv('GYM16_TEST_DATABASE_URL'):
+    with sqlite3.connect(DIR/'test.db') as conn:
+        conn.execute('CREATE TABLE user_preferences (user_id BIGINT PRIMARY KEY, lesson_reminders BOOLEAN, reminder_minutes INTEGER, schedule_changes BOOLEAN)')
+        conn.execute('CREATE TABLE comments (id INTEGER PRIMARY KEY, post_id INTEGER NOT NULL, user_id BIGINT NOT NULL, author_name VARCHAR(100) NOT NULL, author_class VARCHAR(20), text TEXT NOT NULL, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)')
 import httpx
 from PIL import Image
 from sqlalchemy import select, func

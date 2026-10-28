@@ -14,7 +14,7 @@ from config import settings
 def redact(value):
     if not isinstance(value, str):
         return value
-    for secret in (settings.BOT_TOKEN, settings.DATABASE_URL, settings.BOT_STORAGE_URL):
+    for secret in (settings.BOT_TOKEN, settings.DATABASE_URL, settings.BOT_STORAGE_URL, settings.S3_SECRET_ACCESS_KEY, settings.S3_ACCESS_KEY_ID, settings.BACKUP_ENCRYPTION_KEY):
         if secret:
             value = value.replace(secret, "[REDACTED]")
     value = re.sub(r"bot\d{6,12}:[A-Za-z0-9_-]+", "bot[REDACTED]", value)

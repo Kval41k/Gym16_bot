@@ -311,6 +311,7 @@ class MaterialProgress(Base):
 
 class MediaUpload(Base):
     __tablename__ = "media_uploads"
+    size_bytes: Mapped[int] = mapped_column(BigInteger, default=0, server_default="0", nullable=False)
     filename: Mapped[str] = mapped_column(String(100), primary_key=True)
     user_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("users.id", ondelete="CASCADE"), index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

@@ -35,8 +35,8 @@ function toolsDate(iso) {
 // Schedule: day/week modes, familiar class/profile controls, clear current/next lessons.
 document.getElementById('live-status-card').insertAdjacentHTML('afterend', `
   <div class="g-row g-between school-schedule-toolbar"><div class="g-tabs" role="group" aria-label="Вид расписания">
-  <button class="g-btn primary" id="tools-day" onclick="toolsScheduleMode('day')">День</button>
-  <button class="g-btn" id="tools-week" onclick="toolsScheduleMode('week')">Неделя</button></div></div>
+  <button class="g-btn primary" id="tools-day" data-gym-click="h85648f8c61f6">День</button>
+  <button class="g-btn" id="tools-week" data-gym-click="h0d176ec53817">Неделя</button></div></div>
   <div id="tools-schedule-date" class="g-muted"></div>`);
 function toolsScheduleMode(mode) { toolsState.mode = mode; loadSchedule(); }
 function toolsToday() {
@@ -139,7 +139,7 @@ loadSchedule = async function(quiet = false) {
     calculateLiveStatusLocally();
     updateLiveScheduleStatus().catch(() => {});
   } catch (error) {
-    if (requestId === toolsState.scheduleRequest) container.innerHTML = `<div class="g-card g-muted">${toolsEsc(error.message)} <button class="g-btn" onclick="loadSchedule()">Повторить</button></div>`;
+    if (requestId === toolsState.scheduleRequest) container.innerHTML = `<div class="g-card g-muted">${toolsEsc(error.message)} <button class="g-btn" data-gym-click="h1c70d7d00459">Повторить</button></div>`;
   }
 };
 
@@ -148,18 +148,18 @@ document.getElementById('edit-profile-btn').insertAdjacentHTML('afterend', `
   <section class="g-card g-stack"><h3 class="g-title">Оформление</h3>
     <p class="g-muted">Режим «Как в Telegram» автоматически меняет тему вместе с Telegram.</p>
     <div class="g-theme-options" role="group" aria-label="Тема приложения">
-      <button type="button" class="g-btn" data-busy="theme" data-theme-choice="auto" onclick="toolsChooseTheme('auto')">Как в Telegram</button>
-      <button type="button" class="g-btn" data-busy="theme" data-theme-choice="light" onclick="toolsChooseTheme('light')">☀ Светлая</button>
-      <button type="button" class="g-btn" data-busy="theme" data-theme-choice="dark" onclick="toolsChooseTheme('dark')">☾ Тёмная</button>
+      <button type="button" class="g-btn" data-busy="theme" data-theme-choice="auto" data-gym-click="hb6f8e260e11d">Как в Telegram</button>
+      <button type="button" class="g-btn" data-busy="theme" data-theme-choice="light" data-gym-click="h7ddbf1941d30">☀ Светлая</button>
+      <button type="button" class="g-btn" data-busy="theme" data-theme-choice="dark" data-gym-click="hcfd88def1d1c">☾ Тёмная</button>
     </div></section>
   <section class="g-card g-stack"><h3 class="g-title">Уведомления в Telegram</h3>
     <p class="g-muted">Включи нужные уведомления и открой чат бота командой /start. Время — Тюмень (UTC+5).</p>
     <label class="g-row"><input type="checkbox" id="tools-reminders"> Перед началом урока</label>
     <div class="g-reminder-control"><div class="g-row g-between"><label for="tools-reminder-minutes" class="g-muted">Напомнить до начала</label><output id="school-reminder-value" for="tools-reminder-minutes">За 10 минут</output></div>
-    <input id="tools-reminder-minutes" class="g-reminder-range" type="range" min="5" max="15" step="5" value="10" aria-label="За сколько минут до урока напоминать" aria-valuetext="За 10 минут" oninput="schoolReminderPreview()">
-    <div class="g-reminder-ticks">${[5,10,15].map(n=>`<button type="button" data-reminder-minutes="${n}" onclick="schoolChooseReminder(${n})">${n} мин</button>`).join('')}</div></div>
+    <input id="tools-reminder-minutes" class="g-reminder-range" type="range" min="5" max="15" step="5" value="10" aria-label="За сколько минут до урока напоминать" aria-valuetext="За 10 минут" data-gym-input="h9dec1a01edda">
+    <div class="g-reminder-ticks">${[5,10,15].map(n=>`<button type="button" data-reminder-minutes="${n}" data-gym-click="h7269d2d7acef" data-gym-args="${encodeURIComponent(JSON.stringify([(n)]))}">${n} мин</button>`).join('')}</div></div>
     <label class="g-row"><input type="checkbox" id="tools-changes"> При изменении расписания моего класса</label>
-    <button class="g-btn primary" data-busy="prefs" onclick="toolsSavePreferences()">Сохранить настройки</button>
+    <button class="g-btn primary" data-busy="prefs" data-gym-click="h5be758ba104a">Сохранить настройки</button>
     <div class="g-muted">Доставка напоминаний зависит от доступности сервера. На бесплатном хостинге во время сна сервиса они не отправляются.</div>
   </section>`);
 async function loadPersonalTools() {
@@ -210,8 +210,8 @@ async function toolsSavePreferences() {
 
 // News status is visible only to the authenticated author.
 document.getElementById('news-posts-list').insertAdjacentHTML('beforebegin', `<div class="g-tabs">
-  <button class="g-btn primary" id="tools-feed-btn" onclick="toolsNewsTab('feed')">Лента</button>
-  <button class="g-btn" id="tools-mine-btn" onclick="toolsNewsTab('mine')">Мои предложения</button></div><div id="tools-my-news" hidden></div>`);
+  <button class="g-btn primary" id="tools-feed-btn" data-gym-click="hab28e96ec1bc">Лента</button>
+  <button class="g-btn" id="tools-mine-btn" data-gym-click="hd6181765d053">Мои предложения</button></div><div id="tools-my-news" hidden></div>`);
 async function toolsNewsTab(tab) {
   toolsState.news = tab;
   document.getElementById('news-posts-list').hidden = tab !== 'feed';
@@ -233,7 +233,7 @@ async function toolsMyNews() {
 const toolsOriginalNews = renderNewsPost;
 renderNewsPost = function(post) {
   return toolsOriginalNews(post).replace(`<div class="text-[10px] text-ios-secondaryText">${toolsEsc(post.created_at)}</div>`, `<time>${toolsEsc(post.created_at)}</time>`)
-    .replace('<!-- Post Content -->', `${checkCanEdit() ? `<button class="g-btn" onclick="openEditModal(${post.id})">✎ Редактировать</button>` : ''}<!-- Post Content -->`);
+    .replace('<!-- Post Content -->', `${checkCanEdit() ? `<button class="g-btn" data-gym-click="h8360c133f93f" data-gym-args="${encodeURIComponent(JSON.stringify([(post.id)]))}">✎ Редактировать</button>` : ''}<!-- Post Content -->`);
 };
 handleModeratePost = async function(postId, action) {
   let reason = null;
@@ -252,7 +252,7 @@ togglePostReaction = (id, emoji) => toolsRun('reaction-' + id, () => toolsOrigin
 
 // In-app image viewer with zoom and scrolling.
 document.body.insertAdjacentHTML('beforeend', `<dialog class="g-viewer" id="tools-image-viewer" aria-label="Просмотр фотографии">
-  <div class="g-viewer-toolbar"><button onclick="toolsZoom(-.5)" aria-label="Уменьшить">−</button><span id="tools-zoom-label">100%</span><button onclick="toolsZoom(.5)" aria-label="Увеличить">+</button><button onclick="document.getElementById('tools-image-viewer').close()">Закрыть</button></div>
+  <div class="g-viewer-toolbar"><button data-gym-click="hd867108c3cef" aria-label="Уменьшить">−</button><span id="tools-zoom-label">100%</span><button data-gym-click="h7cdbb6fb6346" aria-label="Увеличить">+</button><button data-gym-click="hd6a96bf2f224">Закрыть</button></div>
   <div class="g-viewer-body"><img id="tools-viewer-image" alt="Фотография крупным планом"></div></dialog>`);
 let toolsZoomLevel = 1;
 function toolsZoom(delta) {
@@ -273,8 +273,8 @@ document.addEventListener('click', event => {
 
 // EGE: local full-text filtering on the fetched subject, saved and studied materials.
 document.getElementById('ege-materials-list').insertAdjacentHTML('beforebegin', `<section class="g-stack">
-  <input class="g-input" type="search" id="tools-ege-search" placeholder="Поиск по теме, тексту или № задания" aria-label="Поиск материалов" oninput="toolsRenderEge()">
-  <div class="g-tabs"><button class="g-btn primary" id="tools-ege-all" onclick="toolsEgeFilter('all')">Все материалы</button><button class="g-btn" id="tools-ege-saved" onclick="toolsEgeFilter('saved')">Закладки</button><button class="g-btn" id="tools-ege-studied" onclick="toolsEgeFilter('studied')">Изучено</button></div>
+  <input class="g-input" type="search" id="tools-ege-search" placeholder="Поиск по теме, тексту или № задания" aria-label="Поиск материалов" data-gym-input="h2c431fb8ee2b">
+  <div class="g-tabs"><button class="g-btn primary" id="tools-ege-all" data-gym-click="h82ea381ca0ec">Все материалы</button><button class="g-btn" id="tools-ege-saved" data-gym-click="hcb39b0b23e44">Закладки</button><button class="g-btn" id="tools-ege-studied" data-gym-click="h428b5c3da737">Изучено</button></div>
   <div class="g-muted" id="tools-ege-progress"></div></section>`);
 const toolsOriginalEgeRender = renderEgeMaterials;
 const toolsOriginalEgeCard = renderSingleEgeMaterialCard;
@@ -311,8 +311,8 @@ function toolsRenderEge() {
 }
 renderSingleEgeMaterialCard = function(material, isAdmin) {
   const progress = toolsState.progress[material.id] || {};
-  return toolsOriginalEgeCard(material, isAdmin).replace('</article>', `<div class="g-row" style="padding-top:10px"><button class="g-btn ${progress.bookmarked ? 'primary' : ''}" data-busy="material-${material.id}" aria-pressed="${!!progress.bookmarked}" onclick="toolsMaterial(${material.id},'bookmarked')">${progress.bookmarked ? '★ В закладках' : '☆ Сохранить'}</button>
-    <button class="g-btn ${progress.studied ? 'primary' : ''}" data-busy="material-${material.id}" aria-pressed="${!!progress.studied}" onclick="toolsMaterial(${material.id},'studied')">${progress.studied ? '✓ Изучено' : 'Отметить изученным'}</button></div></article>`);
+  return toolsOriginalEgeCard(material, isAdmin).replace('</article>', `<div class="g-row" style="padding-top:10px"><button class="g-btn ${progress.bookmarked ? 'primary' : ''}" data-busy="material-${material.id}" aria-pressed="${!!progress.bookmarked}" data-gym-click="h715596933ee0" data-gym-args="${encodeURIComponent(JSON.stringify([(material.id)]))}">${progress.bookmarked ? '★ В закладках' : '☆ Сохранить'}</button>
+    <button class="g-btn ${progress.studied ? 'primary' : ''}" data-busy="material-${material.id}" aria-pressed="${!!progress.studied}" data-gym-click="h3b064d9b33a3" data-gym-args="${encodeURIComponent(JSON.stringify([(material.id)]))}">${progress.studied ? '✓ Изучено' : 'Отметить изученным'}</button></div></article>`);
 };
 function toolsMaterial(id, field) {
   return toolsRun('material-' + id, async () => {
@@ -323,11 +323,11 @@ function toolsMaterial(id, field) {
 
 // Only the author can edit a comment; the server checks ownership and revision.
 document.body.insertAdjacentHTML('beforeend', `<dialog class="g-editor" id="tools-comment-editor" aria-labelledby="tools-comment-editor-title">
-  <form onsubmit="toolsSaveComment(event)" class="g-stack"><h3 class="g-title" id="tools-comment-editor-title">Изменить комментарий</h3>
+  <form data-gym-submit="hc4544bd556dc" class="g-stack"><h3 class="g-title" id="tools-comment-editor-title">Изменить комментарий</h3>
   <label class="g-label" for="tools-comment-text">Текст комментария</label>
   <textarea class="g-input" id="tools-comment-text" maxlength="1000" required></textarea>
   <p class="g-error" id="tools-comment-error" role="alert"></p>
-  <div class="g-row" style="justify-content:flex-end"><button type="button" class="g-btn" onclick="document.getElementById('tools-comment-editor').close()">Отмена</button>
+  <div class="g-row" style="justify-content:flex-end"><button type="button" class="g-btn" data-gym-click="he3301321c6be">Отмена</button>
     <button type="submit" class="g-btn primary" data-busy="comment-edit">Сохранить</button></div></form></dialog>`);
 async function toolsEditComment(id) {
   return toolsRun('comment-open', async () => {
@@ -363,27 +363,27 @@ async function toolsSaveComment(event) {
 const toolsAdminTabs = document.getElementById('admin-subtab-moderation-btn').parentElement;
 toolsAdminTabs.className = 'g-tabs';
 toolsAdminTabs.innerHTML = [['moderation','Модерация'],['users','Пользователи'],['schedule','Расписание'],['logs','Логи'],['data','Данные'],['access','Приглашения']]
-  .map(([id, label]) => `<button class="g-btn ${id === 'moderation' ? 'primary' : ''}" id="admin-subtab-${id}-btn" onclick="setAdminSubtab('${id}')">${label}${id === 'moderation' ? ' <span id="admin-subtab-pending-badge" class="hidden"></span>' : ''}</button>`).join('');
+  .map(([id, label]) => `<button class="g-btn ${id === 'moderation' ? 'primary' : ''}" id="admin-subtab-${id}-btn" data-gym-click="h385a501d9b46" data-gym-args="${encodeURIComponent(JSON.stringify([(id)]))}">${label}${id === 'moderation' ? ' <span id="admin-subtab-pending-badge" class="hidden"></span>' : ''}</button>`).join('');
 document.getElementById('tab-admin').insertAdjacentHTML('beforeend', `
   <section id="admin-section-schedule" hidden class="g-stack"><div class="g-card g-stack">
     <h3 class="g-title">Редактор расписания</h3><p class="g-muted">Выберите класс. Изменения относятся ко всей его неделе. Перед публикацией доступен предпросмотр; уроки остальных классов сохраняются.</p>
-    <select class="g-input" id="tools-schedule-class" onchange="toolsAdminSchedule()"></select><div class="g-row" id="tools-class-status"></div>
-    <div class="g-row"><button class="g-btn" onclick="toolsAddLesson()">+ Урок</button><button class="g-btn" onclick="toolsScheduleCSV()">Вставить CSV</button><button class="g-btn" onclick="toolsDownloadSchedule()">Скачать CSV</button></div>
-    <div id="tools-csv-import" hidden><label class="g-label">CSV из таблицы (UTF-8)</label><input class="g-input" type="file" accept=".csv,text/csv" onchange="toolsReadCSV(this)">
+    <select class="g-input" id="tools-schedule-class" data-gym-change="h1e23a28ef595"></select><div class="g-row" id="tools-class-status"></div>
+    <div class="g-row"><button class="g-btn" data-gym-click="h4d73154a1c25">+ Урок</button><button class="g-btn" data-gym-click="h497a6c40582c">Вставить CSV</button><button class="g-btn" data-gym-click="hf411f006bb5a">Скачать CSV</button></div>
+    <div id="tools-csv-import" hidden><label class="g-label">CSV из таблицы (UTF-8)</label><input class="g-input" type="file" accept=".csv,text/csv" data-gym-change="h4e0b662fcb96">
       <textarea class="g-input" id="tools-csv-text" rows="6" placeholder="день;урок;предмет;учитель;кабинет;профиль;группа;начало;конец;примечание"></textarea>
       <p class="g-muted">День: Пн–Сб или 0–5. Пустой профиль — весь класс. Начало и конец можно указать в формате ЧЧ:ММ. Поля с разделителем заключайте в кавычки.</p>
-      <button class="g-btn" data-busy="schedule-preview" onclick="toolsPreviewSchedule(true)">Проверить CSV</button></div>
-    <div id="tools-schedule-grid"></div><button class="g-btn primary" data-busy="schedule-preview" onclick="toolsPreviewSchedule(false)">Предпросмотр изменений</button>
+      <button class="g-btn" data-busy="schedule-preview" data-gym-click="hfec0417dc2cc">Проверить CSV</button></div>
+    <div id="tools-schedule-grid"></div><button class="g-btn primary" data-busy="schedule-preview" data-gym-click="hd5ce9062dba4">Предпросмотр изменений</button>
     <div id="tools-schedule-preview" hidden></div></div></section>
   <section id="admin-section-logs" hidden class="g-stack"><div class="g-card g-stack"><h3 class="g-title">Журнал действий</h3>
     <p class="g-muted">Кто, когда и что изменил в приложении или боте. История собирается с момента установки обновления.</p>
-    <input class="g-input" id="tools-log-search" placeholder="Имя, @username, Telegram ID или ID записи" oninput="toolsLogSearch()">
-    <div class="g-search-controls"><select class="g-input" id="tools-log-section" onchange="toolsLoadLogs()"><option value="">Все разделы</option><option value="profile">Профиль и настройки</option><option value="schedule">Расписание</option><option value="news">Новости</option><option value="comments">Комментарии</option><option value="reactions">Реакции</option><option value="ege">ЕГЭ</option><option value="headman">Староста: чат, посещаемость, питание</option></select>
-    <select class="g-input" id="tools-log-action" onchange="toolsLoadLogs()"><option value="">Все действия</option><option value="create">Добавления</option><option value="update">Изменения</option><option value="delete">Удаления</option></select>
-    <label class="g-muted">С даты<input class="g-input" type="date" id="tools-log-from" onchange="toolsLoadLogs()"></label><label class="g-muted">По дату<input class="g-input" type="date" id="tools-log-to" onchange="toolsLoadLogs()"></label></div>
-    <button class="g-btn" onclick="toolsLoadLogs()">Обновить журнал</button></div><div id="tools-logs-list"></div><button class="g-btn" id="tools-logs-more" data-busy="logs" onclick="toolsLoadLogs(true)" hidden>Показать ещё</button></section>
+    <input class="g-input" id="tools-log-search" placeholder="Имя, @username, Telegram ID или ID записи" data-gym-input="h4123f8b84e95">
+    <div class="g-search-controls"><select class="g-input" id="tools-log-section" data-gym-change="h086b0a0679c7"><option value="">Все разделы</option><option value="profile">Профиль и настройки</option><option value="schedule">Расписание</option><option value="news">Новости</option><option value="comments">Комментарии</option><option value="reactions">Реакции</option><option value="ege">ЕГЭ</option><option value="headman">Староста: чат, посещаемость, питание</option></select>
+    <select class="g-input" id="tools-log-action" data-gym-change="h086b0a0679c7"><option value="">Все действия</option><option value="create">Добавления</option><option value="update">Изменения</option><option value="delete">Удаления</option></select>
+    <label class="g-muted">С даты<input class="g-input" type="date" id="tools-log-from" data-gym-change="h086b0a0679c7"></label><label class="g-muted">По дату<input class="g-input" type="date" id="tools-log-to" data-gym-change="h086b0a0679c7"></label></div>
+    <button class="g-btn" data-gym-click="h086b0a0679c7">Обновить журнал</button></div><div id="tools-logs-list"></div><button class="g-btn" id="tools-logs-more" data-busy="logs" data-gym-click="h6c726fc77ad2" hidden>Показать ещё</button></section>
   <section id="admin-section-data" hidden class="g-stack"><div class="g-card g-stack"><h3 class="g-title">Данные и резервные копии</h3><div id="tools-storage-status" class="g-muted"></div>
-    <button class="g-btn primary" data-busy="backup" onclick="toolsBackup()">Скачать резервную копию ZIP</button>
+    <button class="g-btn primary" data-busy="backup" data-gym-click="hcebc1fb8b79b">Скачать резервную копию ZIP</button>
     <p class="g-muted">В архиве — база, журнал действий, настройки и загруженные файлы. Сохраните его в надёжном месте: он содержит данные пользователей.</p>
     <p class="g-muted">Автоматически создаётся одна локальная копия в день, хранятся последние 7. При остановленном сервере новые копии не создаются.</p></div></section>`);
 setAdminSubtab = function(tab) {
@@ -435,11 +435,11 @@ function toolsRenderScheduleGrid() {
   const columns = [['day_of_week','День'],['lesson_number','Урок'],['subject','Предмет'],['teacher_name','Учитель'],['cabinet','Кабинет'],['profile_name','Профиль'],['subgroup','Группа'],['start_time','Начало'],['end_time','Конец'],['note','Примечание']];
   const profiles = state.structure.class_profiles?.[toolsChosenClass()] || [];
   document.getElementById('tools-schedule-grid').innerHTML = `<div class="g-table-wrap"><table class="g-table"><thead><tr>${columns.map(([,title])=>`<th>${title}</th>`).join('')}<th></th></tr></thead><tbody>${toolsState.rows.map((row,index)=>`<tr>${columns.map(([field,title])=>{
-    const attrs = `class="g-input ${field === 'subject' ? 'g-subject' : ''}" aria-label="${title}, строка ${index+1}" onchange="toolsEditLesson(${index},'${field}',this.value)"`;
+    const attrs = `class="g-input ${field === 'subject' ? 'g-subject' : ''}" aria-label="${title}, строка ${index+1}" data-gym-change="he7dcca099af3" data-gym-args="${encodeURIComponent(JSON.stringify([(index),(field)]))}"`;
     if (field === 'day_of_week') return `<td><select ${attrs}>${toolsDays.map((day,i)=>`<option value="${i}" ${row[field]===i?'selected':''}>${['Пн','Вт','Ср','Чт','Пт','Сб'][i]}</option>`).join('')}</select></td>`;
     if (field === 'profile_name') return `<td><select ${attrs}><option value="">Весь класс</option>${profiles.map(profile=>`<option ${row[field]===profile?'selected':''}>${toolsEsc(profile)}</option>`).join('')}</select></td>`;
     return `<td><input ${attrs} value="${toolsEsc(row[field]??'')}" ${['lesson_number','subgroup'].includes(field)?'type="number" min="0" max="12"':['start_time','end_time'].includes(field)?'type="time"':''}></td>`;
-  }).join('')}<td><button class="g-btn danger" onclick="toolsRemoveLesson(${index})" aria-label="Удалить строку ${index+1}">×</button></td></tr>`).join('')}</tbody></table></div><p class="g-muted">${toolsState.rows.length} строк · таблицу можно прокручивать по горизонтали. Примечания отображаются ученикам в карточках.</p>`;
+  }).join('')}<td><button class="g-btn danger" data-gym-click="hbccfb11554fd" data-gym-args="${encodeURIComponent(JSON.stringify([(index)]))}" aria-label="Удалить строку ${index+1}">×</button></td></tr>`).join('')}</tbody></table></div><p class="g-muted">${toolsState.rows.length} строк · таблицу можно прокручивать по горизонтали. Примечания отображаются ученикам в карточках.</p>`;
 }
 function toolsEditLesson(index, field, value) {
   if (['day_of_week','lesson_number','subgroup'].includes(field)) value = value === '' ? null : Number(value);
@@ -470,7 +470,7 @@ async function toolsPreviewSchedule(fromCSV) {
     toolsRenderScheduleGrid();
     const panel = document.getElementById('tools-schedule-preview'); panel.hidden=false;
     panel.innerHTML = `<div class="g-note g-stack"><b>Предпросмотр · ${toolsEsc(payload.class_name)}</b><p>Было ${preview.old_count} строк → станет ${preview.new_count}.</p><p>Без занятий: ${preview.empty_days.map(day=>toolsDays[day]).join(', ')||'нет'}.</p><p>Новая неделя полностью заменит текущее расписание выбранного класса. Подписанные ученики получат уведомление.</p>
-      ${preview.new_count === 0 ? '<p><b>Все уроки этого класса будут удалены.</b></p>' : ''}<button class="g-btn primary" data-busy="schedule-publish" onclick="toolsPublishSchedule()">Опубликовать это расписание</button></div>`;
+      ${preview.new_count === 0 ? '<p><b>Все уроки этого класса будут удалены.</b></p>' : ''}<button class="g-btn primary" data-busy="schedule-publish" data-gym-click="hfa50d065f8ba">Опубликовать это расписание</button></div>`;
     panel.scrollIntoView({block:'nearest',behavior:'smooth'});
   });
 }
@@ -526,7 +526,7 @@ async function toolsStorage() {
   await toolsRun('storage',async()=>{
     const data=await toolsRequest('/api/admin/storage');
     const ephemeral=data.render&&(!data.persistent_database||!data.persistent_uploads);
-    document.getElementById('tools-storage-status').innerHTML=`<p>База: ${data.persistent_database?'внешняя или на постоянном диске':'локальная SQLite'}.</p><p>Фотографии: ${data.persistent_uploads?'на постоянном диске':'в локальной папке сервера'}.</p><p>Копий на сервере: ${data.backup_count}. Последняя: ${toolsEsc(data.last_backup||'ещё не создана')}.</p>${ephemeral?'<div class="g-note">На этом Render-хостинге локальные данные могут исчезнуть после перезапуска. Скачивайте копии. Для постоянного хранения настройте внешнюю PostgreSQL и постоянный диск для файлов.</div>':''}`;
+    document.getElementById('tools-storage-status').innerHTML=`<p>База: ${data.persistent_database?'внешняя или на постоянном диске':'локальная SQLite'}.</p><p>Фотографии: ${data.remote_media?'в закрытом объектном хранилище':data.persistent_uploads?'на постоянном диске':'в локальной папке сервера'}.</p><p>Лимит фото: ${Number(data.user_quota_mb)} МБ на пользователя, ${Number(data.total_quota_mb)} МБ всего.</p><p>Внешние зашифрованные копии: ${data.external_encrypted_backups?'подключены':'не подключены'}.</p><p>Копий на сервере: ${data.backup_count}. Последняя: ${toolsEsc(data.last_backup||'ещё не создана')}.</p>${ephemeral?'<div class="g-note">На этом Render-хостинге локальные данные могут исчезнуть после перезапуска. Скачивайте копии. Для постоянного хранения настройте внешнюю PostgreSQL и постоянный диск для файлов.</div>':''}`;
   });
 }
 async function toolsBackup() {

@@ -122,7 +122,11 @@ def _validate_news_image_url(value: Optional[str]) -> Optional[str]:
         return value
     parsed = urlparse(value)
     if parsed.scheme == "https" and parsed.netloc and not parsed.username and not parsed.password:
-        return value
+        from config import settings
+        own = urlparse(settings.BASE_URL)
+        if own.netloc and parsed.netloc == own.netloc and parsed.path.startswith(("/uploads/", "/api/media/")):
+            return _validate_news_image_url(parsed.path)
+        raise ValueError("Загрузите изображение в приложение: внешние адреса не поддерживаются для защиты приватности")
     raise ValueError("Изображение должно быть загружено в приложение или иметь HTTPS адрес")
 
 

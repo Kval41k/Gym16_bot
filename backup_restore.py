@@ -13,7 +13,12 @@ import models  # Register every table, including audit history.
 
 
 async def restore(path: Path, apply: bool):
-    with zipfile.ZipFile(path) as archive:
+    source = path
+    if path.name.endswith('.fernet'):
+        import io
+        from offsite_backup import decrypt_backup
+        source = io.BytesIO(decrypt_backup(path.read_bytes()))
+    with zipfile.ZipFile(source) as archive:
         data = json.loads(archive.read("data.json"))
         if data.get("format") != "gym16-backup-v1":
             raise ValueError("Unknown backup format")

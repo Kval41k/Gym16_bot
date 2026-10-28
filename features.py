@@ -287,7 +287,9 @@ def install_features(app, require_user, require_admin, cache_clear):
         persistent_db = engine.dialect.name != "sqlite" or bool(disk and str(engine.url.database).startswith(disk + "/"))
         backup_dir = settings.BACKUP_DIR
         files = sorted(backup_dir.glob("gym16-*.zip"), reverse=True) if backup_dir.exists() else []
-        return {"persistent_database": persistent_db, "persistent_uploads": bool(disk and str(settings.UPLOAD_DIR).startswith(disk + "/")),
+        return {"persistent_database": persistent_db, "persistent_uploads": settings.S3_MEDIA_ENABLED or bool(disk and str(settings.UPLOAD_DIR).startswith(disk + "/")),
+                "remote_media": settings.S3_MEDIA_ENABLED, "external_encrypted_backups": settings.BACKUP_REMOTE_ENABLED,
+                "user_quota_mb": settings.UPLOAD_USER_QUOTA_MB, "total_quota_mb": settings.UPLOAD_TOTAL_QUOTA_MB,
                 "render": bool(os.getenv("RENDER")), "backup_count": len(files),
                 "last_backup": files[0].name if files else None, "automatic_backups": "ежедневно, последние 7 архивов",
                 "reminders_require_awake_service": True}
@@ -315,30 +317,60 @@ async def build_backup():
             for table in Base.metadata.sorted_tables:
                 rows = (await conn.execute(select(table))).mappings().all()
                 data["tables"][table.name] = [dict(row) for row in rows]
+    remote_media = []
+    if settings.S3_MEDIA_ENABLED:
+        from storage import read_remote_image
+        for row in data['tables'].get('media_uploads', []):
+            remote_media.append((row['filename'], await read_remote_image(row['filename'])))
     def pack():
         output = io.BytesIO()
         with zipfile.ZipFile(output, "w", zipfile.ZIP_DEFLATED) as archive:
             archive.writestr("data.json", json.dumps(data, ensure_ascii=False, default=lambda item: item.isoformat() if isinstance(item, datetime) else str(item)))
             archive.writestr("README.txt", "Gym16 portable backup. data.json contains database tables in dependency order. uploads/ contains local media. Restore with: python backup_restore.py ARCHIVE --apply (maintenance mode, empty database). Keep this file private: it contains user data and audit history.")
+            for name, content in remote_media:
+                archive.writestr('uploads/' + name, content)
             for path in settings.UPLOAD_DIR.rglob("*"):
-                if path.is_file() and not path.is_symlink():
+                if path.is_file() and not path.is_symlink() and path.name not in {name for name, _ in remote_media}:
                     archive.write(path, "uploads/" + str(path.relative_to(settings.UPLOAD_DIR)))
         return output.getvalue()
     return await asyncio.to_thread(pack)
 
 
 async def create_daily_backup():
+    import fcntl
+    import tempfile
+    from offsite_backup import validate_archive, publish_backup
     directory = settings.BACKUP_DIR
     directory.mkdir(parents=True, exist_ok=True)
-    target = directory / f"gym16-{datetime.now(TZ).strftime('%Y%m%d')}.zip"
-    if target.exists():
-        return
-    content = await build_backup()
-    temporary = target.with_suffix(".tmp")
-    await asyncio.to_thread(temporary.write_bytes, content)
-    temporary.replace(target)
-    for old in sorted(directory.glob("gym16-*.zip"), reverse=True)[7:]:
-        old.unlink()
+    # One OS lock + unique temp path; concurrent processes cannot corrupt the archive.
+    with (directory / '.backup.lock').open('a') as lock:
+        try:
+            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            return
+        target = directory / f"gym16-{datetime.now(TZ).strftime('%Y%m%d')}.zip"
+        valid = False
+        if target.exists():
+            try:
+                await asyncio.to_thread(validate_archive, target.read_bytes())
+                valid = True
+            except (ValueError, zipfile.BadZipFile, KeyError):
+                logger.warning('Daily backup failed integrity check; rebuilding')
+        if not valid:
+            content = await build_backup()
+            await asyncio.to_thread(validate_archive, content)
+            fd, name = tempfile.mkstemp(prefix='.backup-', dir=directory)
+            temporary = Path(name)
+            try:
+                with os.fdopen(fd, 'wb') as stream:
+                    stream.write(content); stream.flush(); os.fsync(stream.fileno())
+                temporary.replace(target)
+            finally:
+                temporary.unlink(missing_ok=True)
+        await publish_backup(target)
+        for old in sorted(directory.glob('gym16-*.zip'), reverse=True)[7:]:
+            old.unlink()
+            old.with_suffix('.remote-ok').unlink(missing_ok=True)
 
 
 async def enqueue_reminders(now=None):
@@ -422,14 +454,22 @@ async def deliver_notifications():
 
 
 async def maintenance_loop():
+    import time
+    from storage import cleanup_uploads
+    last_cleanup = 0
     while True:
-        try:
-            await create_daily_backup()
-            await enqueue_reminders()
-            await deliver_notifications()
-        except asyncio.CancelledError:
-            raise
-        except Exception:
-            # Never log HTTP client exceptions containing the bot-token URL.
-            logger.error("Background reminders/backup cycle failed", exc_info=False)
+        jobs = []
+        if time.monotonic() - last_cleanup > 3600:
+            jobs.append(cleanup_uploads)
+        jobs.extend([create_daily_backup, enqueue_reminders, deliver_notifications])
+        for job in jobs:
+            try:
+                await job()
+                if job is cleanup_uploads:
+                    last_cleanup = time.monotonic()
+            except asyncio.CancelledError:
+                raise
+            except Exception:
+                # LogRecord factory removes configured secrets from traceback text.
+                logger.error('Background job %s failed', job.__name__, exc_info=True)
         await asyncio.sleep(30)

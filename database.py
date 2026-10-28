@@ -73,25 +73,18 @@ async def init_db() -> None:
             await conn.execute(text("PRAGMA synchronous = NORMAL;"))
             await conn.execute(text("PRAGMA cache_size = -64000;"))
             await conn.execute(text("PRAGMA foreign_keys = ON;"))
-        await conn.run_sync(Base.metadata.create_all)
-        user_columns = await conn.run_sync(lambda sync_conn: inspect(sync_conn).get_columns("users"))
-        if "is_banned" not in {column["name"] for column in user_columns}:
-            await conn.execute(text("ALTER TABLE users ADD COLUMN is_banned BOOLEAN DEFAULT FALSE NOT NULL"))
-        lesson_columns = await conn.run_sync(lambda sync_conn: inspect(sync_conn).get_columns("lessons"))
-        for name in ("start_time", "end_time"):
-            if name not in {column["name"] for column in lesson_columns}:
-                await conn.execute(text(f"ALTER TABLE lessons ADD COLUMN {name} VARCHAR(5)"))
-        for table, column, definition in (("ege_materials", "source_key", "VARCHAR(100)"),
-                                          ("ege_materials", "is_archived", "BOOLEAN DEFAULT FALSE NOT NULL"),
-                                          ("users", "role", "VARCHAR(20) DEFAULT 'student' NOT NULL"),
-                                          ("users", "headman_class_name", "VARCHAR(20)"),
-                                          ("users", "is_member", "BOOLEAN DEFAULT TRUE NOT NULL"),
-                                          ("news_posts", "is_pinned", "BOOLEAN DEFAULT FALSE NOT NULL"),
-                                          ("comments", "updated_at", "TIMESTAMP"),
-                                          ("user_preferences", "theme", "VARCHAR(10) DEFAULT 'auto' NOT NULL")):
-            columns = await conn.run_sync(lambda sync_conn: inspect(sync_conn).get_columns(table))
-            if column not in {item["name"] for item in columns}:
-                await conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {column} {definition}"))
+        # Serialize startup migrations on the same transaction, preserving existing data.
+        if is_sqlite:
+            await conn.execute(text("BEGIN IMMEDIATE"))
+        else:
+            await conn.execute(text("SELECT pg_advisory_xact_lock(160024)"))
+        def upgrade_schema(connection):
+            from alembic import command
+            from alembic.config import Config
+            config = Config(str(BASE_DIR / 'alembic.ini'))
+            config.attributes['connection'] = connection
+            command.upgrade(config, 'head')
+        await conn.run_sync(upgrade_schema)
 
     async with async_session() as session:
         # 1. Seed classes if missing
