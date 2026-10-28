@@ -16,10 +16,10 @@ jobs:
       - run: pip install -r requirements.txt
       - run: python scripts/check_all.py
       - run: python -m compileall -q main.py bot.py storage.py offsite_backup.py database.py migrations
-      - run: npx --yes pnpm@9 install --frozen-lockfile
-      - run: npx --yes pnpm@9 run build:css && git diff --exit-code -- static/ui.css
+      - run: npx --yes pnpm@11.25.0 install --frozen-lockfile
+      - run: npx --yes pnpm@11.25.0 run build:css && git diff --exit-code -- static/ui.css
       - run: pip install pip-audit && pip-audit -r requirements.lock.txt --no-deps --disable-pip
-      - run: npx --yes pnpm@9 audit
+      - run: npx --yes pnpm@11.25.0 audit
   postgres:
     runs-on: ubuntu-latest
     services:
