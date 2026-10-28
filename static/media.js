@@ -4,6 +4,13 @@
   const cache = new Map();
   const pending = new Map();
   const escape = value => String(value).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  function publicImage(value) {
+    try {
+      const url=new URL(value,location.origin);
+      return url.protocol==='https:' && !url.username && !url.password &&
+        (url.hostname==='t.me'||url.hostname.endsWith('.telegram.org')) ? url.href : '';
+    } catch {return '';}
+  }
   function privatePath(value) {
     try {
       const url = new URL(value, location.origin);
@@ -37,14 +44,14 @@
   }
   window.protectedImageAttrs = value => {
     const path = privatePath(value);
-    return path ? `src="${placeholder}" data-protected-src="${escape(path)}"` : `src="${escape(value || '')}"`;
+    return path ? `src="${placeholder}" data-protected-src="${escape(path)}"` : `src="${escape(publicImage(value))}"`;
   };
   window.setProtectedImage = (image, value) => {
     if (!image) return;
     delete image.dataset.protectedLoaded;
     const path = privatePath(value);
     if (path) { image.dataset.protectedSrc = path; image.src = placeholder; hydrate(image); }
-    else { delete image.dataset.protectedSrc; image.src = value || ''; }
+    else { delete image.dataset.protectedSrc; image.src = publicImage(value); }
   };
   function scan(node) {
     if (node.nodeType !== 1) return;

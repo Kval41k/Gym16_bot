@@ -100,6 +100,8 @@ async def lifespan(app: FastAPI):
     
     # Initialize DB schema and base seeds
     await init_db()
+    from storage import validate_storage_configuration
+    validate_storage_configuration()
     from data_updates import apply_calendar_schedule, apply_photo_timetables
     await apply_calendar_schedule()
     await apply_photo_timetables()
@@ -146,12 +148,12 @@ async def audit_identity(request: Request, call_next):
         response.headers["Referrer-Policy"] = "no-referrer"
         response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
         response.headers["Content-Security-Policy"] = (
-            "default-src 'self'; script-src 'self' https://telegram.org 'unsafe-inline'; "
-            "style-src 'self' 'unsafe-inline'; img-src 'self' https: blob: data:; "
+            "default-src 'self'; script-src 'self' https://telegram.org; script-src-attr 'none'; "
+            "style-src 'self' 'unsafe-inline'; img-src 'self' https://t.me https://*.telegram.org blob: data:; "
             "connect-src 'self'; font-src 'self' data:; object-src 'none'; base-uri 'none'; "
             "form-action 'self'; frame-ancestors 'self' https://web.telegram.org https://*.telegram.org"
         )
-        if request.url.path.startswith(("/api/me/", "/api/user/", "/api/admin/", "/api/news", "/api/ege", "/uploads/", "/api/media/", "/admin/")):
+        if request.url.path.startswith(("/api/headman/", "/api/me/", "/api/user/", "/api/admin/", "/api/news", "/api/ege", "/uploads/", "/api/media/", "/admin/")):
             response.headers["Cache-Control"] = "no-store"
             response.headers["Cross-Origin-Resource-Policy"] = "same-origin"
         return response
@@ -234,7 +236,7 @@ def require_telegram_user(init_data_str: Optional[str]) -> Dict[str, Any]:
         user_id = 0
 
     now = int(time.time())
-    if not 0 < user_id < 2**63 or not auth_date or auth_date > now + 300 or now - auth_date > 86400:
+    if not 0 < user_id < 2**63 or not auth_date or auth_date > now + 300 or now - auth_date > settings.AUTH_MAX_AGE:
         raise HTTPException(status_code=401, detail="Срок авторизации Telegram истёк. Перезапустите приложение.")
     return user
 
@@ -514,10 +516,15 @@ async def root():
 
 @app.get("/api/health")
 async def health_check():
-    return {
-        "status": "ok", 
-        "timestamp_tyumen": datetime.now(TYUMEN_TZ).isoformat()
-    }
+    return {"status": "ok", "timestamp_tyumen": datetime.now(TYUMEN_TZ).isoformat()}
+
+
+@app.get("/api/ready")
+async def readiness():
+    from storage import readiness_status
+    checks = await readiness_status()
+    return JSONResponse({"status": "ok" if checks["ready"] else "degraded",
+                         "checks": checks}, status_code=200 if checks["ready"] else 503)
 
 @app.get("/api/meta/structure", response_model=StructureResponse)
 async def get_structure(db: AsyncSession = Depends(get_db)):
@@ -1607,9 +1614,13 @@ async def remove_unused_image(image_url, db):
         return
     if await db.scalar(select(EgeMaterial.id).where(EgeMaterial.image_url.in_(variants)).limit(1)):
         return
-    file = settings.UPLOAD_DIR / path.rsplit("/", 1)[-1]
-    if not file.is_symlink():
-        file.unlink(missing_ok=True)
+    from storage import delete_upload
+    name = path.rsplit('/', 1)[-1]
+    await delete_upload(name)
+    record = await db.get(MediaUpload, name)
+    if record:
+        await db.delete(record)
+        await db.commit()
 
 
 async def validate_ege_task(payload, db):
@@ -1626,6 +1637,10 @@ async def uploaded_image(filename: str,
         raise HTTPException(404, "Изображение не найдено")
     await require_media_access(f"/uploads/{filename}", identity, db)
     path = settings.UPLOAD_DIR / filename
+    if settings.S3_MEDIA_ENABLED:
+        from storage import read_remote_image
+        body = await read_remote_image(filename)
+        return Response(body, media_type="image/png" if filename.endswith('.png') else "image/jpeg", headers={"Cache-Control": "no-store"})
     if path.is_symlink() or not path.is_file() or path.resolve().parent != settings.UPLOAD_DIR.resolve():
         raise HTTPException(404, "Изображение не найдено")
     return FileResponse(path, headers={"Cache-Control": "no-store"})
@@ -1676,14 +1691,14 @@ async def upload_image(
         raise HTTPException(400, str(error))
     if len(content) > 10 * 1024 * 1024:
         raise HTTPException(413, "После обработки изображение превышает 10 МБ")
-    filename = f"{uuid.uuid4().hex}.{ext}"
-    file_path = settings.UPLOAD_DIR / filename
-    await asyncio.to_thread(file_path.write_bytes, content)
+    from storage import reserve_upload
+    filename, file_path = await reserve_upload(db, user.id, content, ext)
     try:
-        db.add(MediaUpload(filename=filename, user_id=user.id))
+        db.add(MediaUpload(filename=filename, user_id=user.id, size_bytes=len(content)))
         await db.commit()
     except Exception:
-        file_path.unlink(missing_ok=True)
+        from storage import delete_upload
+        await delete_upload(filename)
         raise
 
     return {
@@ -2040,9 +2055,9 @@ async def admin_users_dashboard_page(
         if is_adm:
             btn_action = '<span class="text-muted text-sm">Администратор</span>'
         elif u.is_banned:
-            btn_action = f'<button onclick="toggleBan({u.id}, false)" class="btn btn-unban">✅ Разбанить</button>'
+            btn_action = f'<button data-ban-id="{u.id}" data-ban-value="false" class="btn btn-unban">✅ Разбанить</button>'
         else:
-            btn_action = f'<button onclick="toggleBan({u.id}, true)" class="btn btn-ban">🚫 Забанить</button>'
+            btn_action = f'<button data-ban-id="{u.id}" data-ban-value="true" class="btn btn-ban">🚫 Забанить</button>'
 
         rows_html += f"""
         <tr data-user-id="{u.id}" class="user-row {'row-banned' if u.is_banned else ''}">
@@ -2243,7 +2258,7 @@ async def admin_users_dashboard_page(
         </div>
 
         <div class="controls">
-            <input type="text" id="searchInput" class="search-box" placeholder="🔍 Поиск по имени, фамилии, классу или @username..." oninput="filterUsers()">
+            <input type="text" id="searchInput" class="search-box" placeholder="🔍 Поиск по имени, фамилии, классу или @username..." >
         </div>
 
         <div class="table-wrap">
@@ -2268,51 +2283,7 @@ async def admin_users_dashboard_page(
         </div>
     </div>
 
-    <script>
-        const adminId = {authenticated_admin_id};
-        const authTs = {ts or 0};
-        const authSign = "{sign or ''}";
-
-        function filterUsers() {{
-            const query = document.getElementById("searchInput").value.toLowerCase();
-            const rows = document.querySelectorAll("#usersTable tbody tr");
-            rows.forEach(r => {{
-                const text = r.innerText.toLowerCase();
-                r.style.display = text.includes(query) ? "" : "none";
-            }});
-        }}
-
-        async function toggleBan(userId, setBanned) {{
-            const action = setBanned ? "заблокировать" : "разблокировать";
-            if (!confirm(`Вы действительно хотите ${{action}} этого пользователя?`)) return;
-
-            try {{
-                const res = await fetch(`/api/admin/users/${{userId}}/ban`, {{
-                    method: "POST",
-                    headers: {{ "Content-Type": "application/json" }},
-                    body: JSON.stringify({{ admin_id: adminId, ts: authTs, sign: authSign, is_banned: setBanned }})
-                }});
-                const data = await res.json();
-                if (!res.ok) throw new Error(data.detail || "Ошибка запроса");
-
-                const statusEl = document.getElementById(`status-${{userId}}`);
-                const actionEl = document.getElementById(`action-${{userId}}`);
-                const row = document.querySelector(`tr[data-user-id="${{userId}}"]`);
-
-                if (setBanned) {{
-                    statusEl.innerHTML = '<span class="badge badge-banned">🚫 Заблокирован</span>';
-                    actionEl.innerHTML = `<button onclick="toggleBan(${{userId}}, false)" class="btn btn-unban">✅ Разбанить</button>`;
-                    row?.classList.add("row-banned");
-                }} else {{
-                    statusEl.innerHTML = '<span class="badge badge-active">🟢 Активен</span>';
-                    actionEl.innerHTML = `<button onclick="toggleBan(${{userId}}, true)" class="btn btn-ban">🚫 Забанить</button>`;
-                    row?.classList.remove("row-banned");
-                }}
-            }} catch (err) {{
-                alert("Ошибка: " + err.message);
-            }}
-        }}
-    </script>
+    <script src="/static/admin-users.js?v=1"></script>
 </body>
 </html>
 """

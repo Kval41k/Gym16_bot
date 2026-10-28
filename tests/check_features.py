@@ -4,7 +4,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 TEMP = tempfile.TemporaryDirectory(prefix="gym16-check-")
 CHECK_DIR = Path(TEMP.name)
-os.environ.update(DATABASE_URL='sqlite+aiosqlite:///' + str(CHECK_DIR/'check.db'), BOT_TOKEN='123456789:TEST_TOKEN_FOR_LOCAL_CHECKS_ONLY', ADMIN_IDS='2', ADMIN_USERNAME='', UPLOAD_DIR=str(CHECK_DIR/'uploads'), BACKUP_DIR=str(CHECK_DIR/'backups'))
+os.environ.update(DATABASE_URL=os.getenv('GYM16_TEST_DATABASE_URL') or 'sqlite+aiosqlite:///' + str(CHECK_DIR/'check.db'), BOT_TOKEN='123456789:TEST_TOKEN_FOR_LOCAL_CHECKS_ONLY', ADMIN_IDS='2', ADMIN_USERNAME='', UPLOAD_DIR=str(CHECK_DIR/'uploads'), BACKUP_DIR=str(CHECK_DIR/'backups'))
 import httpx
 from config import settings
 from database import init_db, async_session, engine

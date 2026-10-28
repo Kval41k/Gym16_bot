@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock,patch
 from zoneinfo import ZoneInfo
 ROOT=Path(__file__).resolve().parents[1];sys.path.insert(0,str(ROOT))
 TEMP=tempfile.TemporaryDirectory(prefix='gym16-headman-');DIR=Path(TEMP.name)
-os.environ.update(DATABASE_URL='sqlite+aiosqlite:///'+str(DIR/'check.db'),BOT_TOKEN='123456789:TEST_TOKEN_FOR_LOCAL_CHECKS_ONLY',ADMIN_IDS='2',ADMIN_USERNAME='oldadmin',UPLOAD_DIR=str(DIR/'uploads'),BACKUP_DIR=str(DIR/'backups'))
+os.environ.update(DATABASE_URL=os.getenv('GYM16_TEST_DATABASE_URL') or 'sqlite+aiosqlite:///'+str(DIR/'check.db'),BOT_TOKEN='123456789:TEST_TOKEN_FOR_LOCAL_CHECKS_ONLY',ADMIN_IDS='2',ADMIN_USERNAME='oldadmin',UPLOAD_DIR=str(DIR/'uploads'),BACKUP_DIR=str(DIR/'backups'))
 import httpx
 from sqlalchemy import select,func
 from database import init_db,async_session,engine

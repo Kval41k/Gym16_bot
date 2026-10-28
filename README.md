@@ -106,3 +106,7 @@ Additional release checks: `python tests/check_school_release.py`. The profile r
 ## Старосты и чаты классов
 
 Добавлена роль старосты с отдельной вкладкой: расписание своего класса, посещаемость и питание. Подключение группы, опрос на 07:00, меню и ограничения бесплатного хостинга описаны в [HEADMAN_RELEASE.md](HEADMAN_RELEASE.md).
+
+## Security and persistent storage
+
+See [SECURITY_RELEASE.md](SECURITY_RELEASE.md) for ID-only administration, upload quotas, strict script CSP, Alembic migrations, CI checks and the private S3/encrypted backup connection and migration procedure. External storage is not active until configured.

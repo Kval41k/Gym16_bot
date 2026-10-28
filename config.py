@@ -24,7 +24,22 @@ class Settings(BaseSettings):
     DATABASE_URL: str = ""
     UPLOAD_DIR_RAW: str = Field(default="", validation_alias="UPLOAD_DIR")
     BACKUP_DIR_RAW: str = Field(default="", validation_alias="BACKUP_DIR")
-    STATIC_DIR_RAW: str = ""
+    STATIC_DIR_RAW: str = Field(default="", validation_alias="STATIC_DIR")
+    AUTH_MAX_AGE: int = Field(default=7200, ge=300, le=86400)
+    UPLOAD_USER_QUOTA_MB: int = Field(default=100, ge=1)
+    UPLOAD_TOTAL_QUOTA_MB: int = Field(default=1024, ge=1)
+    UPLOAD_MIN_FREE_MB: int = Field(default=128, ge=1)
+    UPLOAD_ORPHAN_DAYS: int = Field(default=7, ge=1)
+    S3_ENDPOINT_URL: str = ""
+    S3_REGION: str = "auto"
+    S3_BUCKET: str = ""
+    S3_ACCESS_KEY_ID: str = ""
+    S3_SECRET_ACCESS_KEY: str = ""
+    S3_MEDIA_ENABLED: bool = False
+    BACKUP_ENCRYPTION_KEY: str = ""
+    BACKUP_REMOTE_ENABLED: bool = False
+    BACKUP_REMOTE_KEEP: int = Field(default=30, ge=7)
+    REQUIRE_PERSISTENT_STORAGE: bool = False
     CORS_ORIGINS: str = ""
     
     model_config = SettingsConfigDict(
@@ -62,7 +77,7 @@ class Settings(BaseSettings):
 
     @property
     def STATIC_DIR(self) -> Path:
-        return (BASE_DIR / "static").resolve()
+        return Path(self.STATIC_DIR_RAW).expanduser().resolve() if self.STATIC_DIR_RAW else (BASE_DIR / "static").resolve()
 
     @property
     def admin_ids(self) -> List[int]:
@@ -78,10 +93,8 @@ class Settings(BaseSettings):
 
     @property
     def admin_usernames(self) -> List[str]:
-        raw_val = self.ADMIN_USERNAME
-        if not raw_val:
-            return []
-        return [u.strip().lower().lstrip("@") for u in str(raw_val).split(",") if u.strip()]
+        # Compatibility property: usernames are mutable and must never grant authority.
+        return []
 
 settings = Settings()
 
