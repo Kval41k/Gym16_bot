@@ -5,7 +5,7 @@ Telegram Mini App and bot for the 11th-grade classes: timetable, school news and
 ## Run locally
 
 1. Create a virtual environment and install `requirements.txt`.
-2. Copy `.env.example` to `.env` and set `BOT_TOKEN`, `ADMIN_IDS` or `ADMIN_USERNAME`, and `BASE_URL`.
+2. Copy `.env.example` to `.env` and set `BOT_TOKEN`, numeric `ADMIN_IDS`, and `BASE_URL`.
 3. Run `python seed_data.py` once to create the initial timetable, then run `python run.py`.
 4. Open the HTTPS `BASE_URL` as the Telegram Mini App URL. For local development, use the existing tunnel workflow.
 
@@ -14,7 +14,7 @@ Telegram Mini App and bot for the 11th-grade classes: timetable, school news and
 ## Configuration
 
 - `BOT_TOKEN` — Telegram bot token.
-- `ADMIN_IDS` — comma-separated Telegram IDs. `ADMIN_USERNAME` can contain one or more comma-separated usernames.
+- `ADMIN_IDS` — comma-separated numeric Telegram IDs. `ADMIN_USERNAME` is deprecated and ignored.
 - `BASE_URL` — public HTTPS application URL; used for Telegram links and as the default allowed CORS origin.
 - `CORS_ORIGINS` — optional comma-separated allowed origins. Leave unset to allow only `BASE_URL`.
 - `DATABASE_URL` — SQLAlchemy async database URL. PostgreSQL URLs are normalized to `asyncpg` automatically. If omitted, SQLite is used.
