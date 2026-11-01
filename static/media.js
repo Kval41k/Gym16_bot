@@ -3,6 +3,13 @@
   const placeholder = 'data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=';
   const cache = new Map();
   const pending = new Map();
+  let cachedBytes = 0, active = 0;
+  const waiting = [];
+  async function acquire() {
+    if (active < 4) { active++; return; }
+    await new Promise(resolve => waiting.push(resolve));
+  }
+  function release() { if (waiting.length) waiting.shift()(); else active--; }
   const escape = value => String(value).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
   function publicImage(value) {
     try {
@@ -18,17 +25,23 @@
     } catch (_) { return null; }
   }
   async function imageBlob(path) {
-    if (cache.has(path)) return cache.get(path);
+    if (cache.has(path)) return cache.get(path).url;
     if (pending.has(path)) return pending.get(path);
     const task = (async () => {
+      await acquire();
+      try {
       const response = await fetch(path, {headers:{'X-Telegram-Init-Data':window.Telegram?.WebApp?.initData || ''},cache:'no-store'});
       if (!response.ok) throw new Error('Изображение недоступно');
       const blob = await response.blob();
       if (!blob.type.startsWith('image/') || blob.size > 10 * 1024 * 1024) throw new Error('Некорректное изображение');
       const url = URL.createObjectURL(blob);
-      cache.set(path, url);
-      if (cache.size > 24) { const first = cache.keys().next().value; URL.revokeObjectURL(cache.get(first)); cache.delete(first); }
+      cache.set(path, {url, size:blob.size}); cachedBytes += blob.size;
+      while (cache.size > 16 || cachedBytes > 32 * 1024 * 1024) {
+        const first = cache.keys().next().value, item = cache.get(first);
+        URL.revokeObjectURL(item.url); cachedBytes -= item.size; cache.delete(first);
+      }
       return url;
+      } finally { release(); }
     })();
     pending.set(path, task);
     try { return await task; } finally { pending.delete(path); }
@@ -53,17 +66,22 @@
     if (path) { image.dataset.protectedSrc = path; image.src = placeholder; hydrate(image); }
     else { delete image.dataset.protectedSrc; image.src = publicImage(value); }
   };
+  let viewportObserver = null;
+  function schedule(image) { if (viewportObserver) viewportObserver.observe(image); else hydrate(image); }
   function scan(node) {
     if (node.nodeType !== 1) return;
-    if (node.matches('img[data-protected-src]')) hydrate(node);
-    node.querySelectorAll?.('img[data-protected-src]').forEach(hydrate);
+    if (node.matches('img[data-protected-src]')) schedule(node);
+    node.querySelectorAll?.('img[data-protected-src]').forEach(schedule);
   }
   document.addEventListener('DOMContentLoaded', () => {
+    if (typeof IntersectionObserver !== 'undefined') viewportObserver = new IntersectionObserver(entries => {
+      entries.forEach(entry => { if (entry.isIntersecting) { viewportObserver.unobserve(entry.target); hydrate(entry.target); } });
+    }, {rootMargin:'200px'});
     scan(document.documentElement);
     new MutationObserver(records => records.forEach(record => {
-      if (record.type === 'attributes') hydrate(record.target);
+      if (record.type === 'attributes') schedule(record.target);
       else record.addedNodes.forEach(scan);
     })).observe(document.body, {subtree:true,childList:true,attributes:true,attributeFilter:['data-protected-src']});
   });
-  window.addEventListener('pagehide', () => { cache.forEach(url => URL.revokeObjectURL(url)); cache.clear(); });
+  window.addEventListener('pagehide', () => { cache.forEach(item => URL.revokeObjectURL(item.url)); cache.clear(); cachedBytes=0; });
 })();

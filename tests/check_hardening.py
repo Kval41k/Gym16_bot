@@ -32,7 +32,9 @@ class FakeS3:
 
 async def run():
     await init_db();await init_db()
-    async with engine.connect() as conn:assert await conn.scalar(text('SELECT version_num FROM alembic_version'))=='20261101_02'
+    from alembic.config import Config
+    from alembic.script import ScriptDirectory
+    async with engine.connect() as conn:assert await conn.scalar(text('SELECT version_num FROM alembic_version'))==ScriptDirectory.from_config(Config(str(ROOT/'alembic.ini'))).get_current_head()
     async with async_session() as db:
         db.add_all([User(id=i,first_name='Test',class_name='11А',profile_name='Соц-гум',is_member=True) for i in (1,2)])
         await db.commit()

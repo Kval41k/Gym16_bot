@@ -115,8 +115,7 @@ def _validate_news_image_url(value: Optional[str]) -> Optional[str]:
     if len(value) > 512 or any(char in value for char in "\"'<>\\\n\r"):
         raise ValueError("Некорректный адрес изображения")
     if value.startswith("/uploads/"):
-        filename = value.removeprefix("/uploads/")
-        if filename and "/" not in filename and filename not in {".", ".."}:
+        if re.fullmatch(r"/uploads/[a-f0-9]{32}\.(?:jpe?g|png|webp|gif|bmp|heic|heif)", value):
             return value
         raise ValueError("Некорректный адрес загруженного изображения")
     if re.fullmatch(r"/api/media/[A-Za-z0-9_-]{10,250}", value):
