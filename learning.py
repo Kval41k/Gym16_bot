@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Literal, Optional
 from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from pydantic import BaseModel, Field
-from sqlalchemy import select
+from sqlalchemy import func, select
 from access import require_school_access
 from audit import audit_actor
 from community import TZ, write_lock, utc
@@ -142,12 +142,16 @@ def install_learning(app,require_identity,require_active,require_editor,rate_lim
         now=datetime.now(timezone.utc)
         day,sessions,entries,records=await daily_plan(db,user,now)
         week_start=(now.astimezone(TZ).replace(hour=0,minute=0,second=0,microsecond=0)-timedelta(days=6)).astimezone(timezone.utc)
-        history=(await db.scalars(select(PracticeSession).where(PracticeSession.user_id==user.id,PracticeSession.answered_at>=week_start))).all()
-        week=[]
-        for offset in range(7):
-            date=(week_start.astimezone(TZ)+timedelta(days=offset)).date().isoformat()
-            attempts=[row for row in history if utc(row.answered_at).astimezone(TZ).date().isoformat()==date]
-            week.append({'date':date,'answered':len(attempts),'correct':sum(bool(row.correct) for row in attempts)})
+        boundaries=[week_start+timedelta(days=offset) for offset in range(8)]
+        aggregates=[]
+        for start,end in zip(boundaries,boundaries[1:]):
+            in_day=(PracticeSession.answered_at>=start)&(PracticeSession.answered_at<end)
+            aggregates.extend((func.count(PracticeSession.id).filter(in_day),
+                               func.count(PracticeSession.id).filter(in_day,PracticeSession.correct.is_(True))))
+        counts=(await db.execute(select(*aggregates).where(PracticeSession.user_id==user.id,
+            PracticeSession.answered_at>=week_start,PracticeSession.answered_at<boundaries[-1]))).one()
+        week=[{'date':start.astimezone(TZ).date().isoformat(),'answered':counts[2*i],'correct':counts[2*i+1]}
+              for i,start in enumerate(boundaries[:-1])]
         weak=[]
         for topic in TOPICS:
             mistakes=[r for r in records.values() if r.question_id in QUESTIONS and not r.mastered and r.mistakes and (QUESTIONS[r.question_id]['subject_code'],QUESTIONS[r.question_id]['task_number'])==topic]

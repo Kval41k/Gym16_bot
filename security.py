@@ -76,21 +76,35 @@ def csv_cell(value):
 
 
 class SafeCSVWriter:
-    def __init__(self, stream):
-        self.writer = csv.writer(stream)
+    def __init__(self, stream, **kwargs):
+        self.writer = csv.writer(stream, **kwargs)
     def writerow(self, row):
         return self.writer.writerow([csv_cell(value) for value in row])
 
 
-def safe_csv_writer(stream):
-    return SafeCSVWriter(stream)
+def safe_csv_writer(stream, **kwargs):
+    return SafeCSVWriter(stream, **kwargs)
 
 
 class BodyLimitMiddleware:
     def __init__(self, app):
         self.app = app
+        self.active_uploads = 0
 
     async def __call__(self, scope, receive, send):
+        upload = scope['type'] == 'http' and scope.get('method') == 'POST' and scope.get('path') == '/api/upload'
+        if not upload:
+            return await self._bounded_request(scope, receive, send)
+        # Reserve before multipart parsing or reading bytes into Python memory.
+        if self.active_uploads >= 4:
+            return await JSONResponse({'detail': 'Загрузка занята. Попробуйте через несколько секунд.'}, 429)(scope, receive, send)
+        self.active_uploads += 1
+        try:
+            return await self._bounded_request(scope, receive, send)
+        finally:
+            self.active_uploads -= 1
+
+    async def _bounded_request(self, scope, receive, send):
         if scope["type"] != "http" or scope["method"] not in {"POST", "PUT", "PATCH", "DELETE"}:
             return await self.app(scope, receive, send)
         limit = 11 * 1024 * 1024 if scope["path"] == "/api/upload" else 512 * 1024

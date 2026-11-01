@@ -325,6 +325,8 @@ class NewsReview(Base):
 
 class Notification(Base):
     __tablename__ = "notifications"
+    __table_args__ = (Index('ix_notifications_user_id_id', 'user_id', 'id'),
+                      Index('ix_notifications_user_read', 'user_id', 'read_at'))
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     user_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("users.id", ondelete="CASCADE"), index=True)
     dedup_key: Mapped[str] = mapped_column(String(255), unique=True)
@@ -388,6 +390,7 @@ class PracticeProgress(Base):
 
 class PracticeSession(Base):
     __tablename__ = 'practice_sessions'
+    __table_args__ = (Index('ix_practice_sessions_user_answered', 'user_id', 'answered_at'),)
     id: Mapped[str] = mapped_column(String(32), primary_key=True)
     user_id: Mapped[int] = mapped_column(BigInteger, ForeignKey('users.id', ondelete='CASCADE'), nullable=False, index=True)
     question_id: Mapped[str] = mapped_column(String(80), nullable=False)

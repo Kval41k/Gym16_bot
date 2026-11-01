@@ -27,7 +27,7 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Streamin
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import delete, func, select, update, or_
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
+from sqlalchemy.orm import selectinload, raiseload
 
 from config import DEFAULT_CLASSES, CLASS_PROFILES_MAP, ALL_PROFILES, settings
 from security import BodyLimitMiddleware, clean_image, install_log_redaction, safe_csv_writer
@@ -61,27 +61,40 @@ EMOJI_PALETTE = ["❤️", "🔥", "👍", "👎", "🤡", "😢"]
 # -------------------------------------------------------------
 _CACHE: Dict[str, Any] = {}
 _RATE_LIMITS: Dict[str, List[float]] = {}
+_RATE_EXPIRY: Dict[str, float] = {}
+_CACHE_LIMIT = 256
+_RATE_LIMIT_KEYS = 10000
 
 def enforce_rate_limit(key: str, limit: int, window_seconds: int) -> None:
     now = time.monotonic()
+    if key not in _RATE_LIMITS and len(_RATE_LIMITS) >= _RATE_LIMIT_KEYS:
+        for old_key, expiry in list(_RATE_EXPIRY.items()):
+            if expiry <= now:
+                _RATE_LIMITS.pop(old_key, None)
+                _RATE_EXPIRY.pop(old_key, None)
+        if len(_RATE_LIMITS) >= _RATE_LIMIT_KEYS:
+            raise HTTPException(429, "Слишком много активных запросов. Попробуйте позже.")
     recent = [stamp for stamp in _RATE_LIMITS.get(key, []) if now - stamp < window_seconds]
     if len(recent) >= limit:
         raise HTTPException(status_code=429, detail="Слишком много запросов. Попробуйте позже.")
     recent.append(now)
     _RATE_LIMITS[key] = recent
-    if len(_RATE_LIMITS) > 10000:
-        for old_key, stamps in list(_RATE_LIMITS.items()):
-            if not stamps or now - stamps[-1] >= window_seconds:
-                _RATE_LIMITS.pop(old_key, None)
+    _RATE_EXPIRY[key] = now + window_seconds
 
 def cache_get(key: str, ttl: float) -> Optional[Any]:
     entry = _CACHE.get(key)
-    if entry and (time.time() - entry['time'] < ttl):
+    if entry and time.monotonic() < entry['expires'] and (time.monotonic() - entry['time'] < ttl):
         return entry['data']
+    _CACHE.pop(key, None)
     return None
 
-def cache_set(key: str, data: Any):
-    _CACHE[key] = {'time': time.time(), 'data': data}
+def cache_set(key: str, data: Any, ttl: float = 180):
+    now = time.monotonic()
+    for expired in [key for key, entry in _CACHE.items() if now >= entry['expires']]:
+        _CACHE.pop(expired, None)
+    if key not in _CACHE and len(_CACHE) >= _CACHE_LIMIT:
+        _CACHE.pop(next(iter(_CACHE)))
+    _CACHE[key] = {'time': now, 'expires': now + ttl, 'data': data}
 
 def cache_clear_prefix(prefix: str):
     global _CACHE
@@ -545,7 +558,7 @@ async def get_structure(db: AsyncSession = Depends(get_db)):
         class_profiles=CLASS_PROFILES_MAP,
         all_profiles=ALL_PROFILES
     )
-    cache_set("meta_structure", resp)
+    cache_set("meta_structure", resp, 600)
     return resp
 
 # -------------------------------------------------------------
@@ -741,7 +754,7 @@ async def get_bells(db: AsyncSession = Depends(get_db)):
         )
         for b in raw_bells
     ]
-    cache_set("schedule_bells", bells)
+    cache_set("schedule_bells", bells, 600)
     return bells
 
 def format_minutes_human(minutes: int) -> str:
@@ -951,7 +964,7 @@ async def get_news(
     query = (
         select(NewsPost)
         .where(NewsPost.status == "approved")
-        .options(selectinload(NewsPost.author))
+        .options(selectinload(NewsPost.author), raiseload(NewsPost.comments), raiseload(NewsPost.reactions))
         .order_by(NewsPost.is_pinned.desc(), NewsPost.created_at.desc(), NewsPost.id.desc())
         .offset(offset)
         .limit(limit)
@@ -1069,6 +1082,8 @@ async def suggest_news(
     enforce_rate_limit(f"news:{author_id}", 5, 3600)
     if payload.author_id is not None and payload.author_id != author_id:
         raise HTTPException(status_code=403, detail="Нельзя отправлять новость от имени другого пользователя.")
+    from community import write_lock
+    await write_lock(db)
     user = await db.get(User, author_id)
     if not user:
         raise HTTPException(status_code=409, detail="Сначала заполните профиль Telegram.")
@@ -1416,6 +1431,8 @@ async def moderate_news(
         x_telegram_init_data=x_telegram_init_data, db=db
     )
 
+    from community import write_lock
+    await write_lock(db)
     post = await db.get(NewsPost, post_id)
     if not post:
         raise HTTPException(status_code=404, detail="News post not found")
@@ -1493,6 +1510,11 @@ async def edit_news_post(
         admin_id=admin_uid,
         x_telegram_init_data=x_telegram_init_data, db=db
     )
+
+    from community import write_lock
+    await write_lock(db)
+    if payload.image_url:
+        await require_media_access(payload.image_url, require_telegram_user(x_telegram_init_data), db)
 
     post = await db.get(NewsPost, post_id)
     if not post:
@@ -1599,7 +1621,7 @@ ALLOWED_IMAGE_TYPES = {
     "image/pjpeg", "image/x-png"
 }
 ALLOWED_EXTENSIONS = {"jpg", "jpeg", "png", "webp", "gif", "heic", "heif", "bmp"}
-IMAGE_PROCESSING = asyncio.Semaphore(2)
+IMAGE_PROCESSING = asyncio.Semaphore(1)
 
 
 async def require_media_access(path, identity, db):
@@ -1628,6 +1650,8 @@ async def remove_unused_image(image_url, db):
     path = parsed.path
     if not re.fullmatch(r"/uploads/[a-f0-9]{32}\.(?:jpe?g|png|webp|gif|bmp|heic|heif)", path):
         return
+    from community import write_lock
+    await write_lock(db)
     variants = [path, settings.BASE_URL.rstrip("/") + path]
     if await db.scalar(select(NewsPost.id).where(NewsPost.image_url.in_(variants)).limit(1)):
         return
@@ -1810,6 +1834,11 @@ async def create_ege_material(
         admin_id=payload.admin_id, x_telegram_init_data=x_telegram_init_data, db=db
     )
 
+    from community import write_lock
+    await write_lock(db)
+    if payload.image_url:
+        await require_media_access(payload.image_url, require_telegram_user(x_telegram_init_data), db)
+
     await validate_ege_task(payload, db)
 
     new_mat = EgeMaterial(
@@ -1847,6 +1876,11 @@ async def update_ege_material(
     await check_editor_permission_or_raise(
         admin_id=payload.admin_id, x_telegram_init_data=x_telegram_init_data, db=db
     )
+
+    from community import write_lock
+    await write_lock(db)
+    if payload.image_url:
+        await require_media_access(payload.image_url, require_telegram_user(x_telegram_init_data), db)
 
     await validate_ege_task(payload, db)
 

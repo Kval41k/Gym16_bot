@@ -518,7 +518,14 @@ async def finalize_news_post(user, title: str, content: str, image_url: Optional
 
     # Save to SQLite DB
     async with async_session() as session:
+        from community import write_lock
+        await write_lock(session)
         db_user = await session.get(User, user.id)
+        if not db_user:
+            await message.answer('Сначала откройте приложение и заполните профиль.')
+            return
+        from access import require_school_access
+        await require_school_access(session, db_user)
         author_class = db_user.class_name if db_user else None
         new_post = NewsPost(
             title=title,
@@ -591,6 +598,8 @@ async def cb_approve_news(callback: CallbackQuery, bot: Bot):
     post_id = int(callback.data.split("_")[-1])
 
     async with async_session() as session:
+        from community import write_lock
+        await write_lock(session)
         post = await session.get(NewsPost, post_id)
         if not post:
             await callback.answer("Новость не найдена.", show_alert=True)
@@ -602,6 +611,11 @@ async def cb_approve_news(callback: CallbackQuery, bot: Bot):
 
         post.status = "approved"
         post.published_at = datetime.now(timezone.utc)
+        from inbox import queue_inbox, publication_notices
+        if post.author_id:
+            await queue_inbox(session, post.author_id, 'moderation', f'Ваша новость «{post.title}» опубликована.',
+                              f'moderated:{post.id}:approved', f'news:{post.id}')
+        await publication_notices(session, post)
         await session.commit()
         author_id = post.author_id
         post_title = post.title
@@ -651,6 +665,8 @@ async def cb_reject_news(callback: CallbackQuery, bot: Bot):
     post_id = int(callback.data.split("_")[-1])
 
     async with async_session() as session:
+        from community import write_lock
+        await write_lock(session)
         post = await session.get(NewsPost, post_id)
         if not post:
             await callback.answer("Новость не найдена.", show_alert=True)
@@ -661,6 +677,10 @@ async def cb_reject_news(callback: CallbackQuery, bot: Bot):
             return
 
         post.status = "rejected"
+        from inbox import queue_inbox
+        if post.author_id:
+            await queue_inbox(session, post.author_id, 'moderation', f'Ваша новость «{post.title}» отклонена.',
+                              f'moderated:{post.id}:rejected', 'profile')
         await session.commit()
         author_id = post.author_id
         post_title = post.title
@@ -765,7 +785,7 @@ async def cb_admin_export_users(callback: CallbackQuery):
         users = res.scalars().all()
     output = io.StringIO()
     output.write("\ufeff")
-    writer = csv.writer(output, delimiter=";", quoting=csv.QUOTE_MINIMAL)
+    writer = safe_csv_writer(output, delimiter=";", quoting=csv.QUOTE_MINIMAL)
     writer.writerow(["Telegram ID", "Имя", "Фамилия", "Username", "Класс", "Профиль", "Статус", "Роль", "Дата регистрации"])
     for u in users:
         st = "Заблокирован 🚫" if u.is_banned else "Активен 🟢"
@@ -841,6 +861,8 @@ async def cmd_delete_post(message: Message):
 
     post_id = int(args[1])
     async with async_session() as session:
+        from community import write_lock
+        await write_lock(session)
         post = await session.get(NewsPost, post_id)
         if not post:
             await message.answer(f"❌ Новость #{post_id} не найдена.")
@@ -906,7 +928,7 @@ async def cmd_list_users(message: Message):
     # 1. Build CSV file in-memory with UTF-8 BOM
     output = io.StringIO()
     output.write("\ufeff")
-    writer = csv.writer(output, delimiter=";", quoting=csv.QUOTE_MINIMAL)
+    writer = safe_csv_writer(output, delimiter=";", quoting=csv.QUOTE_MINIMAL)
     writer.writerow([
         "Telegram ID", "Имя", "Фамилия", "Username", "Класс", "Профиль", "Статус", "Роль", "Дата регистрации"
     ])

@@ -4,11 +4,12 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from pydantic import BaseModel, Field
-from sqlalchemy import func, select, update
+from sqlalchemy import func, or_, select, update
 
 from access import access_allowed
 from database import get_db
-from models import Notification, User
+from models import AccessPolicy, Notification, User
+from config import settings
 
 
 async def queue_inbox(db, user_id, kind, message, event_key, link=None):
@@ -27,9 +28,20 @@ async def queue_inbox(db, user_id, kind, message, event_key, link=None):
 
 
 async def publication_notices(db, post):
-    users = (await db.scalars(select(User).where(User.is_banned.is_(False), User.id != post.author_id))).all()
-    for user in users:
-        await queue_inbox(db, user.id, 'news', f'Новая публикация: {post.title}', f'published:{post.id}', f'news:{post.id}')
+    query=select(User.id).where(User.is_banned.is_(False),User.id!=post.author_id)
+    policy=await db.get(AccessPolicy,1)
+    if policy and policy.invites_required:
+        query=query.where(or_(User.is_member.is_(True),User.id.in_(settings.admin_ids)))
+    ids=list(await db.scalars(query))
+    if db.bind.dialect.name=='postgresql':
+        from sqlalchemy.dialects.postgresql import insert
+    else:
+        from sqlalchemy.dialects.sqlite import insert
+    for offset in range(0,len(ids),100):
+        rows=[{'user_id':uid,'kind':'news','text':f'Новая публикация: {post.title}',
+               'link':f'news:{post.id}','dedup_key':f'inbox:published:{post.id}:{uid}','status':'inbox'}
+              for uid in ids[offset:offset+100]]
+        await db.execute(insert(Notification).values(rows).on_conflict_do_nothing(index_elements=['dedup_key']))
 
 
 class ReadRequest(BaseModel):
