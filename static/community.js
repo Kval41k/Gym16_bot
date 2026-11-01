@@ -180,7 +180,7 @@ async function communityRedeem(){await toolsRun('redeem',async()=>{try{await too
 window.communityRoleUI=function(){
   if (state.user?.role==='editor' && !checkIsAdmin()) { const heading=document.querySelector('#tab-admin h2');if(heading){heading.textContent='✎ Редактор';if(heading.nextElementSibling)heading.nextElementSibling.textContent='Модерация новостей и работа с материалами ЕГЭ';}if(!document.getElementById('tab-admin').classList.contains('hidden'))document.getElementById('app-title').textContent='Редактор'; }
   const label=document.querySelector('#nav-tab-admin > span');if(label)label.textContent=checkIsAdmin()?'Админ':'Редактор';
-  ['users','schedule','logs','data','access'].forEach(id=>{const button=document.getElementById('admin-subtab-'+id+'-btn');if(button)button.hidden=!checkIsAdmin();});
+  ['users','schedule','logs','data','access','reports'].forEach(id=>{const button=document.getElementById('admin-subtab-'+id+'-btn');if(button)button.hidden=!checkIsAdmin();});
 };
 const communitySwitchTab=switchTab;
 switchTab=function(tab){if(state.user.access_allowed===false && tab!=='tab-schedule'&&tab!=='tab-profile'){window.communityAccessGate(state.user);return;}communitySwitchTab(tab);communityRoleUI();};
