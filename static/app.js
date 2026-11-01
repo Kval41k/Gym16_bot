@@ -1091,6 +1091,7 @@
 
           ${imageHtml}
 
+          <button type="button" class="school-report-link" data-report-type="news" data-report-id="${post.id}">Пожаловаться</button>
           <!-- Reactions & Comments Bar -->
           <div class="pt-2 flex items-center justify-between border-t border-zinc-100 dark:border-zinc-800/60">
             <div id="reaction-bar-${post.id}" class="flex items-center space-x-1.5 flex-wrap gap-y-1">
@@ -2048,6 +2049,7 @@
               <span class="text-xs font-bold text-zinc-900 dark:text-white">${authorSafe} ${classSafe}</span>
               <div class="flex items-center space-x-1.5">
                 <span class="text-[10px] text-ios-secondaryText">${dateSafe}${c.is_edited ? ' · изменён' : ''}</span>
+                <button type="button" class="school-report-link" data-report-type="comment" data-report-id="${c.id}">Жалоба</button>
                 ${editBtn}
                 ${deleteBtn}
               </div>

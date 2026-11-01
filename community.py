@@ -15,7 +15,7 @@ from config import CLASS_PROFILES_MAP
 from database import engine, get_db
 from features import LessonRow, ScheduleRequest, parse_schedule, lesson_dict
 from models import AccessPolicy, ClassLinkToken, DatedSchedule, NewsDraft, NewsPost, Notification, SchoolInvite, User, UserPreferences
-from timetable import effective_lessons, lesson_timeline
+from timetable import day_bells, effective_lessons, lesson_timeline, lesson_times
 
 TZ = ZoneInfo('Asia/Yekaterinburg')
 
@@ -41,6 +41,44 @@ async def date_payload(db, cls, day):
     note=override.note if override else ''
     return {'class_name':cls,'date':day.isoformat(),'rows':rows,'note':note,'is_override':override is not None,
             'base_revision':row_revision(rows,note,override is not None)}
+
+
+async def schedule_changes(db, cls, day, profile_name=None, subgroup=None):
+    """Compare the dated day with its ordinary week, preserving each audience."""
+    bells = await day_bells(db, day.weekday())
+
+    def visible(row):
+        return (not profile_name or not row.profile_name or row.profile_name.strip().casefold() == profile_name.strip().casefold()) and (subgroup is None or row.subgroup is None or row.subgroup == subgroup)
+
+    def snapshot(row):
+        result = lesson_dict(row)
+        result['start_time'], result['end_time'] = lesson_times(row, bells)
+        result['note'] = result['note'] or ''
+        return result
+
+    def key(row):
+        return row['lesson_number'], (row['profile_name'] or '').strip().casefold(), row['subgroup'] or 0
+
+    before = [snapshot(row) for row in await effective_lessons(db, day.weekday(), cls) if visible(row)]
+    after = [snapshot(row) for row in await effective_lessons(db, day.weekday(), cls, day) if visible(row)]
+    # Lists also preserve legacy duplicate slots without silently dropping lessons.
+    old_by_key, new_by_key = {}, {}
+    for row in before:old_by_key.setdefault(key(row), []).append(row)
+    for row in after:new_by_key.setdefault(key(row), []).append(row)
+    changes = []
+    compared = ('subject', 'cabinet', 'start_time', 'end_time', 'teacher_name', 'note')
+    for audience in sorted(old_by_key.keys() | new_by_key.keys()):
+        old_rows, new_rows = old_by_key.get(audience, [])[:], new_by_key.get(audience, [])[:]
+        for old in old_rows[:]:
+            match = next((new for new in new_rows if all(old[field] == new[field] for field in compared)), None)
+            if match is not None:old_rows.remove(old);new_rows.remove(match)
+        if len(old_rows) == len(new_rows) == 1:
+            old, new = old_rows.pop(), new_rows.pop()
+            changes.append({'kind':'changed', 'before':old, 'after':new,
+                            'fields':[field for field in compared if old[field] != new[field]]})
+        changes.extend({'kind':'cancelled', 'before':row, 'after':None, 'fields':[]} for row in old_rows)
+        changes.extend({'kind':'added', 'before':None, 'after':row, 'fields':[]} for row in new_rows)
+    return changes
 
 
 class DateRequest(BaseModel):
@@ -105,8 +143,10 @@ async def change_date_schedule(payload,db,cache_clear,reset=False,locked=False):
     change_id=uuid.uuid4().hex
     for user in users:
         pref=await db.get(UserPreferences,user.id)
-        if pref and pref.schedule_changes and await access_allowed(db,user):
-            db.add(Notification(user_id=user.id,dedup_key=f'date:{change_id}:{user.id}',text=f'📅 Расписание {payload.class_name} на {payload.date:%d.%m.%Y} обновлено. '+('Восстановлено обычное расписание.' if reset else payload.note.strip() or 'Проверьте замены в приложении.')))
+        if await access_allowed(db,user):
+            db.add(Notification(user_id=user.id,dedup_key=f'date:{change_id}:{user.id}',
+                                status='pending' if pref and pref.schedule_changes else 'inbox',kind='schedule',link='schedule',
+                                text=f'📅 Расписание {payload.class_name} на {payload.date:%d.%m.%Y} обновлено. '+('Восстановлено обычное расписание.' if reset else payload.note.strip() or 'Проверьте замены в приложении.')))
     await db.commit();cache_clear('sched:')
     return await date_payload(db,payload.class_name,payload.date)
 

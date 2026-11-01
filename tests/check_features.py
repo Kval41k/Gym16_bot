@@ -112,7 +112,7 @@ async def run():
         async with async_session() as db:
             notices=(await db.scalars(select(Notification))).all()
             assert len([n for n in notices if n.dedup_key.startswith('lesson:')])==1
-            assert len([n for n in notices if n.dedup_key.startswith('schedule:')])==1
+            assert len([n for n in notices if n.dedup_key.startswith('schedule:') and n.status=='pending'])==1
         sent = []
         class FakeTelegram:
             async def __aenter__(self): return self

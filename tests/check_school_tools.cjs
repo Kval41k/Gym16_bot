@@ -1,0 +1,13 @@
+const fs=require('node:fs'),vm=require('node:vm'),assert=require('node:assert/strict');
+const source=fs.readFileSync('static/school-tools.js','utf8');new vm.Script(source);
+const context={window:{},toolsEsc:value=>String(value).replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;')};
+vm.createContext(context);vm.runInContext(source.slice(source.indexOf('window.communityScheduleChangesHTML'),source.indexOf('async function schoolLoadInbox')),context);
+const before={lesson_number:1,subject:'Math',cabinet:'101',profile_name:'Соц-гум',subgroup:1,start_time:'08:35',end_time:'09:15'};
+const after={...before,cabinet:'<script>alert(1)</script>',start_time:'09:00',end_time:'09:40'};
+const render=context.window.communityScheduleChangesHTML;
+assert.equal(render({is_override:false}),'');
+const html=render({is_override:true,note:'<img src=x onerror=alert(1)>',changes:[{kind:'changed',before,after,fields:['cabinet','start_time','end_time']},{kind:'cancelled',before,after:null,fields:[]}]});
+assert(!html.includes('<script>')&&!html.includes('<img'));
+assert(html.includes('101')&&html.includes('→')&&html.includes('09:00–09:40')&&html.includes('Соц-гум · Группа 1')&&html.includes('Отменён'));
+assert(!/\son(?:click|submit|change)=/.test(source),'CSP-safe delegation required');
+console.log('PASS: schedule diff rendering, audience labels, escaping and script syntax');

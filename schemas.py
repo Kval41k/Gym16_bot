@@ -102,6 +102,7 @@ class DayScheduleResponse(BaseModel):
     slots: List[LessonSlot]
     date: Optional[str] = None
     is_override: bool = False
+    changes: list[dict] = Field(default_factory=list)
     note: str = ""
 
 # -------------------------------------------------------------

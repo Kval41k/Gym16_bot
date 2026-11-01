@@ -271,11 +271,16 @@ def install_features(app, require_user, require_admin, cache_clear):
             await db.delete(row)
             changed = True
         if changed:
-            users = (await db.scalars(select(User).join(UserPreferences).where(
-                User.class_name == payload.class_name, User.is_banned.is_(False), UserPreferences.schedule_changes.is_(True)))).all()
+            users = (await db.scalars(select(User).where(
+                User.class_name == payload.class_name, User.is_banned.is_(False)))).all()
             batch = uuid.uuid4().hex
+            from access import access_allowed
             for user in users:
+                if not await access_allowed(db, user):
+                    continue
+                pref = await db.get(UserPreferences, user.id)
                 db.add(Notification(user_id=user.id, dedup_key=f"schedule:{batch}:{user.id}",
+                        status="pending" if pref and pref.schedule_changes else "inbox", kind="schedule", link="schedule",
                         text=f"📅 Расписание {payload.class_name} обновлено.\n" + "\n".join(changes[:5]) + "\nПолное расписание — в приложении."))
         await db.commit()
         cache_clear("sched:")

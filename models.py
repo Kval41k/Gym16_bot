@@ -331,6 +331,9 @@ class Notification(Base):
     text: Mapped[str] = mapped_column(Text)
     status: Mapped[str] = mapped_column(String(20), default="pending", index=True)
     error: Mapped[Optional[str]] = mapped_column(String(255))
+    kind: Mapped[str] = mapped_column(String(30), default="general", server_default="general", nullable=False)
+    link: Mapped[Optional[str]] = mapped_column(String(80))
+    read_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
@@ -490,3 +493,21 @@ class ClassPollAnswerInbox(Base):
     user_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
     payload_json: Mapped[str] = mapped_column(Text, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class ContentReport(Base):
+    __tablename__ = 'content_reports'
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    reporter_id: Mapped[Optional[int]] = mapped_column(BigInteger, ForeignKey('users.id', ondelete='SET NULL'), index=True)
+    target_type: Mapped[str] = mapped_column(String(16), nullable=False)
+    target_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    post_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    reason: Mapped[str] = mapped_column(String(40), nullable=False)
+    details: Mapped[str] = mapped_column(Text, nullable=False, default='')
+    context_json: Mapped[str] = mapped_column(Text, nullable=False)
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default='pending', index=True)
+    resolved_by: Mapped[Optional[int]] = mapped_column(BigInteger, ForeignKey('users.id', ondelete='SET NULL'))
+    resolution: Mapped[Optional[str]] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), index=True)
+    resolved_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    __table_args__ = (UniqueConstraint('reporter_id', 'target_type', 'target_id', name='uq_report_target_user'),)
