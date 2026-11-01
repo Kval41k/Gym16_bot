@@ -153,7 +153,7 @@ async def audit_identity(request: Request, call_next):
             "connect-src 'self'; font-src 'self' data:; object-src 'none'; base-uri 'none'; "
             "form-action 'self'; frame-ancestors 'self' https://web.telegram.org https://*.telegram.org"
         )
-        if request.url.path.startswith(("/api/headman/", "/api/me/", "/api/user/", "/api/admin/", "/api/news", "/api/ege", "/uploads/", "/api/media/", "/admin/")):
+        if request.url.path.startswith(("/api/headman/", "/api/me/", "/api/user/", "/api/admin/", "/api/news", "/api/reports", "/api/ege", "/uploads/", "/api/media/", "/admin/")):
             response.headers["Cache-Control"] = "no-store"
             response.headers["Cross-Origin-Resource-Policy"] = "same-origin"
         return response
@@ -908,12 +908,14 @@ async def get_lessons(
             lessons=items
         ))
 
+    from community import schedule_changes
+    changes = await schedule_changes(db, class_name, date, profile_name if only_my_profile else None, subgroup) if override else []
     resp = DayScheduleResponse(
         day_of_week=day_of_week,
         day_name=DAY_NAMES[day_of_week],
         class_name=class_name,
         schedule_loaded=schedule_loaded,
-        slots=slots, date=date.isoformat() if date else None, is_override=override is not None, note=override.note if override else ""
+        slots=slots, date=date.isoformat() if date else None, is_override=override is not None, changes=changes, note=override.note if override else ""
     )
     cache_set(cache_key, resp)
     return resp
@@ -925,6 +927,7 @@ async def get_lessons(
 async def get_news(
     user_id: Optional[str] = Query(None),
     q: str = Query("", max_length=120),
+    post_id: Optional[int] = Query(None, ge=1),
     limit: int = Query(20, ge=1, le=100),
     offset: int = Query(0, ge=0),
     x_telegram_init_data: Optional[str] = Header(None, alias="X-Telegram-Init-Data"),
@@ -953,6 +956,8 @@ async def get_news(
         .offset(offset)
         .limit(limit)
     )
+    if post_id is not None:
+        query = query.where(NewsPost.id == post_id)
     if q.strip():
         from database import engine
         fold = func.gym16_casefold if engine.dialect.name == "sqlite" else func.lower
@@ -1339,6 +1344,10 @@ async def add_comment(
         text=payload.text
     )
     db.add(new_comment)
+    await db.flush()
+    if post.author_id and post.author_id != user.id:
+        from inbox import queue_inbox
+        await queue_inbox(db, post.author_id, "comment", f"Новый комментарий к вашей публикации «{post.title}»", f"comment:{new_comment.id}", f"news:{post.id}")
     await db.commit()
     await db.refresh(new_comment)
 
@@ -1411,6 +1420,7 @@ async def moderate_news(
     if not post:
         raise HTTPException(status_code=404, detail="News post not found")
 
+    previous_status = post.status
     if payload.action == "approve":
         post.status = "approved"
         post.published_at = datetime.now(timezone.utc)
@@ -1424,6 +1434,15 @@ async def moderate_news(
         db.add(review)
     review.reason = payload.reason.strip() if payload.action == "reject" and payload.reason else None
 
+    from inbox import queue_inbox, publication_notices
+    if previous_status != post.status:
+        if post.author_id:
+            label = "опубликована" if post.status == "approved" else "отклонена"
+            reason = f" Причина: {review.reason}" if review.reason else ""
+            await queue_inbox(db, post.author_id, "moderation", f"Ваша новость «{post.title}» {label}.{reason}",
+                              f"moderated:{post.id}:{post.status}", f"news:{post.id}" if post.status == "approved" else "profile")
+        if post.status == "approved":
+            await publication_notices(db, post)
     await db.commit()
     return {"status": "success", "post_id": post_id, "action": payload.action}
 
@@ -2302,3 +2321,8 @@ install_learning(app, require_telegram_user, require_active_user, check_editor_p
 
 from headman import install_headman
 install_headman(app, require_telegram_user, cache_clear_prefix, enforce_rate_limit)
+
+from inbox import install_inbox, queue_inbox
+install_inbox(app, require_telegram_user, require_active_user)
+from reports import install_reports
+install_reports(app, require_telegram_user, check_admin_permission_or_raise, enforce_rate_limit, queue_inbox)

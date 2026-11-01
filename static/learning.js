@@ -35,22 +35,24 @@ window.loadPersonalTools=loadPersonalTools;
 document.body.insertAdjacentHTML('beforeend',`<dialog id="school-practice-dialog" class="g-editor school-practice-dialog" aria-labelledby="school-practice-title"><div class="g-row g-between"><h3 id="school-practice-title" class="g-title">Тренажёр</h3><button type="button" class="g-btn" aria-label="Закрыть тренажёр" data-gym-click="h26877ca7fbae">✕</button></div><p class="g-muted" id="school-practice-scope"></p><div class="g-row school-practice-modes"><button class="g-btn primary" id="school-practice-all" data-gym-click="hf2488c74e404">Новые и повторение</button><button class="g-btn" id="school-practice-errors" data-gym-click="h69d1f37ba944">Только ошибки</button></div><div id="school-practice-body" class="g-stack"></div><p id="school-practice-error" class="g-error" role="alert"></p></dialog>`);
 function schoolClosePractice(){school.practiceTicket++;document.getElementById('school-practice-dialog').close();}
 async function schoolPractice(subject,number){school.practice={subject,number,mode:'all'};const dialog=document.getElementById('school-practice-dialog');if(!dialog.open)dialog.showModal();await schoolNextPractice();}
-function schoolPracticeMode(mode){if(!school.practice)return;school.practice.mode=mode;schoolNextPractice();}
+function schoolPracticeMode(mode){if(!school.practice||school.practice.mode==='daily')return;school.practice.mode=mode;schoolNextPractice();}
 async function schoolNextPractice(){
   if(!school.practice)return;
   const ticket=++school.practiceTicket;const {subject,number,mode}=school.practice;
   if(school.answerSaving)try{await school.answerSaving;}catch(_){}
   if(ticket!==school.practiceTicket)return;
-  document.getElementById('school-practice-title').textContent=`Задание №${number} · ${subject==='math'?'Профильная математика':'Русский язык'}`;
+  document.querySelector('.school-practice-modes').hidden=mode==='daily';
+  document.getElementById('school-practice-title').textContent=mode==='daily'?'План ЕГЭ на сегодня':`Задание №${number} · ${subject==='math'?'Профильная математика':'Русский язык'}`;
   document.getElementById('school-practice-all').classList.toggle('primary',mode==='all');document.getElementById('school-practice-errors').classList.toggle('primary',mode==='mistakes');
   document.getElementById('school-practice-error').textContent='';document.getElementById('school-practice-body').innerHTML='<p class="g-muted">Подбираем задачу…</p>';
   try{
-    const data=await toolsRequest('/api/me/practice/next?'+new URLSearchParams({subject_code:subject,task_number:number,mode}));
+    const data=await toolsRequest(mode==='daily'?'/api/me/practice/daily/next':'/api/me/practice/next?'+new URLSearchParams({subject_code:subject,task_number:number,mode}));
     if(ticket!==school.practiceTicket)return;
     school.practice.data=data;
-    const stats=data.stats;document.getElementById('school-practice-scope').textContent=`Решено ${stats.mastered}/${stats.total} · ошибок для повторения ${stats.mistakes}${data.scope?' · '+data.scope:''}`;
+    const stats=data.stats;document.getElementById('school-practice-scope').textContent=mode==='daily'?`Выполнено ${stats.completed}/${stats.total} · верно ${stats.mastered}`:`Решено ${stats.mastered}/${stats.total} · ошибок для повторения ${stats.mistakes}${data.scope?' · '+data.scope:''}`;
     if(!data.question){document.getElementById('school-practice-body').innerHTML=`<p class="g-note">${toolsEsc(data.message)}</p>${stats.mistakes&&mode==='all'?'<button class="g-btn primary" data-gym-click="h69d1f37ba944">Повторить ошибки сейчас</button>':''}`;return;}
     const q=data.question;
+    if(mode==='daily')document.getElementById('school-practice-title').textContent=`План на сегодня · ${q.subject_code==='math'?'Математика':'Русский'} №${q.task_number}`;
     const answers=q.kind==='choice'?`<fieldset class="school-answer-options"><legend class="g-label">Выбери ответ</legend>${q.options.map(option=>`<label><input type="radio" name="school-answer" value="${toolsEsc(option.id)}" required><span>${toolsEsc(option.text)}</span></label>`).join('')}</fieldset>`:`<label class="g-label" for="school-answer">${q.kind==='number'?'Числовой ответ':'Ответ словом или буквой'}</label><input id="school-answer" class="g-input" name="school-answer" maxlength="1000" required autocomplete="off" ${q.kind==='number'?'inputmode="decimal" placeholder="Например: 0,25 или 1/4"':'autocapitalize="off" spellcheck="false"'}>`;
     document.getElementById('school-practice-body').innerHTML=`<p class="g-muted">${toolsEsc(data.notice)}</p><p class="school-question">${toolsEsc(q.prompt)}</p><form data-gym-submit="h7d9da046af6d" class="g-stack">${answers}<button class="g-btn primary school-practice-submit" type="submit">Проверить ответ</button></form><div id="school-practice-feedback" aria-live="polite"></div>`;
   }catch(error){if(ticket===school.practiceTicket)document.getElementById('school-practice-error').textContent=error.message;}
@@ -66,7 +68,9 @@ async function schoolSubmitPractice(event){
     form.querySelectorAll('input').forEach(input=>input.disabled=true);button.textContent='Ответ сохранён';
     document.getElementById('school-practice-feedback').innerHTML=`<div class="school-feedback ${result.correct?'correct':'incorrect'}"><h4 class="g-title">${result.correct?'Верно ✓':'Пока ошибка — разберём решение'}</h4><p><b>Ответ:</b> ${toolsEsc(result.correct_answer)}</p><p>${toolsEsc(result.explanation)}</p><p class="g-muted">${result.correct?'Эта задача решена и больше не появится.':'Ошибка сохранена. Вернёмся к этой задаче при повторении.'}</p>${result.notice?`<p class="g-muted">${toolsEsc(result.notice)}</p>`:''}</div><button class="g-btn primary school-practice-button" data-gym-click="hf6ce761bec29">Следующая задача →</button>`;
     await schoolLoadProgress();
-    if(ticket===school.practiceTicket){const stats=school.progress[`${school.practice.subject}:${school.practice.number}`];if(stats)document.getElementById('school-practice-scope').textContent=`Решено ${stats.mastered}/${stats.total} · ошибок для повторения ${stats.mistakes} · ${school.practice.data.scope}`;}
+    await window.schoolLoadDaily?.();
+    if(ticket===school.practiceTicket&&school.practice.mode==='daily'&&window.schoolToolsDailyStats){const daily=window.schoolToolsDailyStats;document.getElementById('school-practice-scope').textContent=`Выполнено ${daily.completed}/${daily.total} · верно ${daily.correct}`;}
+    if(ticket===school.practiceTicket&&school.practice.mode!=='daily'){const stats=school.progress[`${school.practice.subject}:${school.practice.number}`];if(stats)document.getElementById('school-practice-scope').textContent=`Решено ${stats.mastered}/${stats.total} · ошибок для повторения ${stats.mistakes} · ${school.practice.data.scope}`;}
   }catch(error){if(ticket===school.practiceTicket){button.disabled=false;document.getElementById('school-practice-error').textContent=error.message;}}
   finally{school.answerSaving=null;}
 }

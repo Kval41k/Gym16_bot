@@ -12,7 +12,7 @@ audit_actor = ContextVar("audit_actor", default=None)
 SECTIONS = {
     "class_chats": "headman", "class_rosters": "headman", "class_polls": "headman",
     "attendance": "headman", "meal_menus": "headman", "meal_choices": "headman",
-    "practice_progress": "ege",
+    "practice_progress": "ege", "content_reports": "reports",
     "dated_schedules": "schedule", "school_invites": "access", "access_policy": "access",
     "users": "profile", "user_preferences": "profile", "lessons": "schedule",
     "bell_schedules": "schedule", "news_posts": "news", "news_reviews": "news",

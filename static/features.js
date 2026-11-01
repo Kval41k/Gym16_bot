@@ -131,7 +131,7 @@ loadSchedule = async function(quiet = false) {
       const firstTime = lessonTimes.map(item => item.start_time).sort()[0] || '';
       const lastTime = lessonTimes.map(item => item.end_time).sort().at(-1) || '';
       const cards = data.slots.map(slot => renderLessonSlot(slot, day, next?.lesson_number)).join('') || '<div class="g-card g-muted">Уроков в расписании нет.</div>';
-      const note = data.is_override ? `<div class="g-note">${toolsEsc(data.note || (data.slots.length ? 'Замены на эту дату' : 'Занятия отменены'))}</div>` : '';
+      const note = window.communityScheduleChangesHTML ? window.communityScheduleChangesHTML(data) : data.is_override ? `<div class="g-note">${toolsEsc(data.note || (data.slots.length ? 'Замены на эту дату' : 'Занятия отменены'))}</div>` : '';
       if (toolsState.mode === 'day') return note + cards;
       return `<details class="g-week-day" ${getTyumenDate().getDay() - 1 === day ? 'open' : ''}><summary>${toolsDays[day]} <span class="g-muted">· ${data.slots.length} ур. ${data.slots.length ? `· ${toolsEsc(firstTime)}–${toolsEsc(lastTime)}` : ''}</span></summary><div>${note}${cards}</div></details>`;
     }).join('');
@@ -362,7 +362,7 @@ async function toolsSaveComment(event) {
 // Admin sections share one navigation and one instance of each panel.
 const toolsAdminTabs = document.getElementById('admin-subtab-moderation-btn').parentElement;
 toolsAdminTabs.className = 'g-tabs';
-toolsAdminTabs.innerHTML = [['moderation','Модерация'],['users','Пользователи'],['schedule','Расписание'],['logs','Логи'],['data','Данные'],['access','Приглашения']]
+toolsAdminTabs.innerHTML = [['moderation','Модерация'],['users','Пользователи'],['schedule','Расписание'],['logs','Логи'],['data','Данные'],['access','Приглашения'],['reports','Жалобы']]
   .map(([id, label]) => `<button class="g-btn ${id === 'moderation' ? 'primary' : ''}" id="admin-subtab-${id}-btn" data-gym-click="h385a501d9b46" data-gym-args="${encodeURIComponent(JSON.stringify([(id)]))}">${label}${id === 'moderation' ? ' <span id="admin-subtab-pending-badge" class="hidden"></span>' : ''}</button>`).join('');
 document.getElementById('tab-admin').insertAdjacentHTML('beforeend', `
   <section id="admin-section-schedule" hidden class="g-stack"><div class="g-card g-stack">
@@ -389,7 +389,7 @@ document.getElementById('tab-admin').insertAdjacentHTML('beforeend', `
 setAdminSubtab = function(tab) {
   if (!checkIsAdmin() && tab !== 'moderation') tab = 'moderation';
   toolsState.admin = tab;
-  ['moderation','users','schedule','logs','data','access'].forEach(id => {
+  ['moderation','users','schedule','logs','data','access','reports'].forEach(id => {
     const section = document.getElementById('admin-section-' + id);
     section.hidden = id !== tab; section.classList.toggle('hidden', id !== tab);
     document.getElementById('admin-subtab-' + id + '-btn').classList.toggle('primary', id === tab);
@@ -400,6 +400,7 @@ setAdminSubtab = function(tab) {
   if (tab === 'logs') toolsLoadLogs();
   if (tab === 'data') toolsStorage();
   if (tab === 'access') communityLoadAccess();
+  if (tab === 'reports') window.schoolLoadReports?.();
 };
 const toolsSwitchTab = switchTab;
 switchTab = function(tab) {
