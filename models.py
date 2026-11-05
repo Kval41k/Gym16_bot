@@ -2,7 +2,7 @@ from datetime import date, datetime
 from typing import List, Optional
 from sqlalchemy import (
     BigInteger, Boolean, Column, Date, DateTime, ForeignKey,
-    Index, Integer, String, Text, UniqueConstraint, func
+    Index, Integer, String, Text, UniqueConstraint, func, false
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from database import Base
@@ -30,6 +30,7 @@ class User(Base):
     headman_class_name: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
     is_member: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     is_banned: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    registration_reset: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false(), nullable=False)
     
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
@@ -394,7 +395,7 @@ class PracticeSession(Base):
     id: Mapped[str] = mapped_column(String(32), primary_key=True)
     user_id: Mapped[int] = mapped_column(BigInteger, ForeignKey('users.id', ondelete='CASCADE'), nullable=False, index=True)
     question_id: Mapped[str] = mapped_column(String(80), nullable=False)
-    answer: Mapped[Optional[str]] = mapped_column(String(1000), nullable=True)
+    answer: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     correct: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     answered_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)

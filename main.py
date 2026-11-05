@@ -41,7 +41,7 @@ from schemas import (
     EgeMaterialCreateRequest, EgeMaterialResponse, EgeSubjectResponse,
     LessonItem, LessonSlot, LiveStatusResponse, ModerationActionRequest,
     NewsCreateRequest, NewsEditRequest, NewsResponse, ReactionCount, ReactionToggleRequest,
-    StructureResponse, UserAdminItem, UserBanRequest, UserProfileUpdate, UserResponse, UserSyncRequest
+    StructureResponse, UserAdminItem, UserBanRequest, UserProfileUpdate, UserResponse, UserSyncRequest, AdminUserNameRequest
 )
 
 # Tyumen Timezone: UTC+5 (Asia/Yekaterinburg)
@@ -603,17 +603,10 @@ async def sync_user(
         )
         db.add(user)
     else:
-        if payload.first_name:
-            user.first_name = payload.first_name
-        if payload.last_name is not None:
-            user.last_name = payload.last_name
+        # Stored profile is authoritative; stale device caches must not undo an admin edit/reset.
         user.username = telegram_username
         if telegram_user.get("photo_url"):
             user.photo_url = telegram_user["photo_url"]
-        if payload.class_name:
-            user.class_name = payload.class_name
-        if payload.profile_name:
-            user.profile_name = payload.profile_name
         user.is_admin = is_admin
         if is_admin:
             if not user.class_name:
@@ -735,6 +728,9 @@ async def update_user_profile(
     if user.is_banned:
         raise HTTPException(status_code=403, detail="Ваш аккаунт заблокирован администратором.")
 
+    if registration_complete(user) and user.id not in settings.admin_ids and (first_name != user.first_name or last_name != user.last_name):
+        raise HTTPException(403, "После регистрации имя и фамилию может изменить только администратор.")
+
     class_name = payload.class_name.strip()
     profile_name = payload.profile_name.strip()
     if class_name not in CLASS_PROFILES_MAP or profile_name not in CLASS_PROFILES_MAP[class_name]:
@@ -748,6 +744,7 @@ async def update_user_profile(
     user.last_name = last_name
     has_groups = await db.scalar(select(Lesson.id).where(Lesson.class_name == class_name, Lesson.subgroup.is_not(None)).limit(1))
     user.subgroup = payload.subgroup if has_groups else None
+    user.registration_reset = False
 
     await db.commit()
     await db.refresh(user)
@@ -1985,7 +1982,7 @@ async def get_all_users_for_admin(
         x_telegram_init_data=x_telegram_init_data, db=db
     )
 
-    res = await db.execute(select(User).order_by(User.created_at.desc()))
+    res = await db.execute(select(User).where(User.registration_reset.is_(False)).order_by(User.created_at.desc()))
     users = res.scalars().all()
 
     result = []
@@ -2007,6 +2004,44 @@ async def get_all_users_for_admin(
             created_at=c_str
         ))
     return result
+
+
+@app.put('/api/admin/users/{user_id}/name')
+async def admin_update_name(user_id: int, payload: AdminUserNameRequest,
+    x_telegram_init_data: Optional[str] = Header(None, alias='X-Telegram-Init-Data'), db: AsyncSession = Depends(get_db)):
+    await check_admin_permission_or_raise(x_telegram_init_data=x_telegram_init_data, db=db)
+    from community import write_lock
+    await write_lock(db)
+    user = await db.get(User, user_id)
+    if not user or user.registration_reset:
+        raise HTTPException(404, 'Пользователь не найден')
+    user.first_name = payload.first_name
+    user.last_name = payload.last_name
+    await db.commit()
+    return {'status':'ok'}
+
+
+@app.post('/api/admin/users/{user_id}/reset-registration')
+async def admin_reset_registration(user_id: int,
+    x_telegram_init_data: Optional[str] = Header(None, alias='X-Telegram-Init-Data'), db: AsyncSession = Depends(get_db)):
+    await check_admin_permission_or_raise(x_telegram_init_data=x_telegram_init_data, db=db)
+    from community import write_lock
+    await write_lock(db)
+    user = await db.get(User, user_id)
+    if not user:
+        raise HTTPException(404, 'Пользователь не найден')
+    if user.id in settings.admin_ids:
+        raise HTTPException(400, 'Нельзя удалить регистрацию администратора')
+    user.registration_reset = True
+    user.first_name = ''
+    user.last_name = ''
+    user.class_name = None
+    user.profile_name = None
+    user.subgroup = None
+    user.role = 'student'
+    user.headman_class_name = None
+    await db.commit()
+    return {'status':'ok', 'message':'Регистрация удалена. При следующем входе потребуется заполнить профиль заново.'}
 
 @app.post("/api/admin/users/{user_id}/ban")
 async def toggle_user_ban(

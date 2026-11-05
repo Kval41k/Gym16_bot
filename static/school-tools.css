@@ -1,4 +1,11 @@
 .school-wide-dialog {max-width:620px;max-height:88dvh;overflow:auto}
+.school-notification-button {position:relative;display:inline-flex;align-items:center;justify-content:center;width:44px;height:44px;border:1px solid var(--g-line);border-radius:15px;background:linear-gradient(145deg,var(--g-card),var(--g-soft));color:var(--g-text);box-shadow:0 2px 8px #00000008,inset 0 1px 0 #ffffff26;transition:transform .15s;}
+.school-notification-button:active {transform:scale(.94)}
+.school-notification-button svg {width:22px;height:22px}
+.school-notification-count {position:absolute;top:-4px;right:-4px;min-width:18px;height:18px;padding:0 4px;box-sizing:border-box;border-radius:10px;background:#d92d36;color:white;font-size:10px;font-weight:700;line-height:18px;box-shadow:0 0 0 2px var(--g-card)}
+.school-notification-count[hidden] {display:none}
+.school-question, .school-feedback p {white-space:pre-wrap;overflow-wrap:anywhere}
+.school-question-figure {display:block;width:100%;height:auto;border:1px solid var(--g-line);border-radius:16px;background:white}
 .school-inbox-button {width:100%;display:flex;justify-content:space-between;align-items:center;margin:12px 0}
 #school-inbox-list {margin:16px 0}
 .school-inbox-item {padding:16px;border:1px solid var(--g-line);border-radius:16px;white-space:pre-wrap;overflow-wrap:anywhere}

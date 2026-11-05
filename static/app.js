@@ -495,6 +495,7 @@
       // Prefill Name and Surname
       document.getElementById('onboard-first-name').value = state.user.first_name || '';
       document.getElementById('onboard-last-name').value = state.user.last_name || '';
+      ['onboard-first-name','onboard-last-name'].forEach(id => document.getElementById(id).readOnly = state.user.is_onboarded && !checkIsAdmin());
 
       const closeBtn = document.getElementById('close-onboarding-modal-btn');
       if (closeBtn) {
@@ -1812,7 +1813,7 @@
                   <span>• ID: <code>${u.id}</code></span>
                 </div>
               </div>
-              <div>${actionBtn}${!isSelfOrAdmin ? `<button class="g-btn" data-gym-click="haa6ca87f4155" data-gym-args="${encodeURIComponent(JSON.stringify([(u.id),(u.role === "editor" ? "student" : "editor")]))}">${u.role === "editor" ? "Снять роль редактора" : "Назначить редактором"}</button><button class="g-btn" data-gym-click="h7e21b831fe3a" data-gym-args="${encodeURIComponent(JSON.stringify([(u.id),(u.role === "headman")]))}">${u.role === "headman" ? "Снять роль старосты" : "Назначить старостой"}</button>` : ""}</div>
+              <div class="g-row admin-user-actions"><button class="g-btn" data-admin-person="name" data-user-id="${u.id}">Изменить имя</button>${!isSelfOrAdmin ? `<button class="g-btn danger" data-admin-person="reset" data-user-id="${u.id}">Удалить регистрацию</button>` : ""}${actionBtn}${!isSelfOrAdmin ? `<button class="g-btn" data-gym-click="haa6ca87f4155" data-gym-args="${encodeURIComponent(JSON.stringify([(u.id),(u.role === "editor" ? "student" : "editor")]))}">${u.role === "editor" ? "Снять роль редактора" : "Назначить редактором"}</button><button class="g-btn" data-gym-click="h7e21b831fe3a" data-gym-args="${encodeURIComponent(JSON.stringify([(u.id),(u.role === "headman")]))}">${u.role === "headman" ? "Снять роль старосты" : "Назначить старостой"}</button>` : ""}</div>
             </div>
 
             <div class="flex items-center justify-between text-xs pt-1 border-t border-zinc-200/40 dark:border-zinc-800/60">

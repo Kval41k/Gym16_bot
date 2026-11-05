@@ -10,7 +10,7 @@ async def run():
     import asyncpg
     admin=await asyncpg.connect(dsn)
     try:
-        for suite in ('check_security_and_comments','check_headman','check_features','check_community','check_school_tools','check_efficiency_security'):
+        for suite in ('check_security_and_comments','check_headman','check_features','check_community','check_school_tools','check_efficiency_security','check_beta_profile','check_exam_expansion'):
             name='gym16_ci_'+suite
             # Prefix and fixed names prevent accidental use of an existing database.
             if await admin.fetchval('SELECT 1 FROM pg_database WHERE datname=$1',name):

@@ -43,3 +43,7 @@ cloudflared
 .vscode/
 .idea/
 *.swp
+
+# Intermediate authored curriculum build output
+/data/math_exam_expanded.json
+/data/russian_exam_expanded.json

@@ -4,7 +4,7 @@ from pathlib import Path
 from unittest.mock import patch
 ROOT = Path(__file__).resolve().parents[1]; sys.path.insert(0, str(ROOT))
 TEMP = tempfile.TemporaryDirectory(prefix='gym16-beta-'); folder = Path(TEMP.name)
-os.environ.update(DATABASE_URL='sqlite+aiosqlite:///'+str(folder/'test.db'), BOT_TOKEN='123456789:TEST_TOKEN_FOR_LOCAL_CHECKS_ONLY', ADMIN_IDS='2', ADMIN_USERNAME='', UPLOAD_DIR=str(folder/'uploads'), BACKUP_DIR=str(folder/'backups'))
+os.environ.update(DATABASE_URL=os.getenv('GYM16_TEST_DATABASE_URL') or 'sqlite+aiosqlite:///'+str(folder/'test.db'), BOT_TOKEN='123456789:TEST_TOKEN_FOR_LOCAL_CHECKS_ONLY', ADMIN_IDS='2', ADMIN_USERNAME='', UPLOAD_DIR=str(folder/'uploads'), BACKUP_DIR=str(folder/'backups'))
 import httpx
 from PIL import Image
 from database import init_db, async_session, engine
@@ -52,6 +52,26 @@ async def run():
         assert result.status_code == 200 and result.headers['content-type'] == 'image/jpeg'
         assert result.headers['cache-control'] == 'no-store' and len(calls) == 3
         assert os.environ['BOT_TOKEN'].encode() not in result.content
+        old_profile = {'id':1,'first_name':'Тест','last_name':'Ученик','class_name':'11Д','profile_name':'Инфотех'}
+        assert (await client.put('/api/admin/users/1/name',headers=signed(),json={'first_name':'Новое','last_name':'Имя'})).status_code == 403
+        assert (await client.put('/api/admin/users/1/role',headers=signed(2),json={'role':'editor'})).status_code == 200
+        assert (await client.put('/api/admin/users/1/name',headers=signed(),json={'first_name':'Новое','last_name':'Имя'})).status_code == 403
+        assert (await client.put('/api/user/1/profile',headers=signed(),json={**old_profile,'first_name':'Подмена'})).status_code == 403
+        result = await client.put('/api/admin/users/1/name',headers=signed(2),json={'first_name':'Новое','last_name':'Имя'})
+        assert result.status_code == 200
+        result = await client.post('/api/user/sync',headers=signed(),json=old_profile)
+        assert result.json()['first_name'] == 'Новое' and result.json()['last_name'] == 'Имя', 'Stale cache must not undo admin name'
+        assert (await client.post('/api/admin/users/1/reset-registration',headers=signed(),json={})).status_code == 403
+        await client.post('/api/user/sync',headers=signed(2),json={**old_profile,'id':2})
+        assert (await client.post('/api/admin/users/2/reset-registration',headers=signed(2),json={})).status_code == 400
+        assert (await client.post('/api/admin/users/1/reset-registration',headers=signed(2),json={})).status_code == 200
+        assert 1 not in [u['id'] for u in (await client.get('/api/admin/users',headers=signed(2))).json()]
+        result = await client.post('/api/user/sync',headers=signed(),json=old_profile)
+        assert not result.json()['is_onboarded'] and result.json()['class_name'] is None, 'Stale cache must not restore deleted registration'
+        assert (await client.get('/api/news',headers=signed())).status_code == 409
+        result = await client.put('/api/user/1/profile',headers=signed(),json=old_profile)
+        assert result.status_code == 200 and result.json()['is_onboarded']
+        assert 1 in [u['id'] for u in (await client.get('/api/admin/users',headers=signed(2))).json()]
     from bot import get_main_inline_keyboard
     buttons = [button for row in get_main_inline_keyboard().inline_keyboard for button in row]
     assert len(buttons) == 3 and buttons[1].callback_data == 'view_bells' and buttons[2].url == 'https://t.me/kvalx'

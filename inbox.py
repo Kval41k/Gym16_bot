@@ -28,7 +28,7 @@ async def queue_inbox(db, user_id, kind, message, event_key, link=None):
 
 
 async def publication_notices(db, post):
-    query=select(User.id).where(User.is_banned.is_(False),User.id!=post.author_id)
+    query=select(User.id).where(User.is_banned.is_(False),User.registration_reset.is_(False),User.id!=post.author_id)
     policy=await db.get(AccessPolicy,1)
     if policy and policy.invites_required:
         query=query.where(or_(User.is_member.is_(True),User.id.in_(settings.admin_ids)))

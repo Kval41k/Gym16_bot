@@ -31,7 +31,7 @@ async def run():
  await init_db()
  async with async_session() as db:
   for uid,cls,role in [(1,'11А','student'),(2,'11А','student'),(3,'11А','editor'),(4,'11А','student'),(5,'11Б','student'),(6,'11Б','headman'),(7,'11А','student'),(8,'11А','student'),(9,'11А','student')]:
-   db.add(User(id=uid,first_name='Ученик',last_name=str(uid),username='oldadmin' if uid==9 else 'test'+str(uid),class_name=cls,profile_name='Соц-гум' if cls=='11А' else 'Физмат',role=role,headman_class_name=cls if role=='headman' else None,is_member=True,is_banned=uid==8))
+   db.add(User(id=uid,first_name='Тест' if uid==4 else 'Ученик',last_name='Староста' if uid==4 else str(uid),username='oldadmin' if uid==9 else 'test'+str(uid),class_name=cls,profile_name='Соц-гум' if cls=='11А' else 'Физмат',role=role,headman_class_name=cls if role=='headman' else None,is_member=True,is_banned=uid==8))
   db.add_all([Lesson(class_name=cls,day_of_week=0,lesson_number=1,subject='Физика',teacher_name='Учитель',cabinet='123',start_time='08:15',end_time='08:55') for cls in ['11А','11Б']])
   db.add_all([ClassChat(class_name='11А',chat_id=-1001,chat_title='11А чат'),ClassChat(class_name='11Б',chat_id=-1002,chat_title='11Б чат',attendance_enabled=False)])
   await db.commit()

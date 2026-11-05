@@ -153,7 +153,13 @@ for(const type of ['click','input','change','submit','error','load','keydown','b
     try {parameters=JSON.parse(decodeURIComponent(node.getAttribute('data-gym-args')||'%5B%5D'));}
     catch {return;}
     if(!Array.isArray(parameters))return;
-    const result=handlers[key].call(node,event,parameters);
+    const handlerNode=node;
+    const scopedEvent=type==='submit'?new Proxy(event,{get(original,property){
+      if(property==='currentTarget')return handlerNode;
+      const value=Reflect.get(original,property,original);
+      return typeof value==='function'?value.bind(original):value;
+    }}):event;
+    const result=handlers[key].call(node,scopedEvent,parameters);
     if(result===false){event.preventDefault();event.stopPropagation();}
     if(event.cancelBubble)return;
    }

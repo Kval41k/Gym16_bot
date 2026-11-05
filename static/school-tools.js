@@ -1,11 +1,10 @@
-/* Private notifications, reports and a daily study plan. No inline script handlers. */
-const schoolTools = {inbox: [], cursor: null, latest: null, daily: null, reports: [], busy: new Set()};
+/* Private notifications and reports. No inline script handlers. */
+const schoolTools = {inbox: [], cursor: null, latest: null, reports: [], busy: new Set()};
 const schoolSubjects = {math:'Профильная математика', russian:'Русский язык'};
 const schoolReasons = {spam:'Спам', abuse:'Оскорбления или травля', unsafe:'Опасный контент', privacy:'Личные данные', other:'Другое'};
 const schoolLabels = {schedule:'Расписание', comment:'Комментарий', moderation:'Модерация', news:'Новости', report_result:'Жалоба', general:'Уведомление'};
 
-document.getElementById('header-actions').insertAdjacentHTML('afterbegin', '<button type="button" class="g-btn" data-school-action="inbox" aria-label="Открыть уведомления">🔔 <span class="g-badge" data-inbox-count>0</span></button>');
-document.getElementById('ege-materials-list').insertAdjacentHTML('beforebegin', '<section id="school-daily" class="g-card g-stack" aria-live="polite"></section>');
+document.getElementById('header-actions').insertAdjacentHTML('afterbegin', '<button type="button" class="school-notification-button" data-school-action="inbox" aria-label="Открыть уведомления"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9Z"/><path d="M10 21h4"/></svg><span class="school-notification-count" data-inbox-count hidden>0</span></button>');
 document.getElementById('tab-admin').insertAdjacentHTML('beforeend', `<section id="admin-section-reports" hidden class="g-stack"><div class="g-card g-stack"><h3 class="g-title">Жалобы</h3><p class="g-muted">Проверьте контекст и при необходимости удалите запись через ленту. Рассмотрение жалобы само по себе не удаляет контент.</p><label class="g-label" for="school-report-filter">Статус</label><select id="school-report-filter" class="g-input"><option value="pending">Ожидают рассмотрения</option><option value="handled">Рассмотрены</option><option value="dismissed">Отклонены</option></select><button class="g-btn" data-school-action="reports">Обновить</button></div><div id="school-reports-list" class="g-stack"></div></section>`);
 document.body.insertAdjacentHTML('beforeend', `
 <dialog id="school-inbox-dialog" class="g-editor school-wide-dialog" aria-labelledby="school-inbox-title"><div class="g-row g-between"><h3 id="school-inbox-title" class="g-title">Уведомления</h3><button type="button" class="g-btn" data-school-close="school-inbox-dialog" aria-label="Закрыть уведомления">✕</button></div><p class="g-muted">Замены, новости, комментарии и результаты модерации сохраняются здесь независимо от доставки в Telegram.</p><div class="g-row"><button class="g-btn" data-school-action="inbox-refresh">Обновить</button><button class="g-btn" id="school-read-all" data-school-action="read-all">Прочитать все</button></div><div id="school-inbox-list" class="g-stack" aria-live="polite"></div><button class="g-btn" id="school-inbox-more" data-school-action="inbox-more" hidden>Показать ещё</button><p id="school-inbox-error" class="g-error" role="alert"></p></dialog>
@@ -39,7 +38,7 @@ async function schoolLoadInbox(append = false) {
   if (ticket !== schoolTools.inboxTicket) return;
   schoolTools.inbox = append ? [...schoolTools.inbox, ...data.items] : data.items;
   schoolTools.cursor = data.next_cursor; if (!append) schoolTools.latest = data.latest_id;
-  document.querySelectorAll('[data-inbox-count]').forEach(node => node.textContent = data.unread > 99 ? '99+' : data.unread);
+  document.querySelectorAll('[data-inbox-count]').forEach(node => {node.textContent = data.unread > 99 ? '99+' : data.unread;node.hidden = !data.unread;});
   document.querySelector('[data-school-action="inbox"]').setAttribute('aria-label', `Уведомления, непрочитанных: ${data.unread}`);
   document.getElementById('school-read-all').disabled = !data.unread;
   schoolRenderInbox();
@@ -48,21 +47,6 @@ function schoolRenderInbox() {
   document.getElementById('school-inbox-list').innerHTML = schoolTools.inbox.map(item => `<article class="school-inbox-item ${item.read ? '' : 'unread'}"><div class="g-row g-between"><span class="g-badge">${toolsEsc(schoolLabels[item.kind] || 'Уведомление')}</span><time class="g-muted">${toolsEsc(toolsDate(item.created_at))}</time></div><p>${toolsEsc(item.text)}</p><button class="g-btn" data-school-action="inbox-item" data-school-id="${item.id}">${item.link ? 'Открыть' : item.read ? 'Прочитано' : 'Прочитать'}</button></article>`).join('') || '<p class="g-muted">Здесь появятся ваши уведомления.</p>';
   document.getElementById('school-inbox-more').hidden = !schoolTools.cursor;
 }
-async function schoolLoadDaily() {
-  const node = document.getElementById('school-daily');
-  if (!state.user?.id || state.user.access_allowed === false) {node.innerHTML = '';return;}
-  const ticket = schoolTools.dailyTicket = (schoolTools.dailyTicket || 0) + 1;
-  try {
-    const data = await toolsRequest('/api/me/practice/daily');
-    if (ticket !== schoolTools.dailyTicket) return;
-    schoolTools.daily = data;
-    window.schoolToolsDailyStats={completed:data.completed,total:data.items.length,correct:data.correct};
-    const done = data.completed, total = data.items.length;
-    node.innerHTML = `<div class="g-row g-between"><h3 class="g-title">Мой план на сегодня</h3><span class="g-badge">${done}/${total}</span></div><p class="g-muted">До ${data.target} коротких заданий: новые темы и повторение ошибок. Обновляется ежедневно по времени Тюмени.</p><progress class="school-progress" max="${total || 1}" value="${done}" aria-label="Выполнено заданий"></progress>${total ? `<ul class="school-plan">${data.items.map(item => `<li><span>${item.done ? item.correct ? '✓' : '↻' : item.review ? '↻' : '○'}</span><div>${toolsEsc(schoolSubjects[item.subject_code])} · №${item.task_number}<p class="g-muted">${toolsEsc(item.title)} · ${item.done ? item.correct ? 'Верно' : 'Ошибка сохранена для повторения' : item.review ? 'Повторение ошибки' : 'Новое задание'}</p></div></li>`).join('')}</ul>` : '<p class="g-muted">Все задания решены или ошибки ещё не готовы к повторению.</p>'}<button class="g-btn primary" data-school-action="daily" ${done >= total ? 'disabled' : ''}>${done ? 'Продолжить план' : 'Начать план'}</button><h4 class="g-title">За последние 7 дней</h4><div class="school-week">${data.week.map(day => `<div><span class="g-muted">${toolsEsc(day.date.slice(8) + '.' + day.date.slice(5,7))}</span><strong>${day.correct}/${day.answered}</strong></div>`).join('')}</div><p class="g-muted">Верные ответы / все попытки</p><h4 class="g-title">Темы для повторения</h4>${data.weak_topics.length ? data.weak_topics.map(topic => `<button class="g-btn school-weak" data-school-action="weak" data-subject="${toolsEsc(topic.subject_code)}" data-task="${topic.task_number}">${toolsEsc(schoolSubjects[topic.subject_code])} №${topic.task_number} · ${toolsEsc(topic.title)} · ошибок для разбора: ${topic.remaining}</button>`).join('') : '<p class="g-muted">Пока нет ошибок для повторения. Начните с плана на сегодня.</p>'}`;
-  } catch (error) { if (ticket === schoolTools.dailyTicket) node.innerHTML = `<h3 class="g-title">Мой план на сегодня</h3><p class="g-error">${toolsEsc(error.message)}</p><button class="g-btn" data-school-action="daily-refresh">Повторить загрузку</button>`; }
-}
-window.schoolLoadDaily = schoolLoadDaily;
-
 async function schoolLoadReports(append = false) {
   if (!checkIsAdmin()) return;
   const status = document.getElementById('school-report-filter').value;
@@ -120,8 +104,6 @@ document.addEventListener('click', async event => {
       if (item.link) {document.getElementById('school-inbox-dialog').close();if (item.link.startsWith('news:')) await schoolOpenPost(item.link.split(':')[1], item.kind === 'comment');else if (['schedule','profile','news'].includes(item.link)) switchTab('tab-' + item.link);}
       await schoolLoadInbox();
     }
-    if (action === 'daily-refresh') await schoolLoadDaily();
-    if (action === 'daily') {school.practice = {mode:'daily'};document.getElementById('school-practice-dialog').showModal();await schoolNextPractice();}
     if (action === 'weak') {school.practice={subject:button.dataset.subject,number:Number(button.dataset.task),mode:'mistakes'};document.getElementById('school-practice-dialog').showModal();await schoolNextPractice();}
     if (action === 'reports') await schoolLoadReports();
     if (action === 'reports-more') await schoolLoadReports(true);
@@ -143,5 +125,5 @@ document.addEventListener('submit', async event => {
   finally {delete form.dataset.saving;buttons.forEach(button => button.disabled = false);}
 });
 const schoolToolsPersonal = loadPersonalTools;
-loadPersonalTools = async function() {await schoolToolsPersonal();if (state.user?.id && state.user.access_allowed !== false) await Promise.allSettled([schoolLoadInbox(), schoolLoadDaily()]);};
+loadPersonalTools = async function() {await schoolToolsPersonal();if (state.user?.id && state.user.access_allowed !== false) await Promise.allSettled([schoolLoadInbox()]);};
 window.loadPersonalTools = loadPersonalTools;

@@ -442,7 +442,7 @@ async def deliver_notifications():
                 user = await db.get(User, item.user_id)
                 pref = await db.get(UserPreferences, item.user_id)
                 enabled = pref and (pref.lesson_reminders if item.dedup_key.startswith("lesson:") else pref.schedule_changes)
-                if not user or user.is_banned or not enabled:
+                if not user or user.is_banned or user.registration_reset or not enabled:
                     item.status = "cancelled"
                     await db.commit()
                     continue

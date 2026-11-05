@@ -1,5 +1,4 @@
 """Reviewed study catalog and server-checked, per-account practice with mistake review."""
-import hashlib
 import json
 import re
 import secrets
@@ -23,6 +22,9 @@ BANK=json.loads((ROOT/'data/practice_2027.json').read_text())['questions']
 QUESTIONS={q['id']:q for q in BANK}
 TOPICS={(row['subject_code'],row['task_number']):row for row in CATALOG['topics']}
 
+def public_question(question):
+    return {key:question[key] for key in ('id','subject_code','task_number','kind','prompt','options','prototype','figure','figure_alt') if key in question}
+
 
 async def apply_learning_catalog():
     token=audit_actor.set({'id':0,'first_name':'Учебный каталог ЕГЭ-2027','source':'curriculum'})
@@ -34,7 +36,8 @@ async def apply_learning_catalog():
             math_map={**{i:i for i in range(1,6)},6:7,7:8,8:9,9:10,10:11,11:12,12:17,13:14,14:15,15:16,16:13,17:18,18:19,19:20}
             russian_map={22:23,23:24,24:25,25:26,26:22}
             existing=(await db.scalars(select(EgeMaterial))).all()
-            for material in existing:
+            legacy_done = await db.get(AppliedDataUpdate, 'ege-2027-20261025-v1')
+            for material in ([] if legacy_done else existing):
                 if material.source_key:continue
                 if material.subject_code=='math':
                     if material.task_number==20:material.is_archived=True
@@ -42,8 +45,14 @@ async def apply_learning_catalog():
                 elif material.subject_code=='russian':material.task_number=russian_map.get(material.task_number,material.task_number)
             for topic in CATALOG['topics']:
                 key=f'ege-2027:{topic["subject_code"]}:{topic["task_number"]}'
-                if not any(row.source_key==key for row in existing):
+                material = next((row for row in existing if row.source_key == key), None)
+                if material:
+                    material.title = topic['title']; material.theory = topic['theory']; material.link_url = topic['source_url']
+                    material.is_archived = False
+                else:
                     db.add(EgeMaterial(subject_code=topic['subject_code'],task_number=topic['task_number'],title=topic['title'],theory=topic['theory'],link_url=topic['source_url'],source_key=key))
+            if not legacy_done and CATALOG['version'] != 'ege-2027-20261025-v1':
+                db.add(AppliedDataUpdate(revision='ege-2027-20261025-v1'))
             subject=await db.scalar(select(EgeSubject).where(EgeSubject.code=='math'))
             if subject:subject.name='Профильная математика';subject.tasks_count=20
             db.add(AppliedDataUpdate(revision=CATALOG['version']))
@@ -58,65 +67,31 @@ def normalized(value):
 
 def check_answer(question,answer):
     value=normalized(answer)
+    if question.get('answer_order') == 'any':
+        return bool(re.fullmatch(r'[1-9\s,;]+', value)) and sorted(re.sub(r'[\s,;]', '', value)) == sorted(question['answer'])
+    if question['kind']=='text' and question['answer'].isdigit() and re.fullmatch(r'[0-9\s,;]+', value):
+        return re.sub(r'[\s,;]', '', value) == question['answer']
     if question['kind']=='number':
         # Exact arithmetic only; never evaluate a user-supplied expression.
         value=value.replace(',','.').replace(' ','').replace('−','-')
         if len(value)>100 or not re.fullmatch(r'[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:/[+-]?\d+)?',value):return False
-        try:return Fraction(value)==Fraction(question['answer'])
+        try:return Fraction(value)==Fraction(normalized(question['answer']).replace('−','-').replace(',','.'))
         except (ValueError,ZeroDivisionError):return False
-    return value==normalized(question['answer'])
+    return value in [normalized(a) for a in question.get('answers', [question['answer']])]
 
 
 def feedback(question,session):
     answer=question['answer']
     if question['kind']=='choice':answer=next(option['text'] for option in question['options'] if option['id']==answer)
     return {'correct':session.correct,'correct_answer':answer,'explanation':question['explanation'],
-            'repeat':not session.correct,'notice':'Проверен учебный шаг. Это не экспертная оценка полного развёрнутого ответа.' if TOPICS[(question['subject_code'],question['task_number'])]['practice_scope']!='Учебные мини-задания по теме' else ''}
-
-
-DAILY_TARGET=5
-
-
-def daily_session_id(user_id,day,question_id,review):
-    # Persist the assignment and original kind without a separate plan table.
-    key=f'daily:{user_id}:{day}:{question_id}'.encode()
-    return hashlib.sha256(key).hexdigest()[:31]+str(int(review))
-
-
-async def daily_plan(db,user,now):
-    day=now.astimezone(TZ).date().isoformat()
-    ids={daily_session_id(user.id,day,q['id'],review):(q,review) for q in BANK for review in (False,True)}
-    records={r.question_id:r for r in (await db.scalars(select(PracticeProgress).where(PracticeProgress.user_id==user.id))).all()}
-    sessions=list((await db.scalars(select(PracticeSession).where(PracticeSession.user_id==user.id,PracticeSession.id.in_(ids)))).all())
-    if not sessions:
-        weak={topic:sum(r.mistakes for r in records.values() if not r.mastered and r.question_id in QUESTIONS and (QUESTIONS[r.question_id]['subject_code'],QUESTIONS[r.question_id]['task_number'])==topic) for topic in TOPICS}
-        unseen=[q for q in BANK if q['id'] not in records]
-        # Rotate equal-priority topics per pupil and day, prioritising weak topics.
-        unseen.sort(key=lambda q:(-weak[(q['subject_code'],q['task_number'])],daily_session_id(user.id,day,q['id'],False)))
-        due=[q for q in BANK if q['id'] in records and not records[q['id']].mastered and records[q['id']].mistakes and (not records[q['id']].next_review_at or utc(records[q['id']].next_review_at)<=now)]
-        due.sort(key=lambda q:(-records[q['id']].mistakes,q['id']))
-        selected=[(q,True) for q in due[:2]]
-        selected.extend((q,False) for q in unseen[:DAILY_TARGET-len(selected)])
-        selected.extend((q,True) for q in due[2:2+DAILY_TARGET-len(selected)])
-        for q,review in selected:
-            session=PracticeSession(id=daily_session_id(user.id,day,q['id'],review),user_id=user.id,question_id=q['id'],created_at=now)
-            db.add(session);sessions.append(session)
-        await db.flush()
-    sessions.sort(key=lambda session:(not ids[session.id][1],session.id))
-    entries=[]
-    for session in sessions:
-        q,review=ids[session.id]
-        record=records.get(q['id'])
-        done=bool(session.answered_at or (record and record.mastered))
-        entries.append({'question_id':q['id'],'subject_code':q['subject_code'],'task_number':q['task_number'],
-                        'title':TOPICS[(q['subject_code'],q['task_number'])]['title'],'review':review,
-                        'done':done,'correct':session.correct if session.answered_at else True if done else None})
-    return day,sessions,entries,records
+            'repeat':not session.correct,'self_assessed':question['kind']=='self_check',
+            'notice':'Результат отмечен вами после самопроверки. Это не экспертная оценка ЕГЭ.' if question['kind']=='self_check' else ''}
 
 
 class AnswerRequest(BaseModel):
     session_id:str=Field(pattern=r'^[a-f0-9]{32}$')
-    answer:str=Field(min_length=1,max_length=1000)
+    answer:str=Field(min_length=1,max_length=20000)
+    self_assessment:Optional[bool]=None
 
 
 def install_learning(app,require_identity,require_active,require_editor,rate_limit):
@@ -134,51 +109,6 @@ def install_learning(app,require_identity,require_active,require_editor,rate_lim
         await require_editor(x_telegram_init_data=x_telegram_init_data,db=db)
         rows=(await db.scalars(select(EgeMaterial).where(EgeMaterial.is_archived.is_(True)))).all()
         return [{'id':row.id,'title':row.title,'theory':row.theory,'subject_code':row.subject_code,'task_number':row.task_number} for row in rows]
-
-    @router.get('/api/me/practice/daily')
-    async def daily(user=Depends(student),db=Depends(get_db)):
-        rate_limit(f'practice-daily:{user.id}',90,60)
-        await write_lock(db)
-        now=datetime.now(timezone.utc)
-        day,sessions,entries,records=await daily_plan(db,user,now)
-        week_start=(now.astimezone(TZ).replace(hour=0,minute=0,second=0,microsecond=0)-timedelta(days=6)).astimezone(timezone.utc)
-        boundaries=[week_start+timedelta(days=offset) for offset in range(8)]
-        aggregates=[]
-        for start,end in zip(boundaries,boundaries[1:]):
-            in_day=(PracticeSession.answered_at>=start)&(PracticeSession.answered_at<end)
-            aggregates.extend((func.count(PracticeSession.id).filter(in_day),
-                               func.count(PracticeSession.id).filter(in_day,PracticeSession.correct.is_(True))))
-        counts=(await db.execute(select(*aggregates).where(PracticeSession.user_id==user.id,
-            PracticeSession.answered_at>=week_start,PracticeSession.answered_at<boundaries[-1]))).one()
-        week=[{'date':start.astimezone(TZ).date().isoformat(),'answered':counts[2*i],'correct':counts[2*i+1]}
-              for i,start in enumerate(boundaries[:-1])]
-        weak=[]
-        for topic in TOPICS:
-            mistakes=[r for r in records.values() if r.question_id in QUESTIONS and not r.mastered and r.mistakes and (QUESTIONS[r.question_id]['subject_code'],QUESTIONS[r.question_id]['task_number'])==topic]
-            if mistakes:weak.append({'subject_code':topic[0],'task_number':topic[1],'title':TOPICS[topic]['title'],'mistakes':sum(r.mistakes for r in mistakes),'remaining':len(mistakes)})
-        weak.sort(key=lambda row:(-row['mistakes'],row['subject_code'],row['task_number']))
-        await db.commit()
-        return {'date':day,'timezone':str(TZ),'target':DAILY_TARGET,'items':entries,'completed':sum(e['done'] for e in entries),
-                'correct':sum(e['correct'] is True for e in entries),'weak_topics':weak[:5],'week':week}
-
-    @router.get('/api/me/practice/daily/next')
-    async def daily_next(user=Depends(student),db=Depends(get_db)):
-        rate_limit(f'practice-next:{user.id}',90,60)
-        await write_lock(db)
-        now=datetime.now(timezone.utc)
-        day,sessions,entries,records=await daily_plan(db,user,now)
-        stats={'total':len(entries),'mastered':sum(e['correct'] is True for e in entries),'mistakes':sum(e['correct'] is False for e in entries),'completed':sum(e['done'] for e in entries)}
-        pending=next(((session,entry) for session,entry in zip(sessions,entries) if not entry['done']),None)
-        if not pending:
-            await db.commit()
-            return {'question':None,'stats':stats,'message':'План на сегодня выполнен. Новые задания и повторение ошибок появятся завтра.' if entries else 'Все доступные задания решены или ошибки пока не готовы к повторению. Можно выбрать тему вручную.'}
-        session,entry=pending
-        # Opening a stable daily assignment renews the usual answer window.
-        session.created_at=now
-        await db.commit()
-        q=QUESTIONS[session.question_id]
-        return {'question':{key:q[key] for key in ('id','subject_code','task_number','kind','prompt','options')},'session_id':session.id,'stats':stats,
-                'scope':TOPICS[(q['subject_code'],q['task_number'])]['practice_scope'],'review':entry['review'],'notice':'Повторение ошибки' if entry['review'] else 'Новое авторское учебное мини-задание, не официальный КИМ.'}
 
     @router.get('/api/me/practice/next')
     async def next_question(subject_code:Literal['math','russian'],task_number:int=Query(ge=1,le=27),
@@ -203,8 +133,8 @@ def install_learning(app,require_identity,require_active,require_editor,rate_lim
         session=await db.scalar(select(PracticeSession).where(PracticeSession.user_id==user.id,PracticeSession.question_id==q['id'],PracticeSession.answered_at.is_(None),PracticeSession.created_at>=now-timedelta(minutes=30)).order_by(PracticeSession.created_at.desc()))
         if not session:
             session=PracticeSession(id=secrets.token_hex(16),user_id=user.id,question_id=q['id']);db.add(session);await db.commit()
-        return {'question':{key:q[key] for key in ('id','subject_code','task_number','kind','prompt','options')},'session_id':session.id,'stats':stats,
-                'scope':TOPICS[(subject_code,task_number)]['practice_scope'],'notice':'Авторское учебное мини-задание, не официальный КИМ.'}
+        return {'question':public_question(q),'session_id':session.id,'stats':stats,
+                'scope':TOPICS[(subject_code,task_number)]['practice_scope'],'notice':'Авторский экзаменационный прототип по формату ФИПИ-2027. Не официальный КИМ.'}
 
     @router.post('/api/me/practice/answer')
     async def answer(payload:AnswerRequest,x_telegram_init_data:Optional[str]=Header(None),db=Depends(get_db)):
@@ -219,12 +149,22 @@ def install_learning(app,require_identity,require_active,require_editor,rate_lim
         if session.answered_at:return feedback(q,session)
         now=datetime.now(timezone.utc)
         if utc(session.created_at)<now-timedelta(minutes=30):raise HTTPException(409,'Попытка устарела. Откройте следующую задачу.')
+        if q['kind']=='self_check':
+            if payload.self_assessment is None:
+                session.answer=payload.answer
+                await db.commit()
+                return {'needs_review':True,'correct_answer':q['answer'],'explanation':q['explanation'],
+                        'notice':'Сравните полное решение с эталоном и критериями. Приложение не выставляет экспертные баллы.'}
+            if session.answer is None:
+                raise HTTPException(409,'Сначала откройте эталон решения для самопроверки.')
+        elif payload.self_assessment is not None:
+            raise HTTPException(422,'Краткий ответ проверяется автоматически.')
         record=await db.get(PracticeProgress,(user.id,q['id']))
         if record and record.mastered:raise HTTPException(409,'Эта задача уже решена правильно. Откройте следующую.')
         if not record:
             record=PracticeProgress(user_id=user.id,question_id=q['id'],attempts=0,mistakes=0,mastered=False);db.add(record)
         record.attempts+=1
-        session.answer=payload.answer;session.correct=check_answer(q,payload.answer);session.answered_at=now
+        session.answer=payload.answer;session.correct=payload.self_assessment if q['kind']=='self_check' else check_answer(q,payload.answer);session.answered_at=now
         if session.correct:record.mastered=True;record.next_review_at=None
         else:record.mistakes+=1;record.next_review_at=now+timedelta(minutes=1)
         await db.commit()

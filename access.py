@@ -9,7 +9,7 @@ def configured_admin(user):
 
 
 async def access_allowed(db, user):
-    if user.is_banned:
+    if user.is_banned or user.registration_reset:
         return False
     policy = await db.get(AccessPolicy, 1)
     return not (policy and policy.invites_required) or user.is_member or configured_admin(user)
@@ -23,5 +23,5 @@ async def require_school_access(db, user):
 
 
 def registration_complete(user):
-    return bool(user and (user.first_name or '').strip() and (user.last_name or '').strip()
+    return bool(user and not user.registration_reset and (user.first_name or '').strip() and (user.last_name or '').strip()
                 and user.profile_name in CLASS_PROFILES_MAP.get(user.class_name, []))

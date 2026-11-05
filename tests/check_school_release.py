@@ -100,16 +100,22 @@ async def run():
    path=f'/api/me/practice/next?subject_code={sub}&task_number={n}'
    first=await call('GET',path);q=first['question'];assert 'answer' not in q and 'explanation' not in q
    await call('POST','/api/me/practice/answer',{'session_id':first['session_id'],'answer':'wrong'},uid=3,status=404)
-   wrong=await call('POST','/api/me/practice/answer',{'session_id':first['session_id'],'answer':'wrong'});assert wrong['correct'] is False and wrong['explanation']
+   wrong=await call('POST','/api/me/practice/answer',{'session_id':first['session_id'],'answer':'wrong'})
+   if q['kind']=='self_check':
+    assert wrong['needs_review'];wrong=await call('POST','/api/me/practice/answer',{'session_id':first['session_id'],'answer':'wrong','self_assessment':False})
+   assert wrong['correct'] is False and wrong['explanation']
    replay=await call('POST','/api/me/practice/answer',{'session_id':first['session_id'],'answer':QUESTIONS[q['id']]['answer']});assert replay==wrong
    fresh=await call('GET',path);assert fresh['question']['id']!=q['id']
    retry=await call('GET',path+'&mode=mistakes');assert retry['question']['id']==q['id']
-   correct=await call('POST','/api/me/practice/answer',{'session_id':retry['session_id'],'answer':QUESTIONS[q['id']]['answer']});assert correct['correct'] is True
+   correct=await call('POST','/api/me/practice/answer',{'session_id':retry['session_id'],'answer':QUESTIONS[q['id']]['answer']})
+   if q['kind']=='self_check':
+    assert correct['needs_review'];correct=await call('POST','/api/me/practice/answer',{'session_id':retry['session_id'],'answer':'Полное решение','self_assessment':True})
+   assert correct['correct'] is True
    assert (await call('GET',path))['question']['id']!=q['id']
    assert (await call('GET',path+'&mode=mistakes'))['question'] is None
   # Two simultaneous submissions of one session must produce one recorded attempt.
   single=await call('GET','/api/me/practice/next?subject_code=math&task_number=1',uid=2)
-  payload={'session_id':single['session_id'],'answer':'5'}
+  payload={'session_id':single['session_id'],'answer':QUESTIONS[single['question']['id']]['answer']}
   together=await asyncio.gather(*(c.post('/api/me/practice/answer',headers=signed(2),json=payload) for _ in range(2)))
   assert all(r.status_code==200 and r.json()['correct'] for r in together)
   assert (await call('GET','/api/me/practice/progress',uid=2))['math:1']['attempts']==1
@@ -119,11 +125,9 @@ async def run():
   assert (await call('GET','/api/me/practice/progress',uid=3))['math:6']['mastered']==0
   assert check_answer({'kind':'number','answer':'1/4'},'0,25') and check_answer({'kind':'number','answer':'0.25'},'1/4')
   assert not check_answer({'kind':'number','answer':'1'},'__import__("os").system("id")')
-  # Independently hand-calculated keys for every numeric mathematics topic.
-  expected={1:[5,13,17],2:[11,7,-2],3:[20,24,70],4:['1/4','7/20','3/10'],5:['3/10','2/5','63/100'],6:[10,12,30,16,4,"3/10"],7:[10,21,33],8:[3,2,2],9:[4,-2,3],10:[60,60,54],11:[2,2,4],12:[4,5,2],13:[22000,54000,46000,23000,12100,12100],14:[2,3,4],15:[6,8,6],16:[3,7,6],17:[4,9,16,18,8,25],18:[8,11,15],19:[2,3,4],20:[3,4,5]}
-  for n,values in expected.items():
-   actual=[Fraction(q['answer']) for q in QUESTIONS.values() if q['subject_code']=='math' and q['task_number']==n]
-   assert actual==[Fraction(value) for value in values],(n,actual,values)
+  # Independently hand-calculated examples; full-bank structural checks live in check_exam_expansion.
+  expected={'math-full-2027-01-1':'75','math-full-2027-04-1':'4/5','math-full-2027-06-1':'5/2','math-full-2027-13-1':'144000'}
+  for key,value in expected.items():assert Fraction(QUESTIONS[key]['answer'])==Fraction(value),key
   # A backup containing progress, sessions, source keys and photo lessons must restore.
   archive=DIR/'complete.zip';archive.write_bytes(await build_backup())
   env=dict(os.environ,DATABASE_URL='sqlite+aiosqlite:///'+str(DIR/'restored.db'),UPLOAD_DIR=str(DIR/'restored-uploads'))

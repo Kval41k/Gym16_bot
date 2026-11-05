@@ -100,9 +100,8 @@ async def run():
             async with async_session() as db:
                 db.add_all([PracticeSession(id=f'{i:032x}',user_id=1,question_id='fixture',answer='x',correct=correct,answered_at=stamp,created_at=now)
                     for i,stamp,correct in ((800,midnight-timedelta(microseconds=1),False),(801,midnight,True),(802,midnight+timedelta(days=1),True))]);await db.commit()
-            queries.clear();r=await client.get('/api/me/practice/daily',headers=signed(1));assert r.status_code==200
-            assert r.json()['week'][-1]['answered']==301 and r.json()['week'][-1]['correct']==151
-            assert r.json()['week'][-2]['answered']==1
+            queries.clear();r=await client.get('/api/me/practice/progress',headers=signed(1));assert r.status_code==200
+            assert not any('FROM practice_sessions' in q for q in queries), 'Progress must not scan historical answer bodies'
             assert not any('FROM practice_sessions' in q and 'answered_at >=' in q and 'count(' not in q.lower() for q in queries)
     finally:event.remove(engine.sync_engine,'before_cursor_execute',observe)
     # Exercise the bot export itself, not only the escaping helper.

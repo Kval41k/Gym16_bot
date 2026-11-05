@@ -32,7 +32,7 @@ async def run():
             if '/api/' in url and (url.startswith('/api/me/') or '/reports' in url):assert r.headers['cache-control']=='no-store'
             return r.json()
         for uid in (1,2,3,4):await call('POST','/api/user/sync',{'id':uid,'first_name':'Test','last_name':'Student','class_name':'11А','profile_name':'Соц-гум'},uid)
-        for url in ('/api/me/notifications','/api/admin/reports','/api/me/practice/daily'):
+        for url in ('/api/me/notifications','/api/admin/reports','/api/me/practice/progress'):
             assert (await c.get(url)).status_code in (401,403)
         # A transaction keeps the event and mutation atomic; repeated events are idempotent.
         async with async_session() as db:
@@ -101,33 +101,21 @@ async def run():
         changes=(await call('GET',f'/api/schedule/lessons?class_name=11А&date={day}&only_my_profile=true&profile_name={other}'))['changes']
         assert not any(r['kind']=='changed' for r in changes)
         assert any(row['kind']=='schedule' for row in (await call('GET','/api/me/notifications'))['items']),'Inbox works without Telegram opt-in'
-        # Plans are stable across requests; no answer keys or foreign session access.
-        plan=await call('GET','/api/me/practice/daily');assert len(plan['items'])==5 and plan['completed']==0
-        assert plan['items']==(await call('GET','/api/me/practice/daily'))['items']
-        item=await call('GET','/api/me/practice/daily/next');q=item['question'];assert 'answer' not in q and 'explanation' not in q
+        # Free topic choice, private sessions and deliberate mistake review.
+        path='/api/me/practice/next?subject_code=math&task_number=1'
+        item=await call('GET',path);q=item['question'];assert 'answer' not in q and 'explanation' not in q
         await call('POST','/api/me/practice/answer',{'session_id':item['session_id'],'answer':'x'},uid=3,status=404)
+        wrong=await call('POST','/api/me/practice/answer',{'session_id':item['session_id'],'answer':'x'});assert not wrong['correct']
+        retry=await call('GET',path+'&mode=mistakes');assert retry['question']['id']==q['id']
         answer=QUESTIONS[q['id']]['answer']
-        await call('POST','/api/me/practice/answer',{'session_id':item['session_id'],'answer':answer})
-        await call('POST','/api/me/practice/answer',{'session_id':item['session_id'],'answer':answer})
-        plan=await call('GET','/api/me/practice/daily');assert plan['completed']==1 and plan['correct']==1
-        assert (await call('GET','/api/me/practice/daily/next'))['question']['id']!=q['id']
-        assert (await call('GET','/api/me/practice/daily',uid=3))['completed']==0
-        # A due mistake is selected and weak topics are private; mastered problems never return.
-        unassigned=next(key for key in QUESTIONS if key not in {r['question_id'] for r in plan['items']})
-        async with async_session() as db:
-            db.add(PracticeProgress(user_id=1,question_id=unassigned,attempts=1,mistakes=1,mastered=False,next_review_at=datetime.now(timezone.utc)-timedelta(days=1)))
-            await db.commit()
-        class Tomorrow(datetime):
-            @classmethod
-            def now(cls,tz=None):return datetime.now(tz or timezone.utc)+timedelta(days=1)
-        with patch('learning.datetime',Tomorrow):
-            tomorrow=await call('GET','/api/me/practice/daily')
-        assert tomorrow['date']!=plan['date'] and any(row['question_id']==unassigned and row['review'] for row in tomorrow['items'])
-        assert not any(row['question_id']==q['id'] for row in tomorrow['items'])
-        assert tomorrow['weak_topics'] and len(tomorrow['week'])==7
+        right=await call('POST','/api/me/practice/answer',{'session_id':retry['session_id'],'answer':answer});assert right['correct']
+        assert (await call('POST','/api/me/practice/answer',{'session_id':retry['session_id'],'answer':answer}))==right
+        assert (await call('GET',path))['question']['id']!=q['id']
+        assert (await call('GET',path+'&mode=mistakes'))['question'] is None
+        assert (await c.get('/api/me/practice/daily',headers=signed(1))).status_code==404
         async with async_session() as db:
             user=await db.get(User,3);user.is_banned=True;await db.commit()
-        for url in ('/api/me/notifications','/api/me/reports','/api/me/practice/daily'):await call('GET',url,uid=3,status=403)
+        for url in ('/api/me/notifications','/api/me/reports','/api/me/practice/progress'):await call('GET',url,uid=3,status=403)
     await engine.dispose()
-    print('PASS: scoped/read inbox, durable private reports, admin-only resolution, schedule audience/time diffs, stable private daily plan and mistake review')
+    print('PASS: scoped/read inbox, durable private reports, admin-only resolution, schedule audience/time diffs, free topic practice and private mistake review')
 asyncio.run(run())

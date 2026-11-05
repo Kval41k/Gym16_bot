@@ -253,6 +253,18 @@ class UserBanRequest(BaseModel):
     ts: Optional[int] = None
     sign: Optional[str] = None
 
+class AdminUserNameRequest(BaseModel):
+    first_name: str = Field(min_length=2, max_length=100)
+    last_name: str = Field(min_length=2, max_length=100)
+
+    @field_validator('first_name', 'last_name')
+    @classmethod
+    def clean_name(cls, value):
+        value = value.strip()
+        if len(value) < 2 or any(ord(c) < 32 for c in value):
+            raise ValueError('Укажите имя и фамилию без управляющих символов.')
+        return value
+
 class EgeSubjectResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     code: str

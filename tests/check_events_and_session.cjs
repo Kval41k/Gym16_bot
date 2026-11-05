@@ -11,7 +11,11 @@ fire('change','h5ed9b24249b5',[17]);assert.deepEqual(calls.pop(),[17,'late']);
 fire('click','h9324a72da623',[42,'❤️']);assert.deepEqual(calls.pop(),[42,'❤️']);
 const event=fire('click','h21ecdc74c7b2',[]);assert(event.prevented&&event.cancelBubble);assert.equal(calls.pop(),'contact');
 fire('click','constructor',[]);assert.equal(calls.length,0,'Unknown/prototype handlers cannot execute');
-for(const file of ['app','events','session','headman','learning','community','features','admin-users'])new vm.Script(fs.readFileSync('static/'+file+'.js','utf8'),{filename:file});
+c.schoolSubmitPractice=e=>{e.preventDefault();calls.push(e.currentTarget);};
+const submitted=fire('submit','h7d9da046af6d',[]);
+assert.equal(calls.pop(),submitted.target,'Delegated submits must scope currentTarget to the form, not the whole document');
+assert(submitted.prevented,'Native preventDefault must keep the original event as its receiver');
+for(const file of ['app','events','session','headman','learning','community','features','admin-users','admin-profile'])new vm.Script(fs.readFileSync('static/'+file+'.js','utf8'),{filename:file});
 (async()=>{
  const fields=[{id:'propose-title',type:'text',value:'Unsaved title'},{id:'password',type:'password',value:'SECRET'},{id:'propose-file',type:'file',value:'FILE'}];
  const store=new Map(),events={},winEvents={},boxes=[],buttons=[];

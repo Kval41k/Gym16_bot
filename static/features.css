@@ -16,6 +16,8 @@ html[data-theme-mode=auto] .bg-zinc-100, html[data-theme-mode=auto].dark .dark\:
 .dark .g-badge.rejected { color:#ff8b9c; }
 .dark .g-badge.pending { color:#ffd179; }
 .g-card { padding:16px; background:var(--g-card); border:1px solid var(--g-line); border-radius:20px; margin-bottom:12px; color:var(--g-text); }
+.admin-user-actions { justify-content:flex-end; max-width:100%; }
+@media(max-width:600px) { #admin-users-list > div > .flex:first-child { flex-wrap:wrap; } .admin-user-actions { width:100%; justify-content:flex-start; } }
 .g-row { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
 .g-between { justify-content:space-between; }
 .school-schedule-toolbar { width:100%; flex-wrap:nowrap; }
