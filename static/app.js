@@ -117,7 +117,7 @@
         class_name: savedLocal?.class_name || null,
         profile_name: savedLocal?.profile_name || null,
         is_admin: Boolean(savedLocal?.is_admin),
-        is_onboarded: Boolean(savedLocal?.class_name && savedLocal?.profile_name)
+        is_onboarded: false
       },
       ege: {
         activeSubject: 'russian',
@@ -304,6 +304,7 @@
     // Tab button events are handled via inline data-gym-click="haabf077e995a"
 
     function switchTab(tabId) {
+      if (!state.user.is_onboarded) { openOnboardingModal(); return; }
       try {
         const pages = document.querySelectorAll('.tab-page');
         pages.forEach(p => p.classList.add('hidden'));
@@ -365,6 +366,7 @@
     // User Sync & Onboarding
     // --------------------------------------------------------
     async function initUser() {
+      document.body.classList.add('registration-pending');
       // 1. Immediate local UI & Schedule rendering (0ms delay, zero waiting!)
       updateProfileUI();
       updateLiveScheduleStatus().catch(() => {});
@@ -373,7 +375,7 @@
       // 2. Parallel background sync & metadata fetching (never blocks schedule display!)
       try {
         Promise.allSettled([
-          API.get('/api/meta/structure').then(struct => { if (struct) state.structure = struct; }),
+          API.get('/api/meta/structure').then(struct => { if (struct) { state.structure = struct; window.schoolRefreshGroups?.(); } }),
           loadBells(),
           checkPendingNewsCount(),
           API.post('/api/user/sync', {
@@ -394,6 +396,7 @@
               };
               saveProfileLocally(state.user);
               updateProfileUI();
+              if (syncedUser.is_onboarded && !syncedUser.is_banned) document.body.classList.remove('registration-pending');
 
               // Ban check lockout
               if (syncedUser.is_banned) {
@@ -407,6 +410,7 @@
                 return;
               }
 
+              if (!syncedUser.is_onboarded) { openOnboardingModal(); return; }
               if (window.communityAccessGate?.(syncedUser)) return;
               updateAdminNavigation();
               window.loadPersonalTools?.();
@@ -456,12 +460,21 @@
       // Update Schedule view label
       document.getElementById('viewing-class-badge').textContent = state.viewingClass || state.user.class_name || '11А';
 
-      if (state.user.photo_url) {
-        const avatarEl = document.getElementById('profile-avatar');
-        avatarEl.innerHTML = `<img src="${escapeHtml(safeImageUrl(state.user.photo_url))}" alt="Фото профиля" class="w-full h-full object-cover">`;
-      } else {
-        const initials = (state.user.first_name ? state.user.first_name.charAt(0) : 'Г') + (state.user.last_name ? state.user.last_name.charAt(0) : '');
-        document.getElementById('profile-avatar').textContent = initials || 'Г16';
+      const avatarEl = document.getElementById('profile-avatar');
+      const initials = (state.user.first_name?.charAt(0) || 'Г') + (state.user.last_name?.charAt(0) || '');
+      avatarEl.textContent = initials;
+      if (state.user.is_onboarded) {
+        const image = document.createElement('img');
+        image.alt = 'Фото профиля'; image.className = 'w-full h-full object-cover';
+        let triedFallback = false;
+        image.addEventListener('error', () => {
+          if (!triedFallback) { triedFallback = true; window.setProtectedImage(image, '/api/me/avatar'); }
+          else { image.remove(); avatarEl.textContent = initials; }
+        });
+        avatarEl.textContent = ''; avatarEl.append(image);
+        const photo = safeImageUrl(state.user.photo_url);
+        if (photo) window.setProtectedImage(image, photo);
+        else { triedFallback = true; window.setProtectedImage(image, '/api/me/avatar'); }
       }
     }
 
@@ -596,8 +609,11 @@
         state.user = { ...state.user, ...updated };
         state.viewingClass = updated.class_name;
         saveProfileLocally(state.user);
+        document.body.classList.remove('registration-pending');
         updateProfileUI();
         closeOnboardingModal();
+        window.communityAccessGate?.(state.user);
+        window.loadPersonalTools?.();
         haptic('success');
         await loadSchedule();
       }

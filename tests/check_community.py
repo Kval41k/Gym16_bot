@@ -27,7 +27,7 @@ async def run():
     async with httpx.AsyncClient(transport=httpx.ASGITransport(app=main.app),base_url='http://test') as c:
         async def call(method,path,data=None,uid=2,status=200):
             r=await c.request(method,path,json=data,headers=signed(uid));assert r.status_code==status,(method,path,r.status_code,r.text[:700]);return r.json()
-        async def sync(uid):return await call('POST','/api/user/sync',{'id':uid,'first_name':'Тест','class_name':'11А','profile_name':'Соц-гум'},uid)
+        async def sync(uid):return await call('POST','/api/user/sync',{'id':uid,'first_name':'Тест','last_name':'Ученик','class_name':'11А','profile_name':'Соц-гум'},uid)
         for uid in [1,2,3]:assert (await sync(uid))['access_allowed']
         # Editorial rights do not imply administrative authority or allow self-promotion.
         await call('PUT','/api/admin/users/1/role',{'role':'editor'},uid=1,status=403)

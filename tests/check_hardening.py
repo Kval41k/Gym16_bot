@@ -36,7 +36,7 @@ async def run():
     from alembic.script import ScriptDirectory
     async with engine.connect() as conn:assert await conn.scalar(text('SELECT version_num FROM alembic_version'))==ScriptDirectory.from_config(Config(str(ROOT/'alembic.ini'))).get_current_head()
     async with async_session() as db:
-        db.add_all([User(id=i,first_name='Test',class_name='11А',profile_name='Соц-гум',is_member=True) for i in (1,2)])
+        db.add_all([User(id=i,first_name='Test',last_name='Student',class_name='11А',profile_name='Соц-гум',is_member=True) for i in (1,2)])
         await db.commit()
     async with httpx.AsyncClient(transport=httpx.ASGITransport(app=main.app),base_url='http://test') as c:
         r=await c.get('/api/admin/users',headers=signed(1,'reclaimed_admin'));assert r.status_code==403

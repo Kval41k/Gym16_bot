@@ -141,7 +141,7 @@ def get_main_inline_keyboard() -> InlineKeyboardMarkup:
 
     if is_https:
         app_button = InlineKeyboardButton(
-            text="📱 Открыть Гимназия 16",
+            text="Открыть приложение",
             web_app=WebAppInfo(url=web_app_url)
         )
     else:
@@ -153,26 +153,8 @@ def get_main_inline_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [app_button],
-            [
-                InlineKeyboardButton(
-                    text="📢 Предложить новость",
-                    callback_data="suggest_news_start"
-                ),
-                InlineKeyboardButton(
-                    text="🔔 Расписание звонков",
-                    callback_data="view_bells"
-                )
-            ],
-            [
-                InlineKeyboardButton(
-                    text="👤 Мой профиль",
-                    callback_data="view_my_profile"
-                ),
-                InlineKeyboardButton(
-                    text="💬 Написать разработчику",
-                    url="https://t.me/kvalx"
-                )
-            ]
+            [InlineKeyboardButton(text="Расписание звонков", callback_data="view_bells")],
+            [InlineKeyboardButton(text="Написать разработчику", url="https://t.me/kvalx")]
         ]
     )
 
@@ -240,8 +222,9 @@ async def cmd_start(message: Message, bot: Bot):
             )
             session.add(db_user)
         else:
-            db_user.first_name = first_name
-            db_user.last_name = last_name
+            if not db_user.class_name:
+                db_user.first_name = first_name
+                db_user.last_name = last_name
             db_user.username = username
             if is_admin:
                 db_user.is_admin = True
@@ -268,14 +251,9 @@ async def cmd_start(message: Message, bot: Bot):
         )
 
     greeting_text = (
-        f"👋 <b>Привет, {html.quote(first_name)}!</b>\n\n"
-        f"Добро пожаловать в официальное приложение <b>Гимназии №16</b> (11-е классы).\n\n"
-        f"✨ <b>Что доступно в приложении:</b>\n"
-        f"• 📅 <b>Умное расписание</b> с учетом профилей (Соц-гум, Филологический) и звонков\n"
-        f"• ⏱ <b>Live-таймер</b> уроков и перемен в реальном времени\n"
-        f"• 📰 <b>Лента школьных новостей</b> с реакциями и комментариями\n"
-        f"• ✍️ <b>Предложка постов</b> с прикреплением фото\n\n"
-        f"Нажми кнопку ниже, чтобы запустить приложение:{https_notice}"
+        "<b>Гимназия №16</b>\n"
+        "Расписание, новости и подготовка к ЕГЭ — в одном приложении.\n\n"
+        "Открой приложение, чтобы начать." + https_notice
     )
 
     await message.answer(

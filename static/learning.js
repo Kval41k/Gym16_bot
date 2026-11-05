@@ -7,13 +7,17 @@ schoolReminderPreview();
 // Explicit groups show both halves by default; personal group is saved separately in the profile.
 document.getElementById('schedule-profile-filter-container').insertAdjacentHTML('afterend',`<p class="g-muted" id="school-track-hint" hidden>11В: выбери «Инфотех» или «Инженеры». Общие уроки отображаются в обоих профилях.</p><div class="g-tabs school-groups" role="group" aria-label="Подгруппа в расписании"><button class="g-btn primary" data-school-group="" data-gym-click="h33988b648d2e">Обе группы</button><button class="g-btn" data-school-group="1" data-gym-click="h0f574365f389">1 группа</button><button class="g-btn" data-school-group="2" data-gym-click="he7d7ec995198">2 группа</button></div>`);
 function schoolViewingGroup(){return school.group;}
+function schoolHasGroups(cls){return (state.structure.subgroup_classes || ['11Б','11Г','11Д','11Ж']).includes(cls);}
 function schoolChooseGroup(value){school.group=value;document.querySelectorAll('[data-school-group]').forEach(button=>button.classList.toggle('primary',button.dataset.schoolGroup===(value?String(value):'')));loadSchedule();}
 window.schoolViewingGroup=schoolViewingGroup;
 const schoolProfileFilters=renderScheduleProfileFilters;
-renderScheduleProfileFilters=function(){schoolProfileFilters();document.getElementById('school-track-hint').hidden=(state.viewingClass||state.user.class_name)!=='11В';const groups=document.querySelector('.school-groups');if(groups){groups.hidden=!['11Б','11Г','11Д','11Ж'].includes(state.viewingClass||state.user.class_name);if(groups.hidden)school.group=null;}};
+renderScheduleProfileFilters=function(){schoolProfileFilters();document.getElementById('school-track-hint').hidden=(state.viewingClass||state.user.class_name)!=='11В';const groups=document.querySelector('.school-groups');if(groups){groups.hidden=!schoolHasGroups(state.viewingClass||state.user.class_name);if(groups.hidden)school.group=null;}};
 renderScheduleProfileFilters();
 const groupAnchor=document.getElementById('onboarding-profiles-list');
-groupAnchor.insertAdjacentHTML('afterend',`<label class="g-label" for="school-profile-group">Подгруппа английского / информатики</label><select id="school-profile-group" class="g-input"><option value="">Не выбрана — показывать обе</option><option value="1">1 группа</option><option value="2">2 группа</option></select><p class="g-muted">Используется в личной карточке и напоминаниях, если в классе есть занятия по группам.</p>`);
+groupAnchor.insertAdjacentHTML('afterend',`<div id="school-profile-group-field" hidden><label class="g-label" for="school-profile-group">Подгруппа английского / информатики</label><select id="school-profile-group" class="g-input"><option value="">Не выбрана — показывать обе</option><option value="1">1 группа</option><option value="2">2 группа</option></select><p class="g-muted">Используется в личной карточке и напоминаниях для занятий по группам.</p></div>`);
+const schoolOnboardControls=renderOnboardingControls;
+renderOnboardingControls=function(){schoolOnboardControls();const field=document.getElementById('school-profile-group-field'),select=document.getElementById('school-profile-group');field.hidden=!schoolHasGroups(tempSelectedClass);select.disabled=field.hidden;if(field.hidden)select.value='';};
+window.schoolRefreshGroups=function(){renderScheduleProfileFilters();if(!document.getElementById('onboarding-modal').classList.contains('hidden'))renderOnboardingControls();};
 const schoolOnboard=openOnboardingModal;
 openOnboardingModal=function(){document.getElementById('school-profile-group').value=state.user.subgroup||'';return schoolOnboard();};
 document.getElementById('edit-profile-btn').removeEventListener('click',schoolOnboard);

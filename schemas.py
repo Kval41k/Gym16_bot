@@ -11,6 +11,7 @@ class StructureResponse(BaseModel):
     classes: List[str]
     class_profiles: Dict[str, List[str]]
     all_profiles: List[str]
+    subgroup_classes: List[str] = Field(default_factory=list)
 
 # -------------------------------------------------------------
 # User Profile Schemas

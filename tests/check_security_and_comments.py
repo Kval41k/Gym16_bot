@@ -37,7 +37,7 @@ async def run():
             assert response.status_code==status,(method,path,response.status_code,response.text[:500])
             return response
         for uid in (1,2,3):
-            await call('POST','/api/user/sync',{'id':uid,'first_name':'Тест','class_name':'11А','profile_name':'Соц-гум','photo_url':'https://evil.invalid/fake.jpg'},uid)
+            await call('POST','/api/user/sync',{'id':uid,'first_name':'Тест','last_name':'Ученик','class_name':'11А','profile_name':'Соц-гум','photo_url':'https://evil.invalid/fake.jpg'},uid)
         profile=(await call('GET','/api/user/1')).json()
         assert profile['photo_url'] is None, 'Unsigned photo must not override signed Telegram identity'
         for path in ('/api/news','/api/news/1/comments','/api/ege/subjects','/api/ege/materials?subject_code=russian&task_number=1','/api/me/preferences','/api/admin/logs','/uploads/'+'a'*32+'.jpg','/api/media/unreferenced_file'):

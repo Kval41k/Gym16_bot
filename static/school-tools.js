@@ -5,7 +5,6 @@ const schoolReasons = {spam:'Спам', abuse:'Оскорбления или т�
 const schoolLabels = {schedule:'Расписание', comment:'Комментарий', moderation:'Модерация', news:'Новости', report_result:'Жалоба', general:'Уведомление'};
 
 document.getElementById('header-actions').insertAdjacentHTML('afterbegin', '<button type="button" class="g-btn" data-school-action="inbox" aria-label="Открыть уведомления">🔔 <span class="g-badge" data-inbox-count>0</span></button>');
-document.getElementById('edit-profile-btn').insertAdjacentHTML('afterend', `<button type="button" class="g-btn school-inbox-button" data-school-action="inbox">Уведомления <span id="school-inbox-count" data-inbox-count class="g-badge" aria-live="polite">0</span></button>`);
 document.getElementById('ege-materials-list').insertAdjacentHTML('beforebegin', '<section id="school-daily" class="g-card g-stack" aria-live="polite"></section>');
 document.getElementById('tab-admin').insertAdjacentHTML('beforeend', `<section id="admin-section-reports" hidden class="g-stack"><div class="g-card g-stack"><h3 class="g-title">Жалобы</h3><p class="g-muted">Проверьте контекст и при необходимости удалите запись через ленту. Рассмотрение жалобы само по себе не удаляет контент.</p><label class="g-label" for="school-report-filter">Статус</label><select id="school-report-filter" class="g-input"><option value="pending">Ожидают рассмотрения</option><option value="handled">Рассмотрены</option><option value="dismissed">Отклонены</option></select><button class="g-btn" data-school-action="reports">Обновить</button></div><div id="school-reports-list" class="g-stack"></div></section>`);
 document.body.insertAdjacentHTML('beforeend', `
@@ -41,7 +40,7 @@ async function schoolLoadInbox(append = false) {
   schoolTools.inbox = append ? [...schoolTools.inbox, ...data.items] : data.items;
   schoolTools.cursor = data.next_cursor; if (!append) schoolTools.latest = data.latest_id;
   document.querySelectorAll('[data-inbox-count]').forEach(node => node.textContent = data.unread > 99 ? '99+' : data.unread);
-  document.getElementById('school-inbox-count').setAttribute('aria-label', `Непрочитанных: ${data.unread}`);
+  document.querySelector('[data-school-action="inbox"]').setAttribute('aria-label', `Уведомления, непрочитанных: ${data.unread}`);
   document.getElementById('school-read-all').disabled = !data.unread;
   schoolRenderInbox();
 }

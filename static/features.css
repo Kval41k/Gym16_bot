@@ -30,6 +30,24 @@ html[data-theme-mode=auto] .bg-zinc-100, html[data-theme-mode=auto].dark .dark\:
 .g-btn:disabled, button:disabled { opacity:.5; cursor:wait; }
 .g-input { width:100%; padding:11px 12px; background:var(--g-soft); border:1px solid var(--g-line); border-radius:12px; font-size:13px; color:var(--g-text); min-width:0; }
 .g-input:focus { outline:2px solid #007aff66; outline-offset:1px; }
+/* Keep iOS native date/time controls and long labels inside mobile cards. */
+.g-input { box-sizing:border-box; max-width:100%; }
+.g-input[type=time], .g-input[type=date] { appearance:none; -webkit-appearance:none; min-height:44px; display:block; }
+.g-input::-webkit-date-and-time-value { text-align:left; min-width:0; }
+.g-card, .g-row > *, .g-label, .g-title { min-width:0; overflow-wrap:anywhere; }
+.g-editor { box-sizing:border-box; max-height:90dvh; overflow-y:auto; }
+.registration-pending main, body.registration-pending > nav, .registration-pending #header-actions { visibility:hidden; }
+#registration-loading { display:none; }
+.registration-pending #registration-loading { display:block; position:fixed; inset:25% 20px auto; text-align:center; }
+@media(max-width:480px) {
+  .g-card { padding:14px; }
+  .g-date-row-fields, .g-search-controls { grid-template-columns:minmax(0,1fr); }
+  .g-row > .g-input { flex-basis:100%; }
+  .g-btn { white-space:normal; overflow-wrap:anywhere; }
+  .g-theme-options { gap:5px; }
+  .g-theme-options .g-btn { padding:8px 5px; }
+  #header-actions { flex-shrink:0; }
+}
 .g-tabs { display:flex; overflow-x:auto; gap:6px; padding:4px 0; flex-wrap:nowrap; scrollbar-width:none; }
 .g-tabs .g-btn { flex-shrink:0; white-space:nowrap; }
 .g-badge { display:inline-block; padding:4px 8px; background:var(--g-soft); border-radius:8px; font-size:11px; font-weight:600; }

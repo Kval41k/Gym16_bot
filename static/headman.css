@@ -21,5 +21,10 @@
 .headman-steps { list-style:decimal; padding-left:20px; font-size:13px; line-height:1.7; }
 .headman-steps li+li { margin-top:10px; }
 .headman-code { display:block; white-space:pre-wrap; overflow-wrap:anywhere; user-select:all; padding:14px; background:var(--g-soft); border-radius:12px; font-size:13px; }
+.headman-hero > div { min-width:0; }
+#tab-headman .g-label > .g-input { margin-top:6px; }
+#tab-headman input[type=time] { width:100%; max-width:100%; min-width:0; }
+.headman-person > :first-child { flex:1; min-width:0; overflow-wrap:anywhere; }
+.headman-person > select { flex-shrink:0; width:135px; }
 #headman-error:empty { display:none; }
 @media(max-width:360px) { .headman-fields { grid-template-columns:1fr; } .headman-person { align-items:flex-start; } }

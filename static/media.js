@@ -21,7 +21,7 @@
   function privatePath(value) {
     try {
       const url = new URL(value, location.origin);
-      return url.origin === location.origin && /^\/(uploads\/|api\/media\/)/.test(url.pathname) ? url.pathname : null;
+      return url.origin === location.origin && (/^\/(uploads\/|api\/media\/)/.test(url.pathname) || url.pathname === '/api/me/avatar') ? url.pathname : null;
     } catch (_) { return null; }
   }
   async function imageBlob(path) {
@@ -52,7 +52,7 @@
     image.dataset.protectedLoading = path;
     imageBlob(path).then(url => {
       if (image.dataset.protectedSrc === path) { image.dataset.protectedLoaded = path; image.src = url; }
-    }).catch(() => { if (image.dataset.protectedSrc === path) image.alt = 'Не удалось загрузить изображение'; })
+    }).catch(() => { if (image.dataset.protectedSrc === path) { image.alt = 'Не удалось загрузить изображение'; image.dispatchEvent(new Event('error')); } })
       .finally(() => { delete image.dataset.protectedLoading; });
   }
   window.protectedImageAttrs = value => {

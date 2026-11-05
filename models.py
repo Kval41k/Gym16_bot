@@ -23,7 +23,7 @@ class User(Base):
     # Gymnasium student metadata
     class_name: Mapped[Optional[str]] = mapped_column(String(20), nullable=True, index=True)  # e.g. "11А"
     profile_name: Mapped[Optional[str]] = mapped_column(String(100), nullable=True, index=True) # e.g. "Физмат"
-    subgroup: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, default=1) # 1 or 2
+    subgroup: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, default=None) # chosen only for classes with groups
     
     is_admin: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     role: Mapped[str] = mapped_column(String(20), default="student", nullable=False)

@@ -64,7 +64,7 @@ async def run():
     await asyncio.gather(task,return_exceptions=True);assert guard.active_uploads==0
     await init_db()
     async with async_session() as db:
-        db.add_all([User(id=i,first_name='=1+1' if i==3 else 'Test',class_name='11А',profile_name='Соц-гум',is_member=True) for i in (1,2,3)])
+        db.add_all([User(id=i,first_name='=1+1' if i==3 else 'Test',last_name='Student',class_name='11А',profile_name='Соц-гум',is_member=True) for i in (1,2,3)])
         db.add_all([User(id=i,first_name='Test',is_member=i%2==0,is_banned=i==100) for i in range(100,300)])
         await db.flush()
         post=NewsPost(author_id=1,author_name='Test',title='Title',content='Body',status='approved');db.add(post);await db.flush();pid=post.id

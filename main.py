@@ -34,7 +34,7 @@ from security import BodyLimitMiddleware, clean_image, install_log_redaction, sa
 from database import async_session, get_db, init_db
 from timetable import day_bells, lesson_times, lesson_timeline, effective_lessons
 from datetime import date as CalendarDate
-from access import access_allowed, require_school_access
+from access import access_allowed, require_school_access, registration_complete
 from models import BellSchedule, Comment, EgeMaterial, EgeSubject, Lesson, MediaUpload, NewsPost, Profile, Reaction, SchoolClass, User
 from schemas import (
     BellItem, CommentCreateRequest, CommentEditRequest, CommentResponse, DayScheduleResponse,
@@ -556,7 +556,8 @@ async def get_structure(db: AsyncSession = Depends(get_db)):
     resp = StructureResponse(
         classes=classes,
         class_profiles=CLASS_PROFILES_MAP,
-        all_profiles=ALL_PROFILES
+        all_profiles=ALL_PROFILES,
+        subgroup_classes=list((await db.scalars(select(Lesson.class_name).where(Lesson.subgroup.is_not(None)).distinct())).all())
     )
     cache_set("meta_structure", resp, 600)
     return resp
@@ -620,10 +621,12 @@ async def sync_user(
             if not user.profile_name:
                 user.profile_name = "Соц-гум"
 
+    if user.class_name and not await db.scalar(select(Lesson.id).where(Lesson.class_name == user.class_name, Lesson.subgroup.is_not(None)).limit(1)):
+        user.subgroup = None
     await db.commit()
     await db.refresh(user)
 
-    is_onboarded = bool(user.class_name and user.profile_name and user.first_name)
+    is_onboarded = registration_complete(user)
     return UserResponse(
         id=user.id,
         first_name=user.first_name,
@@ -641,6 +644,37 @@ async def sync_user(
         is_onboarded=is_onboarded
     )
 
+@app.get("/api/me/avatar")
+async def own_avatar(x_telegram_init_data: Optional[str] = Header(None, alias="X-Telegram-Init-Data"), db: AsyncSession = Depends(get_db)):
+    identity = require_telegram_user(x_telegram_init_data)
+    await require_active_user(identity, db)
+    enforce_rate_limit(f"avatar:{identity['id']}", 20, 60)
+    bot_url = f"https://api.telegram.org/bot{settings.BOT_TOKEN}"
+    try:
+        async with httpx.AsyncClient(timeout=15) as client:
+            info = await client.get(f"{bot_url}/getUserProfilePhotos", params={"user_id": identity['id'], "limit": 1})
+            photos = info.json().get('result', {}).get('photos', []) if info.is_success else []
+            if not photos:
+                raise HTTPException(404, "Фото профиля недоступно")
+            info = await client.get(f"{bot_url}/getFile", params={"file_id": photos[0][-1]['file_id']})
+            path = info.json().get('result', {}).get('file_path', '') if info.is_success else ''
+            if not re.fullmatch(r'[A-Za-z0-9_/-]+\.[A-Za-z0-9]+', path) or '..' in path:
+                raise HTTPException(404, "Фото профиля недоступно")
+            content = bytearray()
+            async with client.stream('GET', f"https://api.telegram.org/file/bot{settings.BOT_TOKEN}/{path}") as response:
+                if not response.is_success:
+                    raise HTTPException(404, "Фото профиля недоступно")
+                async for chunk in response.aiter_bytes():
+                    content.extend(chunk)
+                    if len(content) > 10 * 1024 * 1024:
+                        raise HTTPException(413, "Изображение слишком большое")
+        async with IMAGE_PROCESSING:
+            clean, ext = await asyncio.to_thread(clean_image, bytes(content))
+        return Response(clean, media_type='image/png' if ext == 'png' else 'image/jpeg', headers={'Cache-Control': 'no-store'})
+    except (httpx.HTTPError, ValueError, KeyError, IndexError):
+        raise HTTPException(502, "Не удалось загрузить фото профиля")
+
+
 @app.get("/api/user/{user_id}", response_model=UserResponse)
 async def get_user_profile(
     user_id: int,
@@ -652,7 +686,7 @@ async def get_user_profile(
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
     
-    is_onboarded = bool(user.class_name and user.profile_name and user.first_name and user.last_name)
+    is_onboarded = registration_complete(user)
     configured_admin = user.id in settings.admin_ids or bool(
         user.username and user.username.lower().lstrip("@") in settings.admin_usernames
     )
@@ -712,7 +746,8 @@ async def update_user_profile(
     user.profile_name = profile_name
     user.first_name = first_name
     user.last_name = last_name
-    user.subgroup = payload.subgroup
+    has_groups = await db.scalar(select(Lesson.id).where(Lesson.class_name == class_name, Lesson.subgroup.is_not(None)).limit(1))
+    user.subgroup = payload.subgroup if has_groups else None
 
     await db.commit()
     await db.refresh(user)

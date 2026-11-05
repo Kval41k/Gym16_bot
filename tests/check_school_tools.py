@@ -31,7 +31,7 @@ async def run():
             assert r.status_code==status,(method,url,r.status_code,r.text[:800])
             if '/api/' in url and (url.startswith('/api/me/') or '/reports' in url):assert r.headers['cache-control']=='no-store'
             return r.json()
-        for uid in (1,2,3,4):await call('POST','/api/user/sync',{'id':uid,'first_name':'Test','class_name':'11А','profile_name':'Соц-гум'},uid)
+        for uid in (1,2,3,4):await call('POST','/api/user/sync',{'id':uid,'first_name':'Test','last_name':'Student','class_name':'11А','profile_name':'Соц-гум'},uid)
         for url in ('/api/me/notifications','/api/admin/reports','/api/me/practice/daily'):
             assert (await c.get(url)).status_code in (401,403)
         # A transaction keeps the event and mutation atomic; repeated events are idempotent.
