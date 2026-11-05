@@ -1,0 +1,12 @@
+*
+!*.py
+!alembic.ini
+!profiles.json
+!requirements.txt
+!requirements.lock.txt
+!migrations/
+!migrations/**
+!data/
+!data/**
+!static/
+!static/**
