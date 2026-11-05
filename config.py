@@ -49,12 +49,16 @@ class Settings(BaseSettings):
     )
 
     @property
+    def persistent_disk_path(self) -> Path | None:
+        mount = os.getenv("RAILWAY_VOLUME_MOUNT_PATH") or os.getenv("RENDER_DISK_PATH")
+        return Path(mount).expanduser().resolve() if mount else None
+
+    @property
     def UPLOAD_DIR(self) -> Path:
         configured = self.UPLOAD_DIR_RAW
         if configured:
             return Path(configured).expanduser().resolve()
-        disk_path = os.getenv("RENDER_DISK_PATH", "")
-        root = Path(disk_path).expanduser() if disk_path else BASE_DIR
+        root = self.persistent_disk_path or BASE_DIR
         return (root / "uploads").resolve()
 
     @property
@@ -65,9 +69,9 @@ class Settings(BaseSettings):
     def database_url(self) -> str:
         if self.DATABASE_URL:
             return self.DATABASE_URL
-        disk_path = os.getenv("RENDER_DISK_PATH")
+        disk_path = self.persistent_disk_path
         if disk_path:
-            return f"sqlite+aiosqlite:///{Path(disk_path).expanduser() / 'gym16.db'}"
+            return f"sqlite+aiosqlite:///{disk_path / 'gym16.db'}"
         return f"sqlite+aiosqlite:///{BASE_DIR}/gym16.db"
 
     @property

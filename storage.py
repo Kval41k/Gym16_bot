@@ -4,6 +4,7 @@ import os
 import shutil
 import uuid
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 from urllib.parse import urlsplit
 from fastapi import HTTPException
 from sqlalchemy import select, func, text
@@ -34,10 +35,10 @@ def validate_storage_configuration():
         from cryptography.fernet import Fernet
         Fernet(settings.BACKUP_ENCRYPTION_KEY.encode())
     if settings.REQUIRE_PERSISTENT_STORAGE:
-        disk = os.getenv('RENDER_DISK_PATH')
+        disk = settings.persistent_disk_path
         def on_disk(path):
-            return bool(disk and path.resolve().is_relative_to(__import__('pathlib').Path(disk).resolve()))
-        database_ok = engine.dialect.name != 'sqlite' or on_disk(__import__('pathlib').Path(engine.url.database))
+            return bool(disk and path.resolve().is_relative_to(disk))
+        database_ok = engine.dialect.name != 'sqlite' or on_disk(Path(engine.url.database))
         if not database_ok or not (settings.S3_MEDIA_ENABLED or on_disk(settings.UPLOAD_DIR)) or not settings.BACKUP_REMOTE_ENABLED:
             raise RuntimeError('Persistent database, media and external encrypted backup are required')
 
